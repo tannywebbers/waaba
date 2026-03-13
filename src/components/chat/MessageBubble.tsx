@@ -168,7 +168,7 @@ export function MessageBubble({ message, onDelete }: MessageBubbleProps) {
             className={cn(
               isSticker ? 'message-sticker' : 'message-bubble',
               !isSticker && (isOutgoing ? 'message-bubble-outgoing' : 'message-bubble-incoming'),
-              !isSticker && 'px-3 py-2 max-w-[85vw] sm:max-w-[75vw] shadow-sm',
+              !isSticker && 'px-3 py-2 max-w-[85vw] sm:max-w-[420px] shadow-sm',
               !isSticker && (isOutgoing ? 'bg-[hsl(var(--bubble-outgoing))] text-[hsl(var(--bubble-text))]' : 'bg-[hsl(var(--bubble-incoming))] text-[hsl(var(--bubble-text))]')
             )}
           >
