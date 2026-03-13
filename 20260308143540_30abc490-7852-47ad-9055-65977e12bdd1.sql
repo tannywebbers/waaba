@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX contacts_user_id_phone_unique ON public.contacts (user_id, phone);
