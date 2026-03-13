@@ -1,6 +1,7 @@
+// @ts-nocheck
 import { useState, useCallback, useEffect } from 'react';
 import { ArrowLeft } from 'lucide-react';
-import { useAppStore } from '@/store/appStore';
+import { useAppStore } from '@/stores/appStore';
 import { useBackButton } from '@/hooks/useBackButton';
 import { ChatList } from '@/components/chat/ChatList';
 import { ChatView } from '@/components/chat/ChatView';

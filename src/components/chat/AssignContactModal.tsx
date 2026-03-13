@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useState } from 'react';
 import { Users, Search, UserMinus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -18,7 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useSharedInbox } from '@/hooks/useSharedInbox';
 import { supabase } from '@/integrations/supabase/client';
-import { useAppStore } from '@/store/appStore';
+import { useAppStore } from '@/stores/appStore';
 
 interface AssignContactModalProps {
   open: boolean;

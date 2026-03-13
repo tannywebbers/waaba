@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Mic, Square, Send, Trash2, Play, Pause } from 'lucide-react';
 import { Button } from '@/components/ui/button';

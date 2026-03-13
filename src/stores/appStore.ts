@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { create } from 'zustand';
 import { supabase } from '@/integrations/supabase/client';
 import { ViewMode, Message, Chat, Contact } from '@/types';

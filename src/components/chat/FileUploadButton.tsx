@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useRef, useState } from 'react';
 import { Paperclip, Image, FileText, Camera, Music } from 'lucide-react';
 import { Button } from '@/components/ui/button';

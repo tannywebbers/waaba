@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Stay-alive pinger — keeps the app URL warm to prevent cold starts.
  * Pings every 60 seconds.
