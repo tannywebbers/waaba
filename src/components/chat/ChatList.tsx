@@ -1,0 +1,567 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Archive, CheckSquare, MessageCircle, Plus, Search, Send, Settings2, SortAsc, SortDesc, SquarePen, Trash2, Users } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { SearchInput } from '@/components/shared/SearchInput';
+import { Input } from '@/components/ui/input';
+import { ChatListItem } from '@/components/chat/ChatListItem';
+import { ContactListItem } from '@/components/contacts/ContactListItem';
+import { LabelManagerPanel } from '@/components/chat/LabelManagerPanel';
+import { useAppStore } from '@/store/appStore';
+import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
+
+type ChatFilter = 'all' | 'unread' | 'archived';
+type SortBy = 'recent' | 'name' | 'amount';
+type SortDir = 'asc' | 'desc';
+type ContactSortBy = 'name' | 'recent' | 'amount' | 'loanId';
+
+interface Label { id: string; name: string; color: string }
+interface AppTemplate { id: string; name: string; body: string }
+interface MetaTemplate { id: string; name: string; status?: string }
+
+interface ChatListProps {
+  onChatSelect?: (chat: any) => void;
+  onNewChat?: () => void;
+}
+
+const VARIABLE_MAP: Record<string, (c: any) => string> = {
+  customer_name: (c) => c.name || '',
+  loan_id: (c) => c.loanId || '',
+  amount: (c) => c.amount?.toString() || '',
+  phone_number: (c) => c.phone || '',
+  app_name: (c) => c.appType || 'Tloan',
+  day_type: (c) => c.dayType?.toString() || '',
+  payment_details: (c) => {
+    const ad = c.accountDetails?.[0];
+    if (!ad) return '';
+    return `${ad.bank} - ${ad.accountNumber} (${ad.accountName})`;
+  },
+  due_date: (c) => {
+    const d = new Date();
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  },
+};
+
+const resolveTemplate = (body: string, contact: any): string =>
+  body.replace(/\{\{(\w+)\}\}/g, (match, variableName) => VARIABLE_MAP[variableName]?.(contact) || match);
+
+export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const {
+    viewMode, setViewMode, chats, contacts, activeChat, setActiveChat, searchQuery, setSearchQuery,
+    setShowAddContactModal, favorites, deleteContact, addMessage,
+  } = useAppStore();
+
+  const [chatFilter, setChatFilter] = useState<ChatFilter>('all');
+  const [sortBy, setSortBy] = useState<SortBy>('recent');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+
+  const [contactSortBy, setContactSortBy] = useState<ContactSortBy>('name');
+  const [contactSortDir, setContactSortDir] = useState<SortDir>('asc');
+  const [contactAppTypeFilter, setContactAppTypeFilter] = useState('all');
+  const [contactDayTypeFilter, setContactDayTypeFilter] = useState('all');
+
+  const [labels, setLabels] = useState<Label[]>([]);
+  const [chatLabelMap, setChatLabelMap] = useState<Record<string, string[]>>({});
+  const [showLabelManager, setShowLabelManager] = useState(false);
+
+  const [contactSelectionMode, setContactSelectionMode] = useState(false);
+  const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
+
+  const [showBulkDialog, setShowBulkDialog] = useState(false);
+  const [bulkSource, setBulkSource] = useState<'app' | 'meta'>('app');
+  const [appTemplates, setAppTemplates] = useState<AppTemplate[]>([]);
+  const [metaTemplates, setMetaTemplates] = useState<MetaTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [sendingBulk, setSendingBulk] = useState(false);
+  const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
+  const [bulkMetaSearch, setBulkMetaSearch] = useState('');
+  const [bulkAppSearch, setBulkAppSearch] = useState('');
+
+  const listContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const bulkFilteredMeta = metaTemplates.filter(t => t.name.toLowerCase().includes(bulkMetaSearch.toLowerCase()));
+  const bulkFilteredApp = appTemplates.filter(t => t.name.toLowerCase().includes(bulkAppSearch.toLowerCase()));
+
+  const fetchLabels = useCallback(async () => {
+    if (!user) return;
+    const [labelsRes, chatLabelsRes] = await Promise.all([
+      supabase.from('labels' as any).select('*').eq('user_id', user.id),
+      supabase.from('chat_labels' as any).select('*').eq('user_id', user.id),
+    ]);
+
+    setLabels(((labelsRes.data as any[]) || []) as Label[]);
+    const map: Record<string, string[]> = {};
+    ((chatLabelsRes.data as any[]) || []).forEach((entry: any) => {
+      if (!map[entry.chat_id]) map[entry.chat_id] = [];
+      map[entry.chat_id].push(entry.label_id);
+    });
+    setChatLabelMap(map);
+  }, [user]);
+
+  const fetchTemplates = useCallback(async () => {
+    if (!user) return;
+    const [appRes, metaRes] = await Promise.all([
+      supabase.from('app_templates' as any).select('*').eq('user_id', user.id).order('name'),
+      supabase.from('whatsapp_templates' as any).select('*').eq('user_id', user.id).order('name'),
+    ]);
+
+    setAppTemplates((appRes.data as any[]) || []);
+    setMetaTemplates((((metaRes.data as any[]) || []).filter((t: any) => t.status === 'APPROVED')));
+  }, [user]);
+
+  useEffect(() => { fetchLabels(); fetchTemplates(); }, [fetchLabels, fetchTemplates]);
+
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel(`labels-sync-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'labels', filter: `user_id=eq.${user.id}` }, fetchLabels)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_labels', filter: `user_id=eq.${user.id}` }, fetchLabels)
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [user, fetchLabels]);
+
+  const archivedCount = chats.filter((c) => c.isArchived || c.contact.isArchived).length;
+  const unreadCount = chats.filter((c) => c.unreadCount > 0).length;
+
+  const filteredChats = chats
+    .filter((chat) => {
+      const matchesSearch = chat.contact.name.toLowerCase().includes(searchQuery.toLowerCase()) || chat.contact.phone.includes(searchQuery);
+      if (!matchesSearch) return false;
+      if (chatFilter === 'archived') return !!(chat.isArchived || chat.contact.isArchived);
+      if (chat.isArchived || chat.contact.isArchived) return false;
+      if (chatFilter === 'unread' && chat.unreadCount <= 0) return false;
+      if (selectedLabelId) return (chatLabelMap[chat.id] || []).includes(selectedLabelId);
+      return true;
+    })
+    .sort((a, b) => {
+      if ((favorites[b.id] ? 1 : 0) !== (favorites[a.id] ? 1 : 0)) return (favorites[b.id] ? 1 : 0) - (favorites[a.id] ? 1 : 0);
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+
+      let cmp = 0;
+      if (sortBy === 'name') cmp = a.contact.name.localeCompare(b.contact.name);
+      else if (sortBy === 'amount') cmp = (a.contact.amount || 0) - (b.contact.amount || 0);
+      else cmp = (b.lastMessage?.timestamp.getTime() || b.contact.createdAt.getTime()) - (a.lastMessage?.timestamp.getTime() || a.contact.createdAt.getTime());
+
+      return sortDir === 'asc' ? cmp : (sortBy === 'recent' ? cmp : -cmp);
+    });
+
+  const appTypeOptions = useMemo(() => ['all', ...Array.from(new Set(contacts.map((c) => (c.appType || 'unknown').toLowerCase())))], [contacts]);
+  const dayTypeOptions = useMemo(() => ['all', ...Array.from(new Set(contacts.map((c) => String(c.dayType ?? '0'))))], [contacts]);
+
+  const filteredContacts = contacts
+    .filter((contact) => contact.name.toLowerCase().includes(searchQuery.toLowerCase()) || contact.phone.includes(searchQuery) || contact.loanId.toLowerCase().includes(searchQuery.toLowerCase()))
+    .filter((contact) => contactAppTypeFilter === 'all' ? true : (contact.appType || '').toLowerCase() === contactAppTypeFilter)
+    .filter((contact) => contactDayTypeFilter === 'all' ? true : String(contact.dayType ?? '0') === contactDayTypeFilter)
+    .sort((a, b) => {
+      let cmp = 0;
+      if (contactSortBy === 'name') cmp = a.name.localeCompare(b.name);
+      else if (contactSortBy === 'amount') cmp = (a.amount || 0) - (b.amount || 0);
+      else if (contactSortBy === 'loanId') cmp = a.loanId.localeCompare(b.loanId);
+      else cmp = b.createdAt.getTime() - a.createdAt.getTime();
+      return contactSortDir === 'asc' ? cmp : -cmp;
+    });
+
+  const toggleContactSelection = (id: string) => {
+    setSelectedContactIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  };
+
+  const handleDeleteSelectedContacts = async () => {
+    if (!user || selectedContactIds.length === 0) return;
+    const { error } = await supabase.from('contacts').delete().eq('user_id', user.id).in('id', selectedContactIds as any);
+    if (error) {
+      toast({ title: 'Failed to delete selected contacts', description: error.message, variant: 'destructive' });
+      return;
+    }
+
+    selectedContactIds.forEach((id) => deleteContact(id));
+    setSelectedContactIds([]);
+    setContactSelectionMode(false);
+    toast({ title: 'Selected contacts deleted' });
+  };
+
+  const handleBulkTemplateSend = async () => {
+    if (!user || !selectedTemplateId || selectedContactIds.length === 0) return;
+    setSendingBulk(true);
+    let sentCount = 0;
+    let failedCount = 0;
+    const failReasons: string[] = [];
+    try {
+      const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', user.id).single();
+      if (!settings?.api_token || !settings?.phone_number_id) {
+        toast({ title: 'WhatsApp not configured', variant: 'destructive' });
+        return;
+      }
+
+      // Fetch contacts with account_details for full field resolution
+      const { data: contactsWithDetails } = await supabase
+        .from('contacts')
+        .select('*, account_details(*)')
+        .eq('user_id', user.id)
+        .in('id', selectedContactIds as any);
+      
+      const enrichedContacts = (contactsWithDetails || []).map((c: any) => ({
+        id: c.id, name: c.name, phone: c.phone, loanId: c.loan_id,
+        amount: c.amount ? Number(c.amount) : undefined,
+        appType: c.app_type || 'tloan', dayType: c.day_type ?? 0,
+        accountDetails: (c.account_details || []).map((ad: any) => ({
+          id: ad.id, bank: ad.bank, accountNumber: ad.account_number, accountName: ad.account_name,
+        })),
+      }));
+      const selectedContacts = enrichedContacts.filter((c: any) => selectedContactIds.includes(c.id));
+      const appTemplate = appTemplates.find((t) => t.id === selectedTemplateId);
+      const metaTemplate = metaTemplates.find((t) => t.id === selectedTemplateId);
+
+      if (bulkSource === 'app' && appTemplate) {
+        for (const contact of selectedContacts) {
+          const normalizedPhone = contact.phone.replace(/[^\d+]/g, '').replace(/^\+/, '');
+          const content = resolveTemplate(appTemplate.body, contact);
+          try {
+            const { data, error } = await supabase.functions.invoke('whatsapp-api', {
+              body: {
+                action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
+                to: normalizedPhone, type: 'text', content,
+              },
+            });
+
+            const success = !error && data?.success;
+            const status = success ? 'sent' : 'failed';
+            const failReason = data?.error || error?.message || '';
+
+            if (success) sentCount++;
+            else { failedCount++; if (failReason) failReasons.push(`${contact.name}: ${failReason}`); }
+
+            const { data: msgData } = await supabase.from('messages').insert({
+              user_id: user.id, contact_id: contact.id, content, type: 'text',
+              status, is_outgoing: true, whatsapp_message_id: data?.messageId || null,
+            }).select().single();
+
+            if (msgData) {
+              addMessage(contact.id, {
+                id: msgData.id, contactId: msgData.contact_id, content, type: 'text', status,
+                isOutgoing: true, timestamp: new Date(msgData.created_at), whatsappMessageId: data?.messageId,
+              });
+            }
+          } catch (err: any) {
+            failedCount++;
+            failReasons.push(`${contact.name}: ${err.message}`);
+          }
+        }
+      }
+
+      if (bulkSource === 'meta' && metaTemplate) {
+        const body = (metaTemplate as any).components?.find?.((c: any) => c.type === 'BODY');
+        const previewText = body?.text || metaTemplate.name;
+
+        // Fetch template mappings ONCE
+        const { data: mappings } = await supabase
+          .from('template_mappings')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('template_name', metaTemplate.name)
+          .order('variable_number', { ascending: true });
+
+        const varMatches = (previewText || '').match(/\{\{\d+\}\}/g) || [];
+        const requiredVarCount = varMatches.length;
+
+        if (requiredVarCount > 0 && (!mappings || mappings.length < requiredVarCount)) {
+          toast({
+            title: 'Template mapping incomplete',
+            description: `Please configure parameter mapping for "${metaTemplate.name}" before sending.`,
+            variant: 'destructive',
+          });
+          setSendingBulk(false);
+          return;
+        }
+
+        for (const contact of selectedContacts) {
+          const normalizedPhone = contact.phone.replace(/[^\d+]/g, '').replace(/^\+/, '');
+
+          const templateParams: Record<string, string> = {};
+          let hasEmptyParam = false;
+
+          for (const m of (mappings || [])) {
+            const fieldKey = (m as any).mapped_field;
+            const resolver = VARIABLE_MAP[fieldKey];
+            const value = resolver ? resolver(contact) : '';
+            if (!value) {
+              failedCount++;
+              failReasons.push(`${contact.name}: Missing field "${fieldKey}"`);
+              hasEmptyParam = true;
+              break;
+            }
+            templateParams[`{{${(m as any).variable_number}}}`] = value;
+          }
+
+          if (hasEmptyParam) continue;
+
+          try {
+            const { data, error } = await supabase.functions.invoke('whatsapp-api', {
+              body: {
+                action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
+                to: normalizedPhone, type: 'template', templateName: metaTemplate.name,
+                templateParams, templateLanguage: (metaTemplate as any).language || 'en',
+              },
+            });
+
+            const success = !error && data?.success;
+            const status = success ? 'sent' : 'failed';
+            const failReason = data?.error || error?.message || '';
+
+            if (success) sentCount++;
+            else { failedCount++; if (failReason) failReasons.push(`${contact.name}: ${failReason}`); }
+
+            // Resolve template text with actual values
+            let resolvedText = previewText;
+            Object.entries(templateParams).forEach(([key, value]) => {
+              resolvedText = resolvedText.replace(key, value || key);
+            });
+
+            const { data: msgData } = await supabase.from('messages').insert({
+              user_id: user.id, contact_id: contact.id, content: resolvedText,
+              type: 'template', status, is_outgoing: true,
+              whatsapp_message_id: data?.messageId || null, template_name: metaTemplate.name,
+              template_params: templateParams,
+            }).select().single();
+
+            if (msgData) {
+              addMessage(contact.id, {
+                id: msgData.id, contactId: msgData.contact_id, content: resolvedText,
+                type: 'template', status, isOutgoing: true,
+                timestamp: new Date(msgData.created_at), whatsappMessageId: data?.messageId,
+              });
+            }
+          } catch (err: any) {
+            failedCount++;
+            failReasons.push(`${contact.name}: ${err.message}`);
+          }
+        }
+      }
+
+      // Show detailed results
+      if (failedCount === 0) {
+        toast({ title: `✅ Sent to ${sentCount} contact(s)`, duration: 4000 });
+      } else {
+        toast({
+          title: `⚠️ ${sentCount} sent, ${failedCount} failed`,
+          description: failReasons.slice(0, 3).join('\n') + (failReasons.length > 3 ? `\n...and ${failReasons.length - 3} more` : ''),
+          variant: 'destructive',
+          duration: 10000,
+        });
+      }
+
+      setSelectedContactIds([]);
+      setContactSelectionMode(false);
+      setShowBulkDialog(false);
+    } catch (error: any) {
+      toast({ title: 'Bulk send failed', description: error.message, variant: 'destructive' });
+    } finally {
+      setSendingBulk(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-panel border-r border-panel-border">
+      <div className="flex items-center justify-between px-4 pt-3 pb-1 bg-panel shrink-0">
+        <h1 className="text-[32px] sm:text-[28px] font-extrabold tracking-tight text-foreground ios-header">{viewMode === 'contacts' ? 'Contacts' : 'Chats'}</h1>
+        <div className="flex items-center gap-1">
+          {viewMode === 'chats' && (
+            <>
+              <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setShowLabelManager(true)}><Settings2 className="h-5 w-5 stroke-[2.8px]" /></Button>
+              <Button variant="ghost" size="icon" className="h-10 w-10" onClick={onNewChat}><SquarePen className="h-5 w-5 stroke-[2.8px]" /></Button>
+            </>
+          )}
+          {viewMode === 'contacts' && (
+            <>
+              <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setShowAddContactModal(true)}><Plus className="h-5 w-5 stroke-[2.8px]" /></Button>
+              <Button variant={contactSelectionMode ? 'default' : 'ghost'} size="icon" className="h-10 w-10" onClick={() => { setContactSelectionMode((v) => !v); setSelectedContactIds([]); }}><CheckSquare className="h-5 w-5" /></Button>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="px-4 py-2 shrink-0">
+        <SearchInput value={searchQuery} onChange={setSearchQuery} placeholder={viewMode === 'contacts' ? 'Search contacts' : 'Search'} />
+      </div>
+
+      {viewMode === 'chats' && (
+        <div className="px-4 pb-2 shrink-0 flex flex-wrap gap-2">
+          <Button size="sm" variant={chatFilter === 'all' ? 'default' : 'secondary'} className={cn('rounded-full', chatFilter === 'all' && 'text-white')} onClick={() => setChatFilter('all')}>All</Button>
+          <Button size="sm" variant={chatFilter === 'unread' ? 'default' : 'secondary'} className={cn('rounded-full flex items-center gap-1', chatFilter === 'unread' && 'text-white')} onClick={() => setChatFilter('unread')}>
+            Unread
+            {unreadCount > 0 && <span className="text-[11px] font-semibold">{unreadCount}</span>}
+          </Button>
+          <Button size="sm" variant={chatFilter === 'archived' ? 'default' : 'secondary'} className={cn('rounded-full flex items-center gap-1', chatFilter === 'archived' && 'text-white')} onClick={() => setChatFilter('archived')}>
+            <Archive className="h-3.5 w-3.5" />Archived
+            {archivedCount > 0 && <span className="text-[11px] font-semibold">{archivedCount}</span>}
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild><Button size="sm" variant="secondary" className="rounded-full"><SortAsc className="h-3.5 w-3.5 mr-1" />Sort</Button></DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => setSortBy('recent')}>Recent</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSortBy('name')}>Name</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSortBy('amount')}>Amount</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setSortDir(sortDir === 'asc' ? 'desc' : 'asc')}>{sortDir === 'asc' ? 'Descending' : 'Ascending'}</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
+
+      {viewMode === 'contacts' && (
+        <div className="px-4 pb-2 shrink-0 space-y-2">
+          <div className="flex flex-wrap gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild><Button size="sm" variant="secondary" className="rounded-full"><SortAsc className="h-3.5 w-3.5 mr-1" />Sort</Button></DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onClick={() => setContactSortBy('name')}>Name</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setContactSortBy('recent')}>Recent</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setContactSortBy('amount')}>Amount</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setContactSortBy('loanId')}>Loan ID</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setContactSortDir(contactSortDir === 'asc' ? 'desc' : 'asc')}>{contactSortDir === 'asc' ? <><SortDesc className='h-3.5 w-3.5 mr-1' />Descending</> : <><SortAsc className='h-3.5 w-3.5 mr-1' />Ascending</>}</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <select value={contactDayTypeFilter} onChange={(e) => setContactDayTypeFilter(e.target.value)} className="h-8 rounded-full px-3 text-xs border bg-secondary">
+              {dayTypeOptions.map((v) => <option key={v} value={v}>{v === 'all' ? 'All day types' : `Day ${v}`}</option>)}
+            </select>
+
+            <select value={contactAppTypeFilter} onChange={(e) => setContactAppTypeFilter(e.target.value)} className="h-8 rounded-full px-3 text-xs border bg-secondary">
+              {appTypeOptions.map((v) => <option key={v} value={v}>{v === 'all' ? 'All app types' : v.toUpperCase()}</option>)}
+            </select>
+          </div>
+
+          {contactSelectionMode && (
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="destructive" onClick={handleDeleteSelectedContacts} disabled={selectedContactIds.length === 0}><Trash2 className="h-4 w-4 mr-1" />Delete ({selectedContactIds.length})</Button>
+              <Button size="sm" onClick={() => setShowBulkDialog(true)} disabled={selectedContactIds.length === 0}><Send className="h-4 w-4 mr-1" />Message ({selectedContactIds.length})</Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div ref={listContainerRef} className="flex-1 overflow-y-auto custom-scrollbar">
+        {viewMode === 'chats' && (
+          filteredChats.length === 0
+            ? <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-4"><MessageCircle className="h-14 w-14 mb-3 opacity-40" /><p className="text-[15px]">No chats yet</p></div>
+            : filteredChats.map((chat) => (
+              <ChatListItem
+                key={chat.id}
+                chat={chat}
+                isActive={activeChat?.id === chat.id}
+                onClick={() => { setActiveChat(chat); onChatSelect?.(chat); }}
+                chatLabels={labels.filter((l) => (chatLabelMap[chat.id] || []).includes(l.id))}
+                allLabels={labels}
+              />
+            ))
+        )}
+
+        {viewMode === 'contacts' && (
+          <>
+            <button onClick={() => setShowAddContactModal(true)} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-accent/50 border-b border-panel-border">
+              <div className="h-10 w-10 rounded-full bg-primary flex items-center justify-center"><Plus className="h-5 w-5 text-primary-foreground" /></div>
+              <span className="text-[17px] font-medium text-primary">New Contact</span>
+            </button>
+
+            {filteredContacts.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-64 text-muted-foreground p-4"><Users className="h-14 w-14 mb-3 opacity-40" /><p className="text-[15px]">No contacts found</p></div>
+            ) : filteredContacts.map((contact) => (
+              <ContactListItem
+                key={contact.id}
+                contact={contact}
+                labels={labels.filter((l) => (chatLabelMap[contact.id] || []).includes(l.id))}
+                selectionMode={contactSelectionMode}
+                selected={selectedContactIds.includes(contact.id)}
+                onToggleSelect={toggleContactSelection}
+                onClick={() => {
+                  const chat = chats.find((c) => c.contact.id === contact.id);
+                  if (chat) {
+                    setActiveChat(chat);
+                    onChatSelect?.(chat);
+                    setViewMode('chats');
+                  }
+                }}
+              />
+            ))}
+          </>
+        )}
+      </div>
+
+      <LabelManagerPanel open={showLabelManager} onOpenChange={setShowLabelManager} onLabelsChanged={fetchLabels} />
+
+      <Dialog open={showBulkDialog} onOpenChange={setShowBulkDialog}>
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
+          <DialogHeader><DialogTitle>Templates</DialogTitle></DialogHeader>
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <Tabs value={bulkSource} onValueChange={(v) => { setBulkSource(v as 'app' | 'meta'); setSelectedTemplateId(''); }}>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="meta">Meta Templates</TabsTrigger>
+                <TabsTrigger value="app">App Templates</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="meta" className="mt-3 space-y-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input placeholder="Search meta templates..." className="pl-9" value={bulkMetaSearch} onChange={(e) => setBulkMetaSearch(e.target.value)} />
+                </div>
+                <ScrollArea className="h-[350px]">
+                  <div className="space-y-2 pb-4">
+                    {bulkFilteredMeta.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground text-sm">No Meta templates found</div>
+                    ) : bulkFilteredMeta.map(t => (
+                      <button key={t.id} onClick={() => setSelectedTemplateId(t.id)}
+                        className={cn("w-full text-left p-4 rounded-lg border transition-colors", selectedTemplateId === t.id ? "border-primary bg-primary/5" : "border-border hover:bg-accent/50")}>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-medium">{t.name}</span>
+                          <Badge variant="default" className="bg-primary text-primary-foreground">APPROVED</Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground line-clamp-2">{(t as any).components?.find?.((c: any) => c.type === 'BODY')?.text || 'No preview'}</p>
+                      </button>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </TabsContent>
+
+              <TabsContent value="app" className="mt-3 space-y-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input placeholder="Search app templates..." className="pl-9" value={bulkAppSearch} onChange={(e) => setBulkAppSearch(e.target.value)} />
+                </div>
+                <ScrollArea className="h-[350px]">
+                  <div className="space-y-2 pb-4">
+                    {bulkFilteredApp.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground text-sm">No app templates found</div>
+                    ) : appTemplates.map(t => (
+                      <button key={t.id} onClick={() => setSelectedTemplateId(t.id)}
+                        className={cn("w-full text-left p-3 rounded-lg border transition-colors", selectedTemplateId === t.id ? "border-primary bg-primary/5" : "border-border hover:bg-accent/50")}>
+                        <p className="font-medium text-sm">{t.name}</p>
+                        <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{t.body}</p>
+                      </button>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </TabsContent>
+            </Tabs>
+          </div>
+          <div className="shrink-0 pt-2 border-t border-border">
+            <Button className="w-full" onClick={handleBulkTemplateSend} disabled={sendingBulk || !selectedTemplateId || selectedContactIds.length === 0}>
+              {sendingBulk ? 'Sending...' : `Send to ${selectedContactIds.length} contact(s)`}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
