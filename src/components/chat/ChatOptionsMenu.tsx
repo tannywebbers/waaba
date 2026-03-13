@@ -18,7 +18,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { useAppStore } from '@/store/appStore';
+import { useAppStore } from '@/stores/appStore';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { AssignContactModal } from '@/components/chat/AssignContactModal';

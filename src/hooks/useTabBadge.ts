@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useAppStore } from '@/store/appStore';
+import { useAppStore } from '@/stores/appStore';
 
 export function useTabBadge() {
   const lastUnreadRef = useRef<number>(-1);

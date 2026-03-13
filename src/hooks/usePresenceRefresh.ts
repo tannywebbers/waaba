@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useAppStore } from '@/store/appStore';
+import { useAppStore } from '@/stores/appStore';
 import { useAuth } from '@/hooks/useAuth';
 import { updateContactsOnlineStatus } from '@/lib/utils/onlineStatusUtils';
 

@@ -7,7 +7,7 @@ import { AddContactModal } from '@/components/contacts/AddContactModal';
 import { EditContactModal } from '@/components/contacts/EditContactModal';
 import { SettingsPage } from '@/components/settings/SettingsPage';
 import { NewChatModal } from '@/components/chat/NewChatModal';
-import { useAppStore } from '@/store/appStore';
+import { useAppStore } from '@/stores/appStore';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ViewMode } from '@/types';
