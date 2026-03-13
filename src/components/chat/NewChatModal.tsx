@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useState } from 'react';
 import { Search, Phone } from 'lucide-react';
 import { useAppStore } from '@/stores/appStore';

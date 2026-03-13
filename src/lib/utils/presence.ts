@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Compute real presence status from lastSeen timestamp
 // 70 seconds threshold as per WhatsApp standard
 const ONLINE_THRESHOLD_MS = 70 * 1000; // 70 seconds

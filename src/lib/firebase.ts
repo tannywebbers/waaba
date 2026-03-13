@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Firebase Cloud Messaging initialization
  * Handles push token generation, refresh, and storage

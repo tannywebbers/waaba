@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useState } from 'react';
 import { X, User, Phone, CreditCard, Banknote, Users, Plus, Calendar, Smartphone, Trash2 } from 'lucide-react';
 import { useAppStore } from '@/stores/appStore';

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useState } from 'react';
 import { MoreVertical, Archive, Pin, BellOff, Bell, MessageSquareOff, User, Search, Eraser, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';

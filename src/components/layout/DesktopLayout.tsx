@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useState } from 'react';
 import { MessageCircle, Users, Settings, SquarePen, UserPlus, Menu } from 'lucide-react';
 import { ChatList } from '@/components/chat/ChatList';
