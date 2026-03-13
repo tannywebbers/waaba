@@ -10,17 +10,496 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.4"
+    PostgrestVersion: "14.1"
   }
   public: {
     Tables: {
-      [_ in never]: never
+      account_details: {
+        Row: {
+          account_name: string
+          account_number: string
+          bank: string
+          contact_id: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          account_name: string
+          account_number: string
+          bank: string
+          contact_id: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          account_name?: string
+          account_number?: string
+          bank?: string
+          contact_id?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_details_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      app_templates: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      chat_labels: {
+        Row: {
+          chat_id: string
+          created_at: string
+          id: string
+          label_id: string
+          user_id: string
+        }
+        Insert: {
+          chat_id: string
+          created_at?: string
+          id?: string
+          label_id: string
+          user_id: string
+        }
+        Update: {
+          chat_id?: string
+          created_at?: string
+          id?: string
+          label_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_labels_chat_id_fkey"
+            columns: ["chat_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_labels_label_id_fkey"
+            columns: ["label_id"]
+            isOneToOne: false
+            referencedRelation: "labels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contacts: {
+        Row: {
+          amount: number | null
+          app_type: string | null
+          assigned_user_id: string | null
+          avatar_url: string | null
+          created_at: string
+          day_type: number | null
+          id: string
+          is_archived: boolean | null
+          is_muted: boolean | null
+          is_online: boolean | null
+          is_pinned: boolean | null
+          last_seen: string | null
+          loan_id: string
+          name: string
+          phone: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount?: number | null
+          app_type?: string | null
+          assigned_user_id?: string | null
+          avatar_url?: string | null
+          created_at?: string
+          day_type?: number | null
+          id?: string
+          is_archived?: boolean | null
+          is_muted?: boolean | null
+          is_online?: boolean | null
+          is_pinned?: boolean | null
+          last_seen?: string | null
+          loan_id: string
+          name: string
+          phone: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number | null
+          app_type?: string | null
+          assigned_user_id?: string | null
+          avatar_url?: string | null
+          created_at?: string
+          day_type?: number | null
+          id?: string
+          is_archived?: boolean | null
+          is_muted?: boolean | null
+          is_online?: boolean | null
+          is_pinned?: boolean | null
+          last_seen?: string | null
+          loan_id?: string
+          name?: string
+          phone?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      labels: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      messages: {
+        Row: {
+          contact_id: string
+          content: string
+          created_at: string
+          id: string
+          is_outgoing: boolean
+          media_url: string | null
+          status: string
+          template_name: string | null
+          template_params: Json | null
+          type: string
+          user_id: string
+          whatsapp_message_id: string | null
+        }
+        Insert: {
+          contact_id: string
+          content: string
+          created_at?: string
+          id?: string
+          is_outgoing?: boolean
+          media_url?: string | null
+          status?: string
+          template_name?: string | null
+          template_params?: Json | null
+          type?: string
+          user_id: string
+          whatsapp_message_id?: string | null
+        }
+        Update: {
+          contact_id?: string
+          content?: string
+          created_at?: string
+          id?: string
+          is_outgoing?: boolean
+          media_url?: string | null
+          status?: string
+          template_name?: string | null
+          template_params?: Json | null
+          type?: string
+          user_id?: string
+          whatsapp_message_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          email: string | null
+          id: string
+          name: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      push_tokens: {
+        Row: {
+          created_at: string
+          device_info: string | null
+          id: string
+          platform: string | null
+          token: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          device_info?: string | null
+          id?: string
+          platform?: string | null
+          token: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          device_info?: string | null
+          id?: string
+          platform?: string | null
+          token?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      shared_inbox_users: {
+        Row: {
+          balance: number
+          created_at: string
+          id: string
+          shared_user_id: string
+          status: string
+          super_user_id: string
+        }
+        Insert: {
+          balance?: number
+          created_at?: string
+          id?: string
+          shared_user_id: string
+          status?: string
+          super_user_id: string
+        }
+        Update: {
+          balance?: number
+          created_at?: string
+          id?: string
+          shared_user_id?: string
+          status?: string
+          super_user_id?: string
+        }
+        Relationships: []
+      }
+      template_mappings: {
+        Row: {
+          created_at: string
+          id: string
+          mapped_field: string
+          template_name: string
+          user_id: string
+          variable_number: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          mapped_field: string
+          template_name: string
+          user_id: string
+          variable_number: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          mapped_field?: string
+          template_name?: string
+          user_id?: string
+          variable_number?: number
+        }
+        Relationships: []
+      }
+      whatsapp_settings: {
+        Row: {
+          api_token: string | null
+          app_id: string | null
+          business_account_id: string | null
+          created_at: string
+          id: string
+          is_connected: boolean | null
+          phone_number_id: string | null
+          updated_at: string
+          user_id: string
+          verify_token: string | null
+          webhook_url: string | null
+        }
+        Insert: {
+          api_token?: string | null
+          app_id?: string | null
+          business_account_id?: string | null
+          created_at?: string
+          id?: string
+          is_connected?: boolean | null
+          phone_number_id?: string | null
+          updated_at?: string
+          user_id: string
+          verify_token?: string | null
+          webhook_url?: string | null
+        }
+        Update: {
+          api_token?: string | null
+          app_id?: string | null
+          business_account_id?: string | null
+          created_at?: string
+          id?: string
+          is_connected?: boolean | null
+          phone_number_id?: string | null
+          updated_at?: string
+          user_id?: string
+          verify_token?: string | null
+          webhook_url?: string | null
+        }
+        Relationships: []
+      }
+      whatsapp_templates: {
+        Row: {
+          category: string | null
+          components: Json | null
+          created_at: string
+          id: string
+          language: string | null
+          name: string
+          status: string | null
+          template_id: string
+          user_id: string
+        }
+        Insert: {
+          category?: string | null
+          components?: Json | null
+          created_at?: string
+          id?: string
+          language?: string | null
+          name: string
+          status?: string | null
+          template_id: string
+          user_id: string
+        }
+        Update: {
+          category?: string | null
+          components?: Json | null
+          created_at?: string
+          id?: string
+          language?: string | null
+          name?: string
+          status?: string | null
+          template_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      assign_conversation: {
+        Args: {
+          _contact_id: string
+          _shared_user_id: string
+          _super_user_id: string
+        }
+        Returns: undefined
+      }
+      check_phone_conflict: {
+        Args: { _phone: string; _user_id: string }
+        Returns: {
+          owner_name: string
+          owner_user_id: string
+        }[]
+      }
+      copy_super_user_credentials: {
+        Args: { _shared_user_id: string; _super_user_id: string }
+        Returns: undefined
+      }
+      deduct_shared_credit: {
+        Args: { _shared_user_id: string }
+        Returns: number
+      }
+      find_profile_by_email: {
+        Args: { _email: string }
+        Returns: {
+          email: string
+          name: string
+          user_id: string
+        }[]
+      }
+      is_active_shared_user: {
+        Args: { _shared_user_id: string; _super_user_id: string }
+        Returns: boolean
+      }
+      remove_shared_credentials: {
+        Args: { _shared_user_id: string }
+        Returns: undefined
+      }
+      unassign_conversation: {
+        Args: { _contact_id: string; _super_user_id: string }
+        Returns: undefined
+      }
+      user_can_access_contact: {
+        Args: { _contact_id: string; _user_id: string }
+        Returns: boolean
+      }
+      users_share_inbox: {
+        Args: { _user_id_1: string; _user_id_2: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
