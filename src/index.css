@@ -2,95 +2,106 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
-
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-
+    --foreground: 0 0% 3.9%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-
+    --card-foreground: 0 0% 3.9%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-
+    --popover-foreground: 0 0% 3.9%;
+    --primary: 143 60% 39%;              /* ✅ #28A156 */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 96.1%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 45.1%;
+    --accent: 143 40% 94%;              /* ✅ soft green tint for hover/highlight */
+    --accent-foreground: 143 60% 25%;
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 143 60% 39%;                /* ✅ matches primary */
     --radius: 0.5rem;
 
+    /* WhatsApp-style tokens */
+    --waba-teal: 143 60% 39%;
+    --waba-teal-light: 143 55% 45%;
+    --waba-teal-dark: 143 65% 30%;
+    --waba-green: 143 60% 39%;
+    --waba-blue: 199 89% 48%;
+
+    /* #d8fdd3 = hsl(115, 95%, 91%) */
+    --bubble-outgoing: 115 95% 91%;
+    --bubble-incoming: 0 0% 100%;
+    --bubble-text: 0 0% 7%;
+
+    /* #a4d4ad = hsl(132, 33%, 74%) */
+    --highlight-active: 143 45% 78%;
+
+    --status-online: 143 60% 39%;
+    --status-offline: 0 0% 70%;
+    --status-typing: 199 89% 48%;
+
+    --panel-bg: 0 0% 100%;
+    --panel-header: 0 0% 97%;
+    --panel-border: 0 0% 88%;
+
+    --chat-bg: 30 30% 92%;
+
     --sidebar-background: 0 0% 98%;
-
     --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
+    --sidebar-primary: 143 60% 39%;
     --sidebar-primary-foreground: 0 0% 98%;
-
     --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
+    --sidebar-accent-foreground: 240 5.3% 26.1%;
     --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-ring: 143 60% 39%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    --background: 0 0% 9%;
+    --foreground: 0 0% 97%;             /* ✅ near-white text */
+    --card: 0 0% 13%;
+    --card-foreground: 0 0% 97%;        /* ✅ light text on cards */
+    --popover: 0 0% 13%;
+    --popover-foreground: 0 0% 97%;
+    --primary: 143 60% 45%;             /* ✅ slightly brighter #28A156 for dark bg */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 18%;
+    --secondary-foreground: 0 0% 92%;   /* ✅ light */
+    --muted: 0 0% 18%;
+    --muted-foreground: 0 0% 68%;       /* ✅ readable muted text */
+    --accent: 143 30% 20%;             /* ✅ subtle green tint for hover */
+    --accent-foreground: 0 0% 97%;
+    --destructive: 0 62.8% 50%;        /* ✅ brighter red so it's visible on dark */
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 22%;
+    --input: 0 0% 22%;
+    --ring: 143 60% 45%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    /* Dark mode bubbles */
+    --bubble-outgoing: 143 28% 22%;
+    --bubble-incoming: 0 0% 17%;
+    --bubble-text: 0 0% 95%;            /* ✅ light bubble text */
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --highlight-active: 143 28% 22%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --panel-bg: 0 0% 13%;
+    --panel-header: 0 0% 15%;
+    --panel-border: 0 0% 22%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --chat-bg: 0 0% 7%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-background: 0 0% 13%;
+    --sidebar-foreground: 0 0% 92%;     /* ✅ light sidebar text */
+    --sidebar-primary: 143 60% 45%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 0 0% 18%;
+    --sidebar-accent-foreground: 0 0% 92%;
+    --sidebar-border: 0 0% 22%;
+    --sidebar-ring: 143 60% 45%;
   }
 }
 
@@ -98,8 +109,163 @@ All colors MUST be HSL.
   * {
     @apply border-border;
   }
-
   body {
     @apply bg-background text-foreground;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', 'Segoe UI', Roboto, sans-serif;
+    font-weight: 500;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
+}
+
+/* WhatsApp-style message bubbles with tails */
+.message-bubble-outgoing {
+  position: relative;
+  border-radius: 7.5px 0 7.5px 7.5px;
+}
+
+.message-bubble-outgoing::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: -8px;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 0 10px 8px;
+  border-color: transparent transparent transparent hsl(var(--bubble-outgoing));
+}
+
+.message-bubble-incoming {
+  position: relative;
+  border-radius: 0 7.5px 7.5px 7.5px;
+}
+
+.message-bubble-incoming::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -8px;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 8px 10px 0;
+  border-color: transparent hsl(var(--bubble-incoming)) transparent transparent;
+}
+
+/* iOS-style settings row */
+.ios-settings-row {
+  @apply flex items-center gap-3 px-4 py-3 text-left w-full hover:bg-accent/50 transition-colors;
+}
+
+.ios-settings-icon {
+  @apply h-[30px] w-[30px] rounded-[7px] flex items-center justify-center shrink-0;
+}
+
+/* Chat background */
+.chat-background {
+  background-color: hsl(var(--chat-bg));
+}
+
+/* Message spacing */
+.message-spacing-container > div {
+  margin-bottom: 6px;
+}
+
+/* Day separator */
+.conversation-day-separator {
+  @apply flex items-center justify-center py-3;
+}
+
+.conversation-day-separator span {
+  @apply text-[12px] text-muted-foreground bg-card/90 px-3 py-1 rounded-lg shadow-sm;
+}
+
+/* Custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Message animation */
+@keyframes message-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-message-in {
+  animation: message-in 0.15s ease-out;
+}
+
+/* iOS header style */
+.ios-header {
+  letter-spacing: -0.02em;
+}
+
+/* Sticker style */
+.message-sticker {
+  background: transparent !important;
+}
+
+/* Mobile keyboard awareness — input bar stays above keyboard */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .chat-input-bar {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Global button radius increase (+15px from default) */
+button, .btn, [role="button"] {
+  border-radius: 30px;
+}
+/* Keep circular buttons circular */
+button.rounded-full, .rounded-full {
+  border-radius: 9999px;
+}
+
+/* Dark mode: ensure icons and text are visible */
+.dark .text-black {
+  color: hsl(var(--foreground));
+}
+
+.dark svg {
+  color: inherit;
+}
+
+/* Unread chat items — extra bold weight */
+.chat-item-unread .chat-item-name,
+.chat-item-unread .chat-item-preview {
+  font-weight: 800;
+}
+.chat-item-unread .chat-item-preview {
+  color: hsl(var(--foreground));
+}
+
+/* Blinking badge for unread messages */
+@keyframes blinkBadge {
+  0% { opacity: 1; }
+  50% { opacity: 0.3; }
+  100% { opacity: 1; }
+}
+
+.animate-blink-badge {
+  animation: blinkBadge 1.2s ease-in-out infinite;
 }
