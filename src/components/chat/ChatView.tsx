@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { ArrowLeft, MessageCircle, Send } from 'lucide-react';
+import { EmojiPickerButton } from '@/components/chat/EmojiPickerButton';
 import { Button } from '@/components/ui/button';
 import { useAppStore } from '@/stores/appStore';
 import { useAuth } from '@/hooks/useAuth';
@@ -678,7 +679,11 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
             />
           ) : (
             <>
-              <div className="flex-1 flex items-end bg-background rounded-[25px] px-3 py-1 border border-input shadow-sm">
+              <div className="flex-1 flex items-end bg-background rounded-[25px] px-3 py-1 border border-input shadow-sm gap-1">
+                <EmojiPickerButton onEmojiSelect={(emoji) => {
+                  setInputValue((prev) => prev + emoji);
+                  setDraft(activeChat.id, inputValue + emoji);
+                }} />
                 <textarea
                   ref={inputRef}
                   value={inputValue}
