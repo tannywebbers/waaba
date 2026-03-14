@@ -784,7 +784,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       )}
 
       {/* Safe area spacer */}
-      <div className="shrink-0" style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }} />
+      <div className="shrink-0" style={{ paddingBottom: 'max(10px, env(safe-area-inset-bottom))' }} />
     </div>
   );
 }
