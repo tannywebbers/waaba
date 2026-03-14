@@ -656,23 +656,9 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         </div>
       )}
 
-      {/* Input bar - transparent, floating above emoji panel */}
+      {/* Input bar */}
       <div className="px-2 sm:px-3 pt-1.5 pb-2 shrink-0 z-20">
         <div className="flex items-end gap-1.5 max-w-3xl mx-auto">
-          {recorderState.state === 'idle' && (
-            <>
-              <div><FileUploadButton onFileSelect={(file, type) => handleFileUpload(file, type)} uploading={uploading} /></div>
-              <UnifiedTemplateSelector
-                contact={contact}
-                onSelectMetaTemplate={handleSendMetaTemplate}
-                onInsertAppTemplate={(text) => {
-                  setInputValue((prev) => prev + text);
-                  setDraft(activeChat.id, inputValue + text);
-                }}
-              />
-            </>
-          )}
-
           {recorderState.state !== 'idle' ? (
             <VoiceRecorderButton
               onRecordingComplete={(blob) => handleVoiceNoteSend(blob)}
@@ -680,28 +666,32 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
             />
           ) : (
             <>
-              <div className="flex-1 flex items-end bg-card dark:bg-[hsl(200_12%_16%)] rounded-[25px] px-3 py-1 border border-input shadow-sm gap-1">
-                <EmojiPickerButton
-                  onEmojiSelect={(emoji) => {
-                    setInputValue((prev) => prev + emoji);
-                    setDraft(activeChat.id, inputValue + emoji);
-                  }}
-                  onDeleteChar={() => {
-                    setInputValue((prev) => {
-                      // Remove last grapheme (handles multi-byte emoji)
-                      const arr = [...prev];
-                      arr.pop();
-                      return arr.join('');
-                    });
-                  }}
-                  onToggle={(isOpen) => {
-                    setEmojiPanelOpen(isOpen);
-                    if (isOpen && isMobile) {
-                      // Blur input so mobile keyboard closes
-                      inputRef.current?.blur();
-                    }
-                  }}
-                />
+              {/* Message input area - contains emoji, textarea, file, template */}
+              <div className="flex-1 flex items-end bg-card dark:bg-[hsl(200_12%_16%)] rounded-[25px] px-2 py-1 border border-input shadow-sm gap-1">
+                {/* Emoji button */}
+                <div className="shrink-0 self-end pb-[2px]">
+                  <EmojiPickerButton
+                    onEmojiSelect={(emoji) => {
+                      setInputValue((prev) => prev + emoji);
+                      setDraft(activeChat.id, inputValue + emoji);
+                    }}
+                    onDeleteChar={() => {
+                      setInputValue((prev) => {
+                        const arr = [...prev];
+                        arr.pop();
+                        return arr.join('');
+                      });
+                    }}
+                    onToggle={(isOpen) => {
+                      setEmojiPanelOpen(isOpen);
+                      if (isOpen && isMobile) {
+                        inputRef.current?.blur();
+                      }
+                    }}
+                  />
+                </div>
+
+                {/* Textarea */}
                 <textarea
                   ref={inputRef}
                   value={inputValue}
@@ -710,7 +700,6 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
                     setDraft(activeChat.id, e.target.value);
                   }}
                   onFocus={() => {
-                    // Close emoji panel when keyboard opens on mobile
                     if (isMobile && emojiPanelOpen) {
                       setEmojiPanelOpen(false);
                     }
@@ -730,11 +719,36 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
                   }}
                   placeholder="Message"
                   rows={1}
-                  className="flex-1 resize-none border-0 focus:outline-none min-h-[36px] max-h-[120px] py-[6px] text-[15px] bg-transparent leading-[1.35] font-medium overflow-y-auto"
+                  className="flex-1 resize-none border-0 focus:outline-none min-h-[36px] max-h-[120px] py-[6px] px-2 text-[15px] bg-transparent leading-[1.35] font-medium overflow-y-auto custom-scrollbar"
+                  style={{
+                    scrollbarWidth: 'thin',
+                    scrollbarColor: 'rgba(155, 155, 155, 0.5) transparent'
+                  }}
                   disabled={sending || uploading}
                 />
+
+                {/* File upload button */}
+                <div className="shrink-0 self-end pb-[2px]">
+                  <FileUploadButton 
+                    onFileSelect={(file, type) => handleFileUpload(file, type)} 
+                    uploading={uploading}
+                  />
+                </div>
+
+                {/* Template button */}
+                <div className="shrink-0 self-end pb-[2px]">
+                  <UnifiedTemplateSelector
+                    contact={contact}
+                    onSelectMetaTemplate={handleSendMetaTemplate}
+                    onInsertAppTemplate={(text) => {
+                      setInputValue((prev) => prev + text);
+                      setDraft(activeChat.id, inputValue + text);
+                    }}
+                  />
+                </div>
               </div>
 
+              {/* Send or Voice button - OUTSIDE message area */}
               {inputValue.trim()
                 ? <Button size="icon" className="h-[42px] w-[42px] shrink-0 rounded-full bg-primary hover:bg-primary/90 shadow-sm" onClick={handleSend} disabled={sending || uploading}>
                     <Send className="h-[18px] w-[18px]" strokeWidth={2.25} />
