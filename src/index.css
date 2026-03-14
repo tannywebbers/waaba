@@ -232,15 +232,6 @@
   }
 }
 
-/* Global button radius increase (+15px from default) */
-button, .btn, [role="button"] {
-  border-radius: 30px;
-}
-/* Keep circular buttons circular */
-button.rounded-full, .rounded-full {
-  border-radius: 9999px;
-}
-
 /* Dark mode: ensure icons and text are visible */
 .dark .text-black {
   color: hsl(var(--foreground));
