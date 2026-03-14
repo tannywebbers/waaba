@@ -564,6 +564,43 @@ serve(async (req) => {
               status: 'delivered',
               payload: { messageId, content: content.substring(0, 100), has_media: !!mediaUrl },
             });
+
+            // ── Send FCM push notification ──
+            try {
+              const { data: pushTokens } = await supabase
+                .from('push_tokens')
+                .select('token')
+                .eq('user_id', targetUserId);
+
+              if (pushTokens && pushTokens.length > 0) {
+                const profileName = value.contacts?.[0]?.profile?.name || from;
+                const notifBody = type === 'text' ? content.substring(0, 200) : `[${type}]`;
+
+                for (const pt of pushTokens) {
+                  try {
+                    const pushUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/send-push`;
+                    await fetch(pushUrl, {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+                      },
+                      body: JSON.stringify({
+                        token: pt.token,
+                        title: profileName,
+                        body: notifBody,
+                        data: { contactId, type, from },
+                      }),
+                    });
+                  } catch (pushErr) {
+                    console.error('❌ Push send error:', pushErr);
+                  }
+                }
+                console.log(`📤 Push sent to ${pushTokens.length} device(s)`);
+              }
+            } catch (pushError) {
+              console.error('❌ Push notification error:', pushError);
+            }
           }
         }
       }

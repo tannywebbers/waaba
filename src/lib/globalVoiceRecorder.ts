@@ -1,9 +1,8 @@
 /**
  * Global voice recorder controller.
- * Uses vmsg (WebAssembly LAME) for reliable MP3 encoding.
+ * Uses native MediaRecorder with opus/webm for clean, low-latency recording.
+ * Falls back to audio/mp4 on Safari.
  */
-import vmsg from 'vmsg';
-const Recorder = (vmsg as any).Recorder || (vmsg as any).default || vmsg;
 
 type RecordingState = 'idle' | 'recording' | 'stopped';
 
@@ -16,7 +15,9 @@ export interface RecordingController {
 }
 
 class VoiceRecorderController {
-  private recorder: any = null;
+  private mediaRecorder: MediaRecorder | null = null;
+  private stream: MediaStream | null = null;
+  private chunks: Blob[] = [];
   private timerInterval: ReturnType<typeof setInterval> | null = null;
   private startTimeMs: number | null = null;
 
@@ -47,6 +48,15 @@ class VoiceRecorderController {
     return this.controller.audioBlob;
   }
 
+  private getMimeType(): string {
+    // Prefer opus in webm (best quality/size for voice)
+    if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) return 'audio/webm;codecs=opus';
+    if (MediaRecorder.isTypeSupported('audio/webm')) return 'audio/webm';
+    if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) return 'audio/ogg;codecs=opus';
+    if (MediaRecorder.isTypeSupported('audio/mp4')) return 'audio/mp4';
+    return '';
+  }
+
   async start(): Promise<{ success: boolean; error?: string }> {
     if (this.controller.state !== 'idle') {
       return { success: false, error: 'Already recording' };
@@ -57,19 +67,32 @@ class VoiceRecorderController {
         throw new Error('BROWSER_UNSUPPORTED');
       }
 
-      console.log('[VoiceRecorder] Initializing vmsg recorder...');
-
-      this.recorder = new Recorder({
-        wasmURL: 'https://unpkg.com/vmsg@0.3.0/vmsg.wasm',
+      // Request mic with echo cancellation and noise suppression for cleaner audio
+      this.stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 48000,
+        },
       });
 
-      console.log('[VoiceRecorder] Loading WebAssembly encoder...');
-      await this.recorder.initAudio();
-      await this.recorder.initWorker();
-      console.log('[VoiceRecorder] ✅ Encoder ready');
+      const mimeType = this.getMimeType();
+      if (!mimeType) {
+        throw new Error('No supported audio recording format found');
+      }
 
-      console.log('[VoiceRecorder] Starting recording...');
-      await this.recorder.startRecording();
+      this.chunks = [];
+      this.mediaRecorder = new MediaRecorder(this.stream, {
+        mimeType,
+        audioBitsPerSecond: 128000,
+      });
+
+      this.mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) this.chunks.push(e.data);
+      };
+
+      this.mediaRecorder.start(250); // Collect data every 250ms for smooth recording
 
       this.startTimeMs = Date.now();
       this.controller.state = 'recording';
@@ -82,16 +105,13 @@ class VoiceRecorderController {
         this.notify();
       }, 1000);
 
-      console.log('[VoiceRecorder] ✅ Recording started successfully');
       this.notify();
       return { success: true };
 
     } catch (error: any) {
-      console.error('[VoiceRecorder] ❌ Recording initialization failed:', error);
       this.cleanupRecorder();
 
       let errorMessage = 'Failed to start recording. Please try again.';
-
       if (error.message === 'BROWSER_UNSUPPORTED') {
         errorMessage = 'Microphone not supported in this browser.';
       } else if (error?.name === 'NotAllowedError') {
@@ -100,8 +120,6 @@ class VoiceRecorderController {
         errorMessage = 'No microphone found. Please connect a microphone.';
       } else if (error?.name === 'NotReadableError' || error?.name === 'AbortError') {
         errorMessage = 'Microphone is busy or unavailable. Close other apps using the mic and try again.';
-      } else if (error.message && error.message.includes('wasm')) {
-        errorMessage = 'Failed to load audio encoder. Please check your internet connection and try again.';
       } else if (error.message) {
         errorMessage = error.message;
       }
@@ -111,54 +129,50 @@ class VoiceRecorderController {
   }
 
   async stop() {
-    if (this.controller.state !== 'recording' || !this.recorder) {
-      console.warn('[VoiceRecorder] Cannot stop - not recording');
+    if (this.controller.state !== 'recording' || !this.mediaRecorder) {
       return;
     }
 
-    console.log('[VoiceRecorder] Stopping recording...');
+    return new Promise<void>((resolve) => {
+      this.mediaRecorder!.onstop = () => {
+        const blob = new Blob(this.chunks, { type: this.mediaRecorder!.mimeType });
 
-    try {
-      const blob = await this.recorder.stopRecording();
+        if (blob.size === 0) {
+          this.cleanupRecorder();
+          this.controller.state = 'idle';
+          this.notify();
+          resolve();
+          return;
+        }
 
-      if (!blob || blob.size === 0) {
-        throw new Error('No audio data recorded');
-      }
+        const url = URL.createObjectURL(blob);
+        this.controller.audioBlob = blob;
+        this.controller.audioUrl = url;
+        this.controller.state = 'stopped';
 
-      const url = URL.createObjectURL(blob);
+        if (this.timerInterval) {
+          clearInterval(this.timerInterval);
+          this.timerInterval = null;
+        }
 
-      console.log('[VoiceRecorder] ✅ Recording complete:', {
-        size: blob.size,
-        type: blob.type
-      });
+        // Stop mic stream tracks
+        this.stream?.getTracks().forEach((t) => t.stop());
+        this.stream = null;
 
-      this.controller.audioBlob = blob;
-      this.controller.audioUrl = url;
-      this.controller.state = 'stopped';
+        this.notify();
+        resolve();
+      };
 
-      if (this.timerInterval) {
-        clearInterval(this.timerInterval);
-        this.timerInterval = null;
-      }
-
-      this.notify();
-
-    } catch (error: any) {
-      console.error('[VoiceRecorder] ❌ Stop recording failed:', error);
-      this.cleanupRecorder();
-      this.controller.state = 'idle';
-      this.notify();
-    }
+      this.mediaRecorder!.stop();
+    });
   }
 
   cancel() {
-    console.log('[VoiceRecorder] Cancelling recording...');
-
-    if (this.recorder && this.controller.state === 'recording') {
+    if (this.mediaRecorder && this.controller.state === 'recording') {
       try {
-        this.recorder.close();
-      } catch (e) {
-        console.error('[VoiceRecorder] Error closing recorder:', e);
+        this.mediaRecorder.stop();
+      } catch {
+        // ignore
       }
     }
 
@@ -188,15 +202,10 @@ class VoiceRecorderController {
       this.timerInterval = null;
     }
 
-    if (this.recorder) {
-      try {
-        this.recorder.close();
-      } catch (e) {
-        console.error('[VoiceRecorder] Error closing recorder:', e);
-      }
-      this.recorder = null;
-    }
-
+    this.stream?.getTracks().forEach((t) => t.stop());
+    this.stream = null;
+    this.mediaRecorder = null;
+    this.chunks = [];
     this.startTimeMs = null;
   }
 }
