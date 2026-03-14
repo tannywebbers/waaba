@@ -61,46 +61,46 @@
   }
 
   .dark {
-    --background: 0 0% 9%;
-    --foreground: 0 0% 97%;             /* ✅ near-white text */
-    --card: 0 0% 13%;
-    --card-foreground: 0 0% 97%;        /* ✅ light text on cards */
-    --popover: 0 0% 13%;
-    --popover-foreground: 0 0% 97%;
-    --primary: 143 60% 45%;             /* ✅ slightly brighter #28A156 for dark bg */
+    --background: 200 12% 7%;              /* #0b141a WhatsApp dark bg */
+    --foreground: 200 10% 92%;             /* #e9edef */
+    --card: 200 12% 13%;                   /* #1f2c34 */
+    --card-foreground: 200 10% 92%;
+    --popover: 200 12% 13%;
+    --popover-foreground: 200 10% 92%;
+    --primary: 143 60% 45%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 18%;
-    --secondary-foreground: 0 0% 92%;   /* ✅ light */
-    --muted: 0 0% 18%;
-    --muted-foreground: 0 0% 68%;       /* ✅ readable muted text */
-    --accent: 143 30% 20%;             /* ✅ subtle green tint for hover */
-    --accent-foreground: 0 0% 97%;
-    --destructive: 0 62.8% 50%;        /* ✅ brighter red so it's visible on dark */
+    --secondary: 200 12% 18%;              /* #202c33 */
+    --secondary-foreground: 200 10% 92%;
+    --muted: 200 12% 18%;
+    --muted-foreground: 200 10% 65%;       /* readable muted */
+    --accent: 143 30% 20%;
+    --accent-foreground: 200 10% 92%;
+    --destructive: 0 62.8% 50%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 22%;
-    --input: 0 0% 22%;
+    --border: 200 12% 20%;
+    --input: 200 12% 20%;
     --ring: 143 60% 45%;
 
-    /* Dark mode bubbles */
-    --bubble-outgoing: 143 28% 22%;
-    --bubble-incoming: 0 0% 17%;
-    --bubble-text: 0 0% 95%;            /* ✅ light bubble text */
+    /* Dark mode bubbles — WhatsApp style */
+    --bubble-outgoing: 157 25% 18%;        /* #005c4b tinted */
+    --bubble-incoming: 200 12% 15%;        /* #1f2c34 */
+    --bubble-text: 200 10% 92%;
 
     --highlight-active: 143 28% 22%;
 
-    --panel-bg: 0 0% 13%;
-    --panel-header: 0 0% 15%;
-    --panel-border: 0 0% 22%;
+    --panel-bg: 200 12% 10%;              /* #111b21 */
+    --panel-header: 200 12% 13%;          /* #1f2c34 */
+    --panel-border: 200 12% 18%;
 
-    --chat-bg: 0 0% 7%;
+    --chat-bg: 200 12% 7%;
 
-    --sidebar-background: 0 0% 13%;
-    --sidebar-foreground: 0 0% 92%;     /* ✅ light sidebar text */
+    --sidebar-background: 200 12% 10%;
+    --sidebar-foreground: 200 10% 92%;
     --sidebar-primary: 143 60% 45%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 0 0% 18%;
-    --sidebar-accent-foreground: 0 0% 92%;
-    --sidebar-border: 0 0% 22%;
+    --sidebar-accent: 200 12% 18%;
+    --sidebar-accent-foreground: 200 10% 92%;
+    --sidebar-border: 200 12% 18%;
     --sidebar-ring: 143 60% 45%;
   }
 }
@@ -230,15 +230,6 @@
   .chat-input-bar {
     padding-bottom: env(safe-area-inset-bottom);
   }
-}
-
-/* Global button radius increase (+15px from default) */
-button, .btn, [role="button"] {
-  border-radius: 30px;
-}
-/* Keep circular buttons circular */
-button.rounded-full, .rounded-full {
-  border-radius: 9999px;
 }
 
 /* Dark mode: ensure icons and text are visible */

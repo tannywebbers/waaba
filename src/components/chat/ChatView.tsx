@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { ArrowLeft, MessageCircle, Send } from 'lucide-react';
-import { EmojiPickerButton } from '@/components/chat/EmojiPickerButton';
+import { EmojiPickerButton, MobileEmojiPanel } from '@/components/chat/EmojiPickerButton';
 import { Button } from '@/components/ui/button';
 import { useAppStore } from '@/stores/appStore';
 import { useAuth } from '@/hooks/useAuth';
@@ -37,6 +37,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
   const [uploading, setUploading] = useState(false);
   const [recorderState, setRecorderState] = useState(globalVoiceRecorder.getState());
   const [pastedImageFile, setPastedImageFile] = useState<File | null>(null);
+  const [emojiPanelOpen, setEmojiPanelOpen] = useState(false);
 
   // Check if the phone number is assigned to another user in the shared inbox (uses SECURITY DEFINER to bypass RLS)
   const checkConflictingAssignment = useCallback(async (): Promise<boolean> => {
@@ -492,7 +493,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       formData.append('messaging_product', 'whatsapp');
 
       const metaUploadRes = await fetch(
-        `https://graph.facebook.com/v18.0/${settings.phone_number_id}/media`,
+        `https://graph.facebook.com/v25.0/${settings.phone_number_id}/media`,
         { method: 'POST', headers: { 'Authorization': `Bearer ${settings.api_token}` }, body: formData }
       );
 
@@ -508,7 +509,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       // Send WhatsApp audio message using media_id
       const normalizedPhone = activeChat.contact.phone.replace(/[^\d+]/g, '').replace(/^\+/, '');
       const sendRes = await fetch(
-        `https://graph.facebook.com/v18.0/${settings.phone_number_id}/messages`,
+        `https://graph.facebook.com/v25.0/${settings.phone_number_id}/messages`,
         {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${settings.api_token}`, 'Content-Type': 'application/json' },
@@ -655,8 +656,8 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         </div>
       )}
 
-      {/* Input bar - anchored at bottom, with safe padding */}
-      <div className="px-2 sm:px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] bg-panel-header border-t border-panel-border shrink-0 z-20 chat-input-bar">
+      {/* Input bar - transparent, floating above emoji panel */}
+      <div className="px-2 sm:px-3 pt-1.5 pb-2 shrink-0 z-20">
         <div className="flex items-end gap-1.5 max-w-3xl mx-auto">
           {recorderState.state === 'idle' && (
             <>
@@ -679,17 +680,40 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
             />
           ) : (
             <>
-              <div className="flex-1 flex items-end bg-background rounded-[25px] px-3 py-1 border border-input shadow-sm gap-1">
-                <EmojiPickerButton onEmojiSelect={(emoji) => {
-                  setInputValue((prev) => prev + emoji);
-                  setDraft(activeChat.id, inputValue + emoji);
-                }} />
+              <div className="flex-1 flex items-end bg-card dark:bg-[hsl(200_12%_16%)] rounded-[25px] px-3 py-1 border border-input shadow-sm gap-1">
+                <EmojiPickerButton
+                  onEmojiSelect={(emoji) => {
+                    setInputValue((prev) => prev + emoji);
+                    setDraft(activeChat.id, inputValue + emoji);
+                  }}
+                  onDeleteChar={() => {
+                    setInputValue((prev) => {
+                      // Remove last grapheme (handles multi-byte emoji)
+                      const arr = [...prev];
+                      arr.pop();
+                      return arr.join('');
+                    });
+                  }}
+                  onToggle={(isOpen) => {
+                    setEmojiPanelOpen(isOpen);
+                    if (isOpen && isMobile) {
+                      // Blur input so mobile keyboard closes
+                      inputRef.current?.blur();
+                    }
+                  }}
+                />
                 <textarea
                   ref={inputRef}
                   value={inputValue}
                   onChange={(e) => {
                     setInputValue(e.target.value);
                     setDraft(activeChat.id, e.target.value);
+                  }}
+                  onFocus={() => {
+                    // Close emoji panel when keyboard opens on mobile
+                    if (isMobile && emojiPanelOpen) {
+                      setEmojiPanelOpen(false);
+                    }
                   }}
                   onKeyDown={handleKeyDown}
                   onPaste={(e) => {
@@ -706,13 +730,15 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
                   }}
                   placeholder="Message"
                   rows={1}
-                  className="flex-1 resize-none border-0 focus:outline-none min-h-[32px] max-h-[120px] py-[5px] text-[15px] bg-transparent leading-[1.3] font-medium overflow-y-auto"
+                  className="flex-1 resize-none border-0 focus:outline-none min-h-[36px] max-h-[120px] py-[6px] text-[15px] bg-transparent leading-[1.35] font-medium overflow-y-auto"
                   disabled={sending || uploading}
                 />
               </div>
 
               {inputValue.trim()
-                ? <Button size="icon" className="h-[40px] w-[40px] shrink-0 rounded-full bg-primary hover:bg-primary/90 shadow-sm" onClick={handleSend} disabled={sending || uploading}><Send className="h-[18px] w-[18px]" /></Button>
+                ? <Button size="icon" className="h-[42px] w-[42px] shrink-0 rounded-full bg-primary hover:bg-primary/90 shadow-sm" onClick={handleSend} disabled={sending || uploading}>
+                    <Send className="h-[18px] w-[18px]" strokeWidth={2.25} />
+                  </Button>
                 : (
                   <VoiceRecorderButton
                     onRecordingComplete={(blob) => handleVoiceNoteSend(blob)}
@@ -723,6 +749,28 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
           )}
         </div>
       </div>
+
+      {/* Mobile emoji panel — renders below input like a keyboard */}
+      {isMobile && emojiPanelOpen && (
+        <div className="shrink-0 z-20">
+          <MobileEmojiPanel
+            onEmojiSelect={(emoji) => {
+              setInputValue((prev) => prev + emoji);
+              setDraft(activeChat.id, inputValue + emoji);
+            }}
+            onDeleteChar={() => {
+              setInputValue((prev) => {
+                const arr = [...prev];
+                arr.pop();
+                return arr.join('');
+              });
+            }}
+          />
+        </div>
+      )}
+
+      {/* Safe area spacer */}
+      <div className="shrink-0" style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }} />
     </div>
   );
 }
