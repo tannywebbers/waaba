@@ -493,7 +493,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       formData.append('messaging_product', 'whatsapp');
 
       const metaUploadRes = await fetch(
-        `https://graph.facebook.com/v18.0/${settings.phone_number_id}/media`,
+        `https://graph.facebook.com/v25.0/${settings.phone_number_id}/media`,
         { method: 'POST', headers: { 'Authorization': `Bearer ${settings.api_token}` }, body: formData }
       );
 
