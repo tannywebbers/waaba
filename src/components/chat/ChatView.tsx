@@ -37,6 +37,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
   const [uploading, setUploading] = useState(false);
   const [recorderState, setRecorderState] = useState(globalVoiceRecorder.getState());
   const [pastedImageFile, setPastedImageFile] = useState<File | null>(null);
+  const [emojiPanelOpen, setEmojiPanelOpen] = useState(false);
 
   // Check if the phone number is assigned to another user in the shared inbox (uses SECURITY DEFINER to bypass RLS)
   const checkConflictingAssignment = useCallback(async (): Promise<boolean> => {

@@ -51,47 +51,53 @@ export function VoiceRecorderButton({ onRecordingComplete, disabled }: VoiceReco
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
+  // Preview state — after recording stopped
   if (controller.state === 'stopped' && controller.audioUrl) {
     return (
       <div className="flex items-center gap-2 flex-1 bg-muted rounded-full px-3 py-2 animate-fade-in">
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive/80" onClick={handleCancel} disabled={disabled}><Trash2 className="h-4 w-4" /></Button>
+        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive/80" onClick={handleCancel} disabled={disabled}>
+          <Trash2 className="h-4 w-4" strokeWidth={2.25} />
+        </Button>
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={togglePlayback} disabled={disabled}>
-          {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+          {playing ? <Pause className="h-4 w-4" strokeWidth={2.25} /> : <Play className="h-4 w-4" strokeWidth={2.25} />}
         </Button>
         <span className="text-sm flex-1 font-medium">{formatTime(controller.duration)}</span>
         <audio ref={audioRef} src={controller.audioUrl} onEnded={() => setPlaying(false)} onPause={() => setPlaying(false)} onPlay={() => setPlaying(true)} className="hidden" />
-        <Button size="icon" className="h-9 w-9 rounded-full bg-primary hover:bg-primary/90" onClick={handleSend} disabled={disabled}><Send className="h-4 w-4" /></Button>
+        <Button size="icon" className="h-[42px] w-[42px] rounded-full bg-primary hover:bg-primary/90" onClick={handleSend} disabled={disabled}>
+          <Send className="h-[18px] w-[18px]" strokeWidth={2.25} />
+        </Button>
       </div>
     );
   }
 
+  // Recording state
   if (controller.state === 'recording') {
     return (
       <div className="flex items-center gap-2 flex-1 bg-destructive/10 rounded-full px-4 py-2 animate-fade-in">
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive/80" onClick={handleCancel}><Trash2 className="h-5 w-5" /></Button>
+        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive/80" onClick={handleCancel}>
+          <Trash2 className="h-5 w-5" strokeWidth={2.25} />
+        </Button>
         <div className="flex items-center gap-2 flex-1">
-          <div className="h-2 w-2 rounded-full bg-destructive animate-pulse" />
-          <span className="text-sm font-medium text-destructive">{formatTime(controller.duration)}</span>
-          <div className="flex items-center gap-[2px] flex-1">
-            {Array.from({ length: 20 }).map((_, i) => (
-              <div key={i} className="bg-destructive/60 rounded-full w-[3px]" style={{ height: `${8 + Math.sin((Date.now() / 200) + i) * 6}px`, animation: `pulse 0.8s ease-in-out ${i * 0.05}s infinite alternate` }} />
-            ))}
-          </div>
+          <div className="h-2.5 w-2.5 rounded-full bg-destructive animate-pulse" />
+          <span className="text-sm font-bold text-destructive tabular-nums">{formatTime(controller.duration)}</span>
         </div>
-        <Button size="icon" className="h-10 w-10 rounded-full bg-primary hover:bg-primary/90" onClick={handleStop}><Square className="h-4 w-4" /></Button>
+        <Button size="icon" className="h-[42px] w-[42px] rounded-full bg-primary hover:bg-primary/90" onClick={handleStop}>
+          <Square className="h-4 w-4" strokeWidth={2.25} />
+        </Button>
       </div>
     );
   }
 
+  // Idle — mic button
   return (
     <Button
       variant="ghost" size="icon"
-      className="h-[40px] w-[40px] shrink-0 rounded-full bg-primary hover:bg-primary/90 shadow-sm"
+      className="h-[42px] w-[42px] shrink-0 rounded-full bg-primary hover:bg-primary/90 shadow-sm"
       onClick={handleStart}
       disabled={disabled || !navigator.mediaDevices}
       title={!navigator.mediaDevices ? 'Voice recording not supported' : 'Record voice message'}
     >
-      <Mic className="h-5 w-5 text-primary-foreground" />
+      <Mic className="h-5 w-5 text-primary-foreground" strokeWidth={2.25} />
     </Button>
   );
 }
