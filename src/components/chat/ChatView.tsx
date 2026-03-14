@@ -655,8 +655,8 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         </div>
       )}
 
-      {/* Input bar - anchored at bottom */}
-      <div className="px-2 sm:px-3 py-1.5 bg-panel-header border-t border-panel-border shrink-0 z-20 chat-input-bar">
+      {/* Input bar - anchored at bottom, with safe padding */}
+      <div className="px-2 sm:px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] bg-panel-header border-t border-panel-border shrink-0 z-20 chat-input-bar">
         <div className="flex items-end gap-1.5 max-w-3xl mx-auto">
           {recorderState.state === 'idle' && (
             <>
