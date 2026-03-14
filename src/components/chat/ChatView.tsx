@@ -39,14 +39,6 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
   const [pastedImageFile, setPastedImageFile] = useState<File | null>(null);
   const [emojiPanelOpen, setEmojiPanelOpen] = useState(false);
 
-  // Auto-resize textarea as user types
-  useEffect(() => {
-    if (inputRef.current) {
-      inputRef.current.style.height = 'auto';
-      inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 120)}px`;
-    }
-  }, [inputValue]);
-
   // Check if the phone number is assigned to another user in the shared inbox (uses SECURITY DEFINER to bypass RLS)
   const checkConflictingAssignment = useCallback(async (): Promise<boolean> => {
     if (!activeChat || !user) return false;
@@ -597,15 +589,9 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
     >
       {/* Header - ALWAYS at top, never moves */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-panel-border bg-panel-header/95 shrink-0 z-20" style={{ position: 'sticky', top: 0 }}>
-        {showBackButton && (
-          <Button variant="ghost" size="icon" onClick={onBack}>
-            <ArrowLeft className="h-5 w-5" strokeWidth={2.5} />
-          </Button>
-        )}
+        {showBackButton && <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="h-5 w-5" /></Button>}
         <button className="flex items-center gap-2 flex-1 min-w-0" onClick={() => setShowContactPanel(true)}>
-          <div className="ring-2 ring-border rounded-full">
-            <ContactAvatar name={contact.name} avatar={contact.avatar} isOnline={contact.isOnline} size="md" />
-          </div>
+          <ContactAvatar name={contact.name} avatar={contact.avatar} isOnline={contact.isOnline} size="md" />
           <div className="min-w-0 text-left">
             <p className="font-bold truncate">{contact.name}</p>
             <p className="text-xs text-muted-foreground truncate">{presenceText}</p>
@@ -732,6 +718,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
                     }
                   }}
                   placeholder="Message"
+                  rows={1}
                   className="flex-1 resize-none border-0 focus:outline-none min-h-[36px] max-h-[120px] py-[6px] px-2 text-[15px] bg-transparent leading-[1.35] font-medium overflow-y-auto custom-scrollbar"
                   style={{
                     scrollbarWidth: 'thin',
@@ -763,16 +750,14 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
 
               {/* Send or Voice button - OUTSIDE message area */}
               {inputValue.trim()
-                ? <Button size="icon" className="h-[48px] w-[48px] shrink-0 rounded-full bg-primary hover:bg-primary/90 shadow-sm" onClick={handleSend} disabled={sending || uploading}>
-                    <Send className="h-5 w-5" strokeWidth={2.5} />
+                ? <Button size="icon" className="h-[42px] w-[42px] shrink-0 rounded-full bg-primary hover:bg-primary/90 shadow-sm" onClick={handleSend} disabled={sending || uploading}>
+                    <Send className="h-[18px] w-[18px]" strokeWidth={2.25} />
                   </Button>
                 : (
-                  <div className="pr-2">
-                    <VoiceRecorderButton
-                      onRecordingComplete={(blob) => handleVoiceNoteSend(blob)}
-                      disabled={sending || uploading}
-                    />
-                  </div>
+                  <VoiceRecorderButton
+                    onRecordingComplete={(blob) => handleVoiceNoteSend(blob)}
+                    disabled={sending || uploading}
+                  />
                 )}
             </>
           )}
@@ -799,7 +784,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       )}
 
       {/* Safe area spacer */}
-      <div className="shrink-0" style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }} />
+      <div className="shrink-0" style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }} />
     </div>
   );
 }
