@@ -509,7 +509,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       // Send WhatsApp audio message using media_id
       const normalizedPhone = activeChat.contact.phone.replace(/[^\d+]/g, '').replace(/^\+/, '');
       const sendRes = await fetch(
-        `https://graph.facebook.com/v18.0/${settings.phone_number_id}/messages`,
+        `https://graph.facebook.com/v25.0/${settings.phone_number_id}/messages`,
         {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${settings.api_token}`, 'Content-Type': 'application/json' },
