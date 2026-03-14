@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { ArrowLeft, MessageCircle, Send } from 'lucide-react';
-import { EmojiPickerButton } from '@/components/chat/EmojiPickerButton';
+import { EmojiPickerButton, MobileEmojiPanel } from '@/components/chat/EmojiPickerButton';
 import { Button } from '@/components/ui/button';
 import { useAppStore } from '@/stores/appStore';
 import { useAuth } from '@/hooks/useAuth';
