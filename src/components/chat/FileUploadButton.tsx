@@ -52,7 +52,7 @@ export function FileUploadButton({ onFileSelect, uploading }: FileUploadButtonPr
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0">
-            <Paperclip className="h-5 w-5 text-muted-foreground" />
+            <Paperclip className="h-6 w-6 text-muted-foreground" strokeWidth={2.25} />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-48">
