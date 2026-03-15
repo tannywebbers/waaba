@@ -57,19 +57,19 @@ export function FileUploadButton({ onFileSelect, uploading }: FileUploadButtonPr
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-48">
           <DropdownMenuItem onClick={() => imageInputRef.current?.click()}>
-            <Image className="h-4 w-4 mr-2 text-blue-500" />
+            <Image className="h-4 w-4 mr-2 text-muted-foreground" />
             Photos & Videos
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => documentInputRef.current?.click()}>
-            <FileText className="h-4 w-4 mr-2 text-purple-500" />
+            <FileText className="h-4 w-4 mr-2 text-muted-foreground" />
             Document
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => audioInputRef.current?.click()}>
-            <Music className="h-4 w-4 mr-2 text-orange-500" />
+            <Music className="h-4 w-4 mr-2 text-muted-foreground" />
             Audio File
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => cameraInputRef.current?.click()}>
-            <Camera className="h-4 w-4 mr-2 text-pink-500" />
+            <Camera className="h-4 w-4 mr-2 text-muted-foreground" />
             Camera
           </DropdownMenuItem>
         </DropdownMenuContent>
