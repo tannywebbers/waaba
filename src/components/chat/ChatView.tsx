@@ -671,7 +671,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
           ) : (
             <>
               {/* Message input area - contains emoji, textarea, file, template */}
-              <div className="flex-1 flex items-end bg-card dark:bg-[hsl(200_12%_16%)] rounded-[25px] px-2 py-1 border border-input shadow-sm gap-1">
+              <div className="min-w-0 flex-1 flex items-end bg-card dark:bg-[hsl(200_12%_16%)] rounded-[25px] px-2 py-1 border border-input shadow-sm gap-1">
                 {/* Emoji button */}
                 <div className="shrink-0 self-end pb-[2px]">
                   <EmojiPickerButton
