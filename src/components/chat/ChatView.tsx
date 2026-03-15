@@ -589,11 +589,15 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
     >
       {/* Header - ALWAYS at top, never moves */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-panel-border bg-panel-header/95 shrink-0 z-20" style={{ position: 'sticky', top: 0 }}>
-        {showBackButton && <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="h-5 w-5" /></Button>}
+        {showBackButton && (
+          <Button variant="ghost" size="icon" className="h-10 w-10" onClick={onBack}>
+            <ArrowLeft className="h-6 w-6" strokeWidth={2.5} />
+          </Button>
+        )}
         <button className="flex items-center gap-2 flex-1 min-w-0" onClick={() => setShowContactPanel(true)}>
           <ContactAvatar name={contact.name} avatar={contact.avatar} isOnline={contact.isOnline} size="md" />
           <div className="min-w-0 text-left">
-            <p className="font-bold truncate">{contact.name}</p>
+            <p className="font-extrabold text-[16px] truncate">{contact.name}</p>
             <p className="text-xs text-muted-foreground truncate">{presenceText}</p>
           </div>
         </button>
