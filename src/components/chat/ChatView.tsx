@@ -710,7 +710,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
                     // Auto-resize
                     if (inputRef.current) {
                       inputRef.current.style.height = 'auto';
-                      inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 150)}px`;
+                      inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 154)}px`;
                     }
                   }}
                   onFocus={() => {
