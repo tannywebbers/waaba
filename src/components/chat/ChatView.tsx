@@ -733,7 +733,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
                   }}
                   placeholder="Message"
                   rows={1}
-                  className="flex-1 resize-none border-0 focus:outline-none min-h-[38px] max-h-[150px] py-[7px] px-2 text-[16px] bg-transparent leading-[1.4] font-medium overflow-y-auto custom-scrollbar"
+                  className="min-w-0 flex-1 resize-none border-0 focus:outline-none min-h-[38px] max-h-[154px] py-[7px] px-2 text-[16px] bg-transparent leading-[1.4] font-medium overflow-y-auto custom-scrollbar"
                   style={{
                     scrollbarWidth: 'thin',
                     scrollbarColor: 'rgba(155, 155, 155, 0.5) transparent'

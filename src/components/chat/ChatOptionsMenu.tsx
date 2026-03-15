@@ -120,8 +120,8 @@ export function ChatOptionsMenu({
     <>
       <DropdownMenu open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-10 w-10">
-            <MoreVertical className="h-6 w-6 text-muted-foreground" strokeWidth={2.25} />
+          <Button variant="ghost" size="icon" className="h-[45px] w-[45px] text-[hsl(var(--chat-control-icon))]">
+            <MoreVertical className="h-[29px] w-[29px]" strokeWidth={2.75} />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
