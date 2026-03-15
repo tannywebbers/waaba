@@ -55,16 +55,16 @@ export function VoiceRecorderButton({ onRecordingComplete, disabled }: VoiceReco
   if (controller.state === 'stopped' && controller.audioUrl) {
     return (
       <div className="flex items-center gap-2 flex-1 bg-muted rounded-full px-3 py-2 animate-fade-in">
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive/80" onClick={handleCancel} disabled={disabled}>
-          <Trash2 className="h-4 w-4" strokeWidth={2.25} />
+        <Button variant="ghost" size="icon" className="h-9 w-9 text-destructive hover:text-destructive/80" onClick={handleCancel} disabled={disabled}>
+          <Trash2 className="h-5 w-5" strokeWidth={2.25} />
         </Button>
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={togglePlayback} disabled={disabled}>
-          {playing ? <Pause className="h-4 w-4" strokeWidth={2.25} /> : <Play className="h-4 w-4" strokeWidth={2.25} />}
+        <Button variant="ghost" size="icon" className="h-9 w-9" onClick={togglePlayback} disabled={disabled}>
+          {playing ? <Pause className="h-5 w-5" strokeWidth={2.25} /> : <Play className="h-5 w-5" strokeWidth={2.25} />}
         </Button>
-        <span className="text-sm flex-1 font-medium">{formatTime(controller.duration)}</span>
+        <span className="text-sm flex-1 font-bold tabular-nums">{formatTime(controller.duration)}</span>
         <audio ref={audioRef} src={controller.audioUrl} onEnded={() => setPlaying(false)} onPause={() => setPlaying(false)} onPlay={() => setPlaying(true)} className="hidden" />
-        <Button size="icon" className="h-[42px] w-[42px] rounded-full bg-primary hover:bg-primary/90" onClick={handleSend} disabled={disabled}>
-          <Send className="h-[18px] w-[18px]" strokeWidth={2.25} />
+        <Button size="icon" className="h-[46px] w-[46px] rounded-full bg-primary hover:bg-primary/90 shadow-md" onClick={handleSend} disabled={disabled}>
+          <Send className="h-5 w-5" strokeWidth={2.25} />
         </Button>
       </div>
     );
@@ -74,15 +74,28 @@ export function VoiceRecorderButton({ onRecordingComplete, disabled }: VoiceReco
   if (controller.state === 'recording') {
     return (
       <div className="flex items-center gap-2 flex-1 bg-destructive/10 rounded-full px-4 py-2 animate-fade-in">
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive/80" onClick={handleCancel}>
+        <Button variant="ghost" size="icon" className="h-9 w-9 text-destructive hover:text-destructive/80" onClick={handleCancel}>
           <Trash2 className="h-5 w-5" strokeWidth={2.25} />
         </Button>
         <div className="flex items-center gap-2 flex-1">
-          <div className="h-2.5 w-2.5 rounded-full bg-destructive animate-pulse" />
+          <div className="h-3 w-3 rounded-full bg-destructive animate-pulse" />
           <span className="text-sm font-bold text-destructive tabular-nums">{formatTime(controller.duration)}</span>
+          {/* Simple wave animation */}
+          <div className="flex items-center gap-[3px] flex-1 px-2">
+            {Array.from({ length: 20 }).map((_, i) => (
+              <div
+                key={i}
+                className="w-[3px] rounded-full bg-destructive/60"
+                style={{
+                  height: `${8 + Math.sin((controller.duration * 3) + i * 0.7) * 8 + Math.random() * 4}px`,
+                  transition: 'height 0.15s ease',
+                }}
+              />
+            ))}
+          </div>
         </div>
-        <Button size="icon" className="h-[42px] w-[42px] rounded-full bg-primary hover:bg-primary/90" onClick={handleStop}>
-          <Square className="h-4 w-4" strokeWidth={2.25} />
+        <Button size="icon" className="h-[46px] w-[46px] rounded-full bg-primary hover:bg-primary/90 shadow-md" onClick={handleStop}>
+          <Square className="h-5 w-5 fill-current" strokeWidth={2.25} />
         </Button>
       </div>
     );
@@ -92,7 +105,7 @@ export function VoiceRecorderButton({ onRecordingComplete, disabled }: VoiceReco
   return (
     <Button
       variant="ghost" size="icon"
-      className="h-[42px] w-[42px] shrink-0 rounded-full bg-primary hover:bg-primary/90 shadow-sm"
+      className="h-[46px] w-[46px] shrink-0 rounded-full bg-primary hover:bg-primary/90 shadow-md"
       onClick={handleStart}
       disabled={disabled || !navigator.mediaDevices}
       title={!navigator.mediaDevices ? 'Voice recording not supported' : 'Record voice message'}

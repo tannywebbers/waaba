@@ -252,7 +252,7 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0" title="Templates">
-          <FileText className="h-5 w-5 text-muted-foreground" />
+          <FileText className="h-6 w-6 text-muted-foreground" strokeWidth={2.25} />
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">

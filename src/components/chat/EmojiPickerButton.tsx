@@ -41,8 +41,8 @@ export function EmojiPickerButton({ onEmojiSelect, onDeleteChar, onToggle }: Emo
         className="p-1.5 text-muted-foreground hover:text-foreground transition-colors"
       >
         {open
-          ? <Keyboard className="h-5 w-5" strokeWidth={2.25} />
-          : <Smile className="h-5 w-5" strokeWidth={2.25} />
+          ? <Keyboard className="h-6 w-6" strokeWidth={2.25} />
+          : <Smile className="h-6 w-6" strokeWidth={2.25} />
         }
       </button>
 
@@ -86,9 +86,9 @@ export function MobileEmojiPanel({
       <EmojiPicker
         theme={Theme.AUTO}
         width="100%"
-        height={320}
+        height={280}
         onEmojiClick={(emojiData) => onEmojiSelect(emojiData.emoji)}
-        searchDisabled={false}
+        searchDisabled
         skinTonesDisabled
         previewConfig={{ showPreview: false }}
       />

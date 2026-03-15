@@ -589,11 +589,15 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
     >
       {/* Header - ALWAYS at top, never moves */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-panel-border bg-panel-header/95 shrink-0 z-20" style={{ position: 'sticky', top: 0 }}>
-        {showBackButton && <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="h-5 w-5" /></Button>}
+        {showBackButton && (
+          <Button variant="ghost" size="icon" className="h-10 w-10" onClick={onBack}>
+            <ArrowLeft className="h-6 w-6" strokeWidth={2.5} />
+          </Button>
+        )}
         <button className="flex items-center gap-2 flex-1 min-w-0" onClick={() => setShowContactPanel(true)}>
           <ContactAvatar name={contact.name} avatar={contact.avatar} isOnline={contact.isOnline} size="md" />
           <div className="min-w-0 text-left">
-            <p className="font-bold truncate">{contact.name}</p>
+            <p className="font-extrabold text-[16px] truncate">{contact.name}</p>
             <p className="text-xs text-muted-foreground truncate">{presenceText}</p>
           </div>
         </button>
@@ -657,8 +661,8 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       )}
 
       {/* Input bar */}
-      <div className="px-2 sm:px-3 pt-1.5 pb-2 shrink-0 z-20">
-        <div className="flex items-end gap-1.5 max-w-3xl mx-auto">
+      <div className="px-2 sm:px-3 pt-1.5 shrink-0 z-20" style={{ paddingBottom: 'max(5px, env(safe-area-inset-bottom))' }}>
+        <div className="flex items-end gap-2 max-w-3xl mx-auto pr-1">
           {recorderState.state !== 'idle' ? (
             <VoiceRecorderButton
               onRecordingComplete={(blob) => handleVoiceNoteSend(blob)}
@@ -685,7 +689,12 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
                     onToggle={(isOpen) => {
                       setEmojiPanelOpen(isOpen);
                       if (isOpen && isMobile) {
+                        // Close keyboard when emoji opens
                         inputRef.current?.blur();
+                      }
+                      if (!isOpen && isMobile) {
+                        // Open keyboard when emoji closes
+                        setTimeout(() => inputRef.current?.focus(), 50);
                       }
                     }}
                   />
@@ -698,6 +707,11 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
                   onChange={(e) => {
                     setInputValue(e.target.value);
                     setDraft(activeChat.id, e.target.value);
+                    // Auto-resize
+                    if (inputRef.current) {
+                      inputRef.current.style.height = 'auto';
+                      inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 150)}px`;
+                    }
                   }}
                   onFocus={() => {
                     if (isMobile && emojiPanelOpen) {
@@ -719,7 +733,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
                   }}
                   placeholder="Message"
                   rows={1}
-                  className="flex-1 resize-none border-0 focus:outline-none min-h-[36px] max-h-[120px] py-[6px] px-2 text-[15px] bg-transparent leading-[1.35] font-medium overflow-y-auto custom-scrollbar"
+                  className="flex-1 resize-none border-0 focus:outline-none min-h-[38px] max-h-[150px] py-[7px] px-2 text-[16px] bg-transparent leading-[1.4] font-medium overflow-y-auto custom-scrollbar"
                   style={{
                     scrollbarWidth: 'thin',
                     scrollbarColor: 'rgba(155, 155, 155, 0.5) transparent'
@@ -750,8 +764,8 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
 
               {/* Send or Voice button - OUTSIDE message area */}
               {inputValue.trim()
-                ? <Button size="icon" className="h-[42px] w-[42px] shrink-0 rounded-full bg-primary hover:bg-primary/90 shadow-sm" onClick={handleSend} disabled={sending || uploading}>
-                    <Send className="h-[18px] w-[18px]" strokeWidth={2.25} />
+                ? <Button size="icon" className="h-[46px] w-[46px] shrink-0 rounded-full bg-primary hover:bg-primary/90 shadow-md" onClick={handleSend} disabled={sending || uploading}>
+                    <Send className="h-5 w-5" strokeWidth={2.25} />
                   </Button>
                 : (
                   <VoiceRecorderButton
@@ -782,9 +796,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
           />
         </div>
       )}
-
-      {/* Safe area spacer */}
-      <div className="shrink-0" style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }} />
     </div>
   );
 }
+

@@ -35,10 +35,9 @@ export function ContactAvatar({ name, avatar, isOnline, lastSeen, size = 'md', c
 
   return (
     <div className="relative shrink-0">
-      <Avatar className={cn(sizeClasses[size], 'bg-muted', className)}>
+      <Avatar className={cn(sizeClasses[size], 'bg-muted ring-2 ring-border', className)}>
         <AvatarImage src={avatar} alt={name} />
         <AvatarFallback className="bg-muted text-muted-foreground">
-          {/* Default profile icon instead of initials */}
           <User className={cn(iconSizeClasses[size], 'stroke-[1.5px]')} />
         </AvatarFallback>
       </Avatar>
