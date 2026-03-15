@@ -1,9 +1,9 @@
 /**
- * Global voice recorder controller (WebAssembly MP3).
- * Uses vmsg encoder to produce WhatsApp-friendly audio/mpeg blobs.
+ * Global voice recorder controller.
+ * Uses vmsg (WebAssembly LAME) for reliable MP3 encoding.
  */
-
-import Recorder from 'vmsg';
+import vmsg from 'vmsg';
+const Recorder = (vmsg as any).Recorder || (vmsg as any).default || vmsg;
 
 type RecordingState = 'idle' | 'recording' | 'stopped';
 
@@ -15,22 +15,10 @@ export interface RecordingController {
   audioUrl: string | null;
 }
 
-interface VmsgRecorder {
-  initAudio: () => Promise<void>;
-  initWorker: () => Promise<void>;
-  startRecording: () => Promise<void>;
-  stopRecording: () => Promise<Blob>;
-  close: () => void;
-}
-
-const VMSG_WASM_URL = 'https://unpkg.com/vmsg@0.4.0/vmsg.wasm';
-
 class VoiceRecorderController {
-  private recorder: VmsgRecorder | null = null;
+  private recorder: any = null;
   private timerInterval: ReturnType<typeof setInterval> | null = null;
   private startTimeMs: number | null = null;
-  private sessionId = 0;
-  private cancelledSessionId: number | null = null;
 
   private controller: RecordingController = {
     state: 'idle',
@@ -59,64 +47,29 @@ class VoiceRecorderController {
     return this.controller.audioBlob;
   }
 
-  private revokeAudioUrl() {
-    if (this.controller.audioUrl) {
-      URL.revokeObjectURL(this.controller.audioUrl);
-    }
-  }
-
-  private stopTimer() {
-    if (this.timerInterval) {
-      clearInterval(this.timerInterval);
-      this.timerInterval = null;
-    }
-  }
-
-  private closeRecorder() {
-    if (this.recorder) {
-      try {
-        this.recorder.close();
-      } catch {
-        // ignore
-      }
-      this.recorder = null;
-    }
-  }
-
-  private cleanupRuntime() {
-    this.stopTimer();
-    this.closeRecorder();
-    this.startTimeMs = null;
-  }
-
   async start(): Promise<{ success: boolean; error?: string }> {
     if (this.controller.state !== 'idle') {
       return { success: false, error: 'Already recording' };
     }
 
     try {
-      this.cleanupRuntime();
-      this.revokeAudioUrl();
-
-      this.controller.audioBlob = null;
-      this.controller.audioUrl = null;
-      this.controller.duration = 0;
-
-      this.sessionId += 1;
-      const currentSession = this.sessionId;
-      this.cancelledSessionId = null;
-
-      const recorder = new Recorder({ wasmURL: VMSG_WASM_URL }) as unknown as VmsgRecorder;
-      this.recorder = recorder;
-
-      await recorder.initAudio();
-      await recorder.initWorker();
-      await recorder.startRecording();
-
-      if (currentSession !== this.sessionId) {
-        recorder.close();
-        return { success: false, error: 'Recording session changed. Please try again.' };
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('BROWSER_UNSUPPORTED');
       }
+
+      console.log('[VoiceRecorder] Initializing vmsg recorder...');
+
+      this.recorder = new Recorder({
+        wasmURL: 'https://unpkg.com/vmsg@0.3.0/vmsg.wasm',
+      });
+
+      console.log('[VoiceRecorder] Loading WebAssembly encoder...');
+      await this.recorder.initAudio();
+      await this.recorder.initWorker();
+      console.log('[VoiceRecorder] ✅ Encoder ready');
+
+      console.log('[VoiceRecorder] Starting recording...');
+      await this.recorder.startRecording();
 
       this.startTimeMs = Date.now();
       this.controller.state = 'recording';
@@ -129,19 +82,27 @@ class VoiceRecorderController {
         this.notify();
       }, 1000);
 
+      console.log('[VoiceRecorder] ✅ Recording started successfully');
       this.notify();
       return { success: true };
+
     } catch (error: any) {
-      this.cleanupRuntime();
+      console.error('[VoiceRecorder] ❌ Recording initialization failed:', error);
+      this.cleanupRecorder();
 
       let errorMessage = 'Failed to start recording. Please try again.';
-      if (error?.name === 'NotAllowedError') {
+
+      if (error.message === 'BROWSER_UNSUPPORTED') {
+        errorMessage = 'Microphone not supported in this browser.';
+      } else if (error?.name === 'NotAllowedError') {
         errorMessage = 'Microphone access denied. Please allow microphone access in your browser settings.';
       } else if (error?.name === 'NotFoundError') {
         errorMessage = 'No microphone found. Please connect a microphone.';
       } else if (error?.name === 'NotReadableError' || error?.name === 'AbortError') {
         errorMessage = 'Microphone is busy or unavailable. Close other apps using the mic and try again.';
-      } else if (error?.message) {
+      } else if (error.message && error.message.includes('wasm')) {
+        errorMessage = 'Failed to load audio encoder. Please check your internet connection and try again.';
+      } else if (error.message) {
         errorMessage = error.message;
       }
 
@@ -151,82 +112,64 @@ class VoiceRecorderController {
 
   async stop() {
     if (this.controller.state !== 'recording' || !this.recorder) {
+      console.warn('[VoiceRecorder] Cannot stop - not recording');
       return;
     }
 
-    const currentSession = this.sessionId;
-    const activeRecorder = this.recorder;
-
-    this.stopTimer();
+    console.log('[VoiceRecorder] Stopping recording...');
 
     try {
-      const blob = await activeRecorder.stopRecording();
-      activeRecorder.close();
-
-      if (this.cancelledSessionId === currentSession || currentSession !== this.sessionId) {
-        return;
-      }
-
-      this.recorder = null;
-      this.startTimeMs = null;
+      const blob = await this.recorder.stopRecording();
 
       if (!blob || blob.size === 0) {
-        this.controller.state = 'idle';
-        this.controller.startTime = null;
-        this.controller.duration = 0;
-        this.notify();
-        return;
+        throw new Error('No audio data recorded');
       }
 
-      this.revokeAudioUrl();
       const url = URL.createObjectURL(blob);
+
+      console.log('[VoiceRecorder] ✅ Recording complete:', {
+        size: blob.size,
+        type: blob.type
+      });
 
       this.controller.audioBlob = blob;
       this.controller.audioUrl = url;
       this.controller.state = 'stopped';
-      this.controller.startTime = null;
 
-      this.notify();
-    } catch {
-      if (this.cancelledSessionId === currentSession || currentSession !== this.sessionId) {
-        return;
+      if (this.timerInterval) {
+        clearInterval(this.timerInterval);
+        this.timerInterval = null;
       }
 
-      this.cleanupRuntime();
+      this.notify();
+
+    } catch (error: any) {
+      console.error('[VoiceRecorder] ❌ Stop recording failed:', error);
+      this.cleanupRecorder();
       this.controller.state = 'idle';
-      this.controller.startTime = null;
       this.notify();
     }
   }
 
   cancel() {
-    const currentSession = this.sessionId;
-    this.cancelledSessionId = currentSession;
+    console.log('[VoiceRecorder] Cancelling recording...');
 
     if (this.recorder && this.controller.state === 'recording') {
-      const activeRecorder = this.recorder;
-      this.recorder = null;
-      this.stopTimer();
-      this.startTimeMs = null;
-
-      void activeRecorder
-        .stopRecording()
-        .catch(() => undefined)
-        .finally(() => {
-          try {
-            activeRecorder.close();
-          } catch {
-            // ignore
-          }
-        });
+      try {
+        this.recorder.close();
+      } catch (e) {
+        console.error('[VoiceRecorder] Error closing recorder:', e);
+      }
     }
 
+    this.cleanupRecorder();
     this.reset();
   }
 
   reset() {
-    this.cleanupRuntime();
-    this.revokeAudioUrl();
+    if (this.controller.audioUrl) {
+      URL.revokeObjectURL(this.controller.audioUrl);
+    }
 
     this.controller = {
       state: 'idle',
@@ -237,6 +180,24 @@ class VoiceRecorderController {
     };
 
     this.notify();
+  }
+
+  private cleanupRecorder() {
+    if (this.timerInterval) {
+      clearInterval(this.timerInterval);
+      this.timerInterval = null;
+    }
+
+    if (this.recorder) {
+      try {
+        this.recorder.close();
+      } catch (e) {
+        console.error('[VoiceRecorder] Error closing recorder:', e);
+      }
+      this.recorder = null;
+    }
+
+    this.startTimeMs = null;
   }
 }
 
