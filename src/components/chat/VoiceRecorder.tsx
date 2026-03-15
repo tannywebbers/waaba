@@ -32,7 +32,7 @@ export function VoiceRecorder({ onRecordingComplete, onCancel, isRecording, setI
 
   const SAMPLE_RATE = 44100;
   const BIT_RATE = 256;
-  const BUFFER_SIZE = 2048;
+  const BUFFER_SIZE = 512;
 
   useEffect(() => {
     return () => {
