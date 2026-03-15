@@ -662,7 +662,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
 
       {/* Input bar */}
       <div className="px-2 sm:px-3 pt-1.5 shrink-0 z-20" style={{ paddingBottom: 'max(5px, env(safe-area-inset-bottom))' }}>
-        <div className="flex items-end gap-2 max-w-3xl mx-auto pr-1">
+        <div className="flex w-full items-end gap-2 max-w-3xl mx-auto pr-2">
           {recorderState.state !== 'idle' ? (
             <VoiceRecorderButton
               onRecordingComplete={(blob) => handleVoiceNoteSend(blob)}
