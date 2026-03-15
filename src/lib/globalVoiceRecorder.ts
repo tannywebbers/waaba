@@ -1,8 +1,9 @@
 /**
- * Global voice recorder controller.
- * Uses native MediaRecorder with opus/webm for clean, low-latency recording.
- * Falls back to audio/mp4 on Safari.
+ * Global voice recorder controller (WebAssembly MP3).
+ * Uses vmsg encoder to produce WhatsApp-friendly audio/mpeg blobs.
  */
+
+import Recorder from 'vmsg';
 
 type RecordingState = 'idle' | 'recording' | 'stopped';
 
@@ -14,12 +15,22 @@ export interface RecordingController {
   audioUrl: string | null;
 }
 
+interface VmsgRecorder {
+  initAudio: () => Promise<void>;
+  initWorker: () => Promise<void>;
+  startRecording: () => Promise<void>;
+  stopRecording: () => Promise<Blob>;
+  close: () => void;
+}
+
+const VMSG_WASM_URL = 'https://unpkg.com/vmsg@0.4.0/vmsg.wasm';
+
 class VoiceRecorderController {
-  private mediaRecorder: MediaRecorder | null = null;
-  private stream: MediaStream | null = null;
-  private chunks: Blob[] = [];
+  private recorder: VmsgRecorder | null = null;
   private timerInterval: ReturnType<typeof setInterval> | null = null;
   private startTimeMs: number | null = null;
+  private sessionId = 0;
+  private cancelledSessionId: number | null = null;
 
   private controller: RecordingController = {
     state: 'idle',
@@ -48,13 +59,34 @@ class VoiceRecorderController {
     return this.controller.audioBlob;
   }
 
-  private getMimeType(): string {
-    // Prefer opus in webm (best quality/size for voice)
-    if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) return 'audio/webm;codecs=opus';
-    if (MediaRecorder.isTypeSupported('audio/webm')) return 'audio/webm';
-    if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) return 'audio/ogg;codecs=opus';
-    if (MediaRecorder.isTypeSupported('audio/mp4')) return 'audio/mp4';
-    return '';
+  private revokeAudioUrl() {
+    if (this.controller.audioUrl) {
+      URL.revokeObjectURL(this.controller.audioUrl);
+    }
+  }
+
+  private stopTimer() {
+    if (this.timerInterval) {
+      clearInterval(this.timerInterval);
+      this.timerInterval = null;
+    }
+  }
+
+  private closeRecorder() {
+    if (this.recorder) {
+      try {
+        this.recorder.close();
+      } catch {
+        // ignore
+      }
+      this.recorder = null;
+    }
+  }
+
+  private cleanupRuntime() {
+    this.stopTimer();
+    this.closeRecorder();
+    this.startTimeMs = null;
   }
 
   async start(): Promise<{ success: boolean; error?: string }> {
@@ -63,36 +95,28 @@ class VoiceRecorderController {
     }
 
     try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error('BROWSER_UNSUPPORTED');
+      this.cleanupRuntime();
+      this.revokeAudioUrl();
+
+      this.controller.audioBlob = null;
+      this.controller.audioUrl = null;
+      this.controller.duration = 0;
+
+      this.sessionId += 1;
+      const currentSession = this.sessionId;
+      this.cancelledSessionId = null;
+
+      const recorder = new Recorder({ wasmURL: VMSG_WASM_URL }) as unknown as VmsgRecorder;
+      this.recorder = recorder;
+
+      await recorder.initAudio();
+      await recorder.initWorker();
+      await recorder.startRecording();
+
+      if (currentSession !== this.sessionId) {
+        recorder.close();
+        return { success: false, error: 'Recording session changed. Please try again.' };
       }
-
-      // Request mic with echo cancellation and noise suppression for cleaner audio
-      this.stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          sampleRate: 48000,
-        },
-      });
-
-      const mimeType = this.getMimeType();
-      if (!mimeType) {
-        throw new Error('No supported audio recording format found');
-      }
-
-      this.chunks = [];
-      this.mediaRecorder = new MediaRecorder(this.stream, {
-        mimeType,
-        audioBitsPerSecond: 128000,
-      });
-
-      this.mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) this.chunks.push(e.data);
-      };
-
-      this.mediaRecorder.start(250); // Collect data every 250ms for smooth recording
 
       this.startTimeMs = Date.now();
       this.controller.state = 'recording';
@@ -107,20 +131,17 @@ class VoiceRecorderController {
 
       this.notify();
       return { success: true };
-
     } catch (error: any) {
-      this.cleanupRecorder();
+      this.cleanupRuntime();
 
       let errorMessage = 'Failed to start recording. Please try again.';
-      if (error.message === 'BROWSER_UNSUPPORTED') {
-        errorMessage = 'Microphone not supported in this browser.';
-      } else if (error?.name === 'NotAllowedError') {
+      if (error?.name === 'NotAllowedError') {
         errorMessage = 'Microphone access denied. Please allow microphone access in your browser settings.';
       } else if (error?.name === 'NotFoundError') {
         errorMessage = 'No microphone found. Please connect a microphone.';
       } else if (error?.name === 'NotReadableError' || error?.name === 'AbortError') {
         errorMessage = 'Microphone is busy or unavailable. Close other apps using the mic and try again.';
-      } else if (error.message) {
+      } else if (error?.message) {
         errorMessage = error.message;
       }
 
@@ -129,61 +150,83 @@ class VoiceRecorderController {
   }
 
   async stop() {
-    if (this.controller.state !== 'recording' || !this.mediaRecorder) {
+    if (this.controller.state !== 'recording' || !this.recorder) {
       return;
     }
 
-    return new Promise<void>((resolve) => {
-      this.mediaRecorder!.onstop = () => {
-        const blob = new Blob(this.chunks, { type: this.mediaRecorder!.mimeType });
+    const currentSession = this.sessionId;
+    const activeRecorder = this.recorder;
 
-        if (blob.size === 0) {
-          this.cleanupRecorder();
-          this.controller.state = 'idle';
-          this.notify();
-          resolve();
-          return;
-        }
+    this.stopTimer();
 
-        const url = URL.createObjectURL(blob);
-        this.controller.audioBlob = blob;
-        this.controller.audioUrl = url;
-        this.controller.state = 'stopped';
+    try {
+      const blob = await activeRecorder.stopRecording();
+      activeRecorder.close();
 
-        if (this.timerInterval) {
-          clearInterval(this.timerInterval);
-          this.timerInterval = null;
-        }
+      if (this.cancelledSessionId === currentSession || currentSession !== this.sessionId) {
+        return;
+      }
 
-        // Stop mic stream tracks
-        this.stream?.getTracks().forEach((t) => t.stop());
-        this.stream = null;
+      this.recorder = null;
+      this.startTimeMs = null;
 
+      if (!blob || blob.size === 0) {
+        this.controller.state = 'idle';
+        this.controller.startTime = null;
+        this.controller.duration = 0;
         this.notify();
-        resolve();
-      };
+        return;
+      }
 
-      this.mediaRecorder!.stop();
-    });
+      this.revokeAudioUrl();
+      const url = URL.createObjectURL(blob);
+
+      this.controller.audioBlob = blob;
+      this.controller.audioUrl = url;
+      this.controller.state = 'stopped';
+      this.controller.startTime = null;
+
+      this.notify();
+    } catch {
+      if (this.cancelledSessionId === currentSession || currentSession !== this.sessionId) {
+        return;
+      }
+
+      this.cleanupRuntime();
+      this.controller.state = 'idle';
+      this.controller.startTime = null;
+      this.notify();
+    }
   }
 
   cancel() {
-    if (this.mediaRecorder && this.controller.state === 'recording') {
-      try {
-        this.mediaRecorder.stop();
-      } catch {
-        // ignore
-      }
+    const currentSession = this.sessionId;
+    this.cancelledSessionId = currentSession;
+
+    if (this.recorder && this.controller.state === 'recording') {
+      const activeRecorder = this.recorder;
+      this.recorder = null;
+      this.stopTimer();
+      this.startTimeMs = null;
+
+      void activeRecorder
+        .stopRecording()
+        .catch(() => undefined)
+        .finally(() => {
+          try {
+            activeRecorder.close();
+          } catch {
+            // ignore
+          }
+        });
     }
 
-    this.cleanupRecorder();
     this.reset();
   }
 
   reset() {
-    if (this.controller.audioUrl) {
-      URL.revokeObjectURL(this.controller.audioUrl);
-    }
+    this.cleanupRuntime();
+    this.revokeAudioUrl();
 
     this.controller = {
       state: 'idle',
@@ -194,19 +237,6 @@ class VoiceRecorderController {
     };
 
     this.notify();
-  }
-
-  private cleanupRecorder() {
-    if (this.timerInterval) {
-      clearInterval(this.timerInterval);
-      this.timerInterval = null;
-    }
-
-    this.stream?.getTracks().forEach((t) => t.stop());
-    this.stream = null;
-    this.mediaRecorder = null;
-    this.chunks = [];
-    this.startTimeMs = null;
   }
 }
 

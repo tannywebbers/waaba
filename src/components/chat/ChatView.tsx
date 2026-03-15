@@ -590,8 +590,8 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       {/* Header - ALWAYS at top, never moves */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-panel-border bg-panel-header/95 shrink-0 z-20" style={{ position: 'sticky', top: 0 }}>
         {showBackButton && (
-          <Button variant="ghost" size="icon" className="h-10 w-10" onClick={onBack}>
-            <ArrowLeft className="h-6 w-6" strokeWidth={2.5} />
+          <Button variant="ghost" size="icon" className="h-[45px] w-[45px] text-[hsl(var(--chat-control-icon))]" onClick={onBack}>
+            <ArrowLeft className="h-[29px] w-[29px]" strokeWidth={2.75} />
           </Button>
         )}
         <button className="flex items-center gap-2 flex-1 min-w-0" onClick={() => setShowContactPanel(true)}>
@@ -662,7 +662,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
 
       {/* Input bar */}
       <div className="px-2 sm:px-3 pt-1.5 shrink-0 z-20" style={{ paddingBottom: 'max(5px, env(safe-area-inset-bottom))' }}>
-        <div className="flex items-end gap-2 max-w-3xl mx-auto pr-1">
+        <div className="flex w-full items-end gap-2 max-w-3xl mx-auto pr-2">
           {recorderState.state !== 'idle' ? (
             <VoiceRecorderButton
               onRecordingComplete={(blob) => handleVoiceNoteSend(blob)}
@@ -671,7 +671,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
           ) : (
             <>
               {/* Message input area - contains emoji, textarea, file, template */}
-              <div className="flex-1 flex items-end bg-card dark:bg-[hsl(200_12%_16%)] rounded-[25px] px-2 py-1 border border-input shadow-sm gap-1">
+              <div className="min-w-0 flex-1 flex items-end bg-card dark:bg-[hsl(200_12%_16%)] rounded-[25px] px-2 py-1 border border-input shadow-sm gap-1">
                 {/* Emoji button */}
                 <div className="shrink-0 self-end pb-[2px]">
                   <EmojiPickerButton
@@ -710,7 +710,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
                     // Auto-resize
                     if (inputRef.current) {
                       inputRef.current.style.height = 'auto';
-                      inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 150)}px`;
+                      inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 154)}px`;
                     }
                   }}
                   onFocus={() => {
@@ -733,7 +733,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
                   }}
                   placeholder="Message"
                   rows={1}
-                  className="flex-1 resize-none border-0 focus:outline-none min-h-[38px] max-h-[150px] py-[7px] px-2 text-[16px] bg-transparent leading-[1.4] font-medium overflow-y-auto custom-scrollbar"
+                  className="min-w-0 flex-1 resize-none border-0 focus:outline-none min-h-[38px] max-h-[154px] py-[7px] px-2 text-[16px] bg-transparent leading-[1.4] font-medium overflow-y-auto custom-scrollbar"
                   style={{
                     scrollbarWidth: 'thin',
                     scrollbarColor: 'rgba(155, 155, 155, 0.5) transparent'
