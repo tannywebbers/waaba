@@ -30,9 +30,9 @@ export function VoiceRecorder({ onRecordingComplete, onCancel, isRecording, setI
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  const SAMPLE_RATE = 44100;
-  const BIT_RATE = 256;
-  const BUFFER_SIZE = 512;
+  const SAMPLE_RATE = 48000; // Modern professional standard
+const BIT_RATE = 320;      // Maximum fidelity for compressed audio
+const BUFFER_SIZE = 512;   // Balanced "sweet spot"
 
   useEffect(() => {
     return () => {
