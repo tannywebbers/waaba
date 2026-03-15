@@ -590,8 +590,8 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       {/* Header - ALWAYS at top, never moves */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-panel-border bg-panel-header/95 shrink-0 z-20" style={{ position: 'sticky', top: 0 }}>
         {showBackButton && (
-          <Button variant="ghost" size="icon" className="h-10 w-10" onClick={onBack}>
-            <ArrowLeft className="h-6 w-6" strokeWidth={2.5} />
+          <Button variant="ghost" size="icon" className="h-[45px] w-[45px] text-[hsl(var(--chat-control-icon))]" onClick={onBack}>
+            <ArrowLeft className="h-[29px] w-[29px]" strokeWidth={2.75} />
           </Button>
         )}
         <button className="flex items-center gap-2 flex-1 min-w-0" onClick={() => setShowContactPanel(true)}>
