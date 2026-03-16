@@ -48,18 +48,18 @@ export function DesktopLayout() {
               className={cn(
                 'relative flex flex-col items-center gap-0.5 w-14 py-2 rounded-xl transition-all hover:scale-[1.03]',
                 viewMode === mode
-                  ? 'bg-primary/20 text-black ring-2 ring-primary/40'
-                  : 'text-black hover:bg-accent'
+                  ? 'bg-primary/20 text-foreground ring-2 ring-primary/40'
+                  : 'text-foreground/70 hover:bg-accent'
               )}
               title={label}
             >
               {imgSrc ? (
                 <img src={imgSrc} alt={label} className={cn(
-                  "h-6 w-6 object-contain",
+                  "h-7 w-7 object-contain dark:invert",
                   viewMode === mode ? "opacity-100" : "opacity-60"
                 )} />
               ) : (
-                <Icon className={cn("h-6 w-6 stroke-[2.6px]", viewMode === mode && "stroke-[2.8px]")} />
+                <Icon className={cn("h-7 w-7 stroke-[2.5px]", viewMode === mode && "stroke-[2.75px]")} />
               )}
               <span className="text-[10px] font-semibold">{label}</span>
               {mode === 'chats' && chatsWithUnread > 0 && (
