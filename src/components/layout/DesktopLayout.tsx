@@ -75,7 +75,7 @@ export function DesktopLayout() {
         <div className="flex flex-col items-center gap-2 py-4">
           <Button
             variant="ghost" size="icon"
-            className="h-10 w-10 text-black hover:text-primary"
+            className="h-10 w-10 text-foreground hover:text-primary"
             onClick={() => setShowNewChatModal(true)}
             title="New Chat"
           >
@@ -83,7 +83,7 @@ export function DesktopLayout() {
           </Button>
           <Button
             variant="ghost" size="icon"
-            className="h-10 w-10 text-black hover:text-primary"
+            className="h-10 w-10 text-foreground hover:text-primary"
             onClick={() => setShowAddContactModal(true)}
             title="Add Contact"
           >
