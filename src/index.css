@@ -234,13 +234,18 @@
   }
 }
 
-/* Dark mode: ensure icons and text are visible */
+/* Dark mode: invert dark colors to light */
 .dark .text-black {
   color: hsl(var(--foreground));
 }
 
 .dark svg {
   color: inherit;
+}
+
+/* Dark mode: invert icon images */
+.dark img.dark\:invert {
+  filter: invert(1) brightness(2);
 }
 
 /* Unread chat items — extra bold weight */

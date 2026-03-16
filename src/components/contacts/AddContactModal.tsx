@@ -1,6 +1,6 @@
 // @ts-nocheck
-import { useState } from 'react';
-import { X, User, Phone, CreditCard, Banknote, Users, Plus, Calendar, Smartphone, Trash2 } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { X, User, Phone, CreditCard, Banknote, Users, Plus, Calendar, Smartphone, Trash2, Tag } from 'lucide-react';
 import { useAppStore } from '@/stores/appStore';
 import { useAuth } from '@/hooks/useAuth';
 import { useSharedInbox } from '@/hooks/useSharedInbox';
@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 interface AccountDetail {
   bank: string;
@@ -54,10 +55,26 @@ export function AddContactModal() {
     dayType: '0',
   });
 
+  // Labels
+  interface LabelOption { id: string; name: string; color: string }
+  const [availableLabels, setAvailableLabels] = useState<LabelOption[]>([]);
+  const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([]);
+  const [bulkSelectedLabelIds, setBulkSelectedLabelIds] = useState<string[]>([]);
+
+  const fetchLabels = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase.from('labels').select('*').eq('user_id', user.id);
+    setAvailableLabels((data || []) as LabelOption[]);
+  }, [user]);
+
+  useEffect(() => { fetchLabels(); }, [fetchLabels]);
+
   const resetForms = () => {
     setSingleForm({ loanId: '', name: '', phone: '', amount: '', appType: 'tloan', appTypeCustom: '', dayType: '0' });
     setAccountDetails([]);
     setBulkForm({ contactIds: '', customerNames: '', phoneNumbers: '', appType: 'tloan', dayType: '0' });
+    setSelectedLabelIds([]);
+    setBulkSelectedLabelIds([]);
   };
 
   const handleClose = () => {
@@ -121,6 +138,17 @@ export function AddContactModal() {
             account_name: ad.accountName.trim(),
           })));
         if (accountError) console.error('Error saving account details:', accountError);
+      }
+
+      // Assign labels
+      if (selectedLabelIds.length > 0) {
+        await supabase.from('chat_labels').insert(
+          selectedLabelIds.map(labelId => ({
+            chat_id: contactData.id,
+            label_id: labelId,
+            user_id: user.id,
+          }))
+        );
       }
 
       addContact({
@@ -195,6 +223,19 @@ export function AddContactModal() {
         id: c.id, loanId: c.loan_id, name: c.name, phone: c.phone,
         createdAt: new Date(c.created_at), updatedAt: new Date(c.updated_at),
       }));
+
+      // Assign labels to all bulk contacts
+      if (bulkSelectedLabelIds.length > 0 && contactsData && contactsData.length > 0) {
+        const labelInserts = contactsData.flatMap(c =>
+          bulkSelectedLabelIds.map(labelId => ({
+            chat_id: c.id,
+            label_id: labelId,
+            user_id: user.id,
+          }))
+        );
+        await supabase.from('chat_labels').insert(labelInserts);
+      }
+
       addContacts(newContacts);
       toast({ title: 'Contacts added', description: `${newContacts.length} contacts added.` });
       handleClose();
@@ -306,6 +347,34 @@ export function AddContactModal() {
                 ))}
               </div>
 
+              {/* Label Selector */}
+              {availableLabels.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1.5"><Tag className="h-3.5 w-3.5" /> Labels</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {availableLabels.map((label) => (
+                      <button
+                        key={label.id}
+                        type="button"
+                        onClick={() => setSelectedLabelIds(prev => prev.includes(label.id) ? prev.filter(id => id !== label.id) : [...prev, label.id])}
+                        className={cn(
+                          "px-3 py-1 rounded-full text-xs font-semibold border transition-colors",
+                          selectedLabelIds.includes(label.id) ? "ring-2 ring-offset-1" : "opacity-60"
+                        )}
+                        style={{
+                          backgroundColor: label.color + '22',
+                          color: label.color,
+                          borderColor: label.color + '55',
+                          ...(selectedLabelIds.includes(label.id) ? { ringColor: label.color } : {}),
+                        }}
+                      >
+                        {label.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="flex justify-end gap-2 pt-2">
                 <Button type="button" variant="outline" onClick={handleClose} disabled={loading}>Cancel</Button>
                 <Button type="submit" disabled={loading}>{loading ? 'Adding...' : 'Add Contact'}</Button>
@@ -353,6 +422,33 @@ export function AddContactModal() {
                   />
                 </div>
               </div>
+
+              {/* Label Selector for Bulk */}
+              {availableLabels.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1.5"><Tag className="h-3.5 w-3.5" /> Labels (all)</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {availableLabels.map((label) => (
+                      <button
+                        key={label.id}
+                        type="button"
+                        onClick={() => setBulkSelectedLabelIds(prev => prev.includes(label.id) ? prev.filter(id => id !== label.id) : [...prev, label.id])}
+                        className={cn(
+                          "px-3 py-1 rounded-full text-xs font-semibold border transition-colors",
+                          bulkSelectedLabelIds.includes(label.id) ? "ring-2 ring-offset-1" : "opacity-60"
+                        )}
+                        style={{
+                          backgroundColor: label.color + '22',
+                          color: label.color,
+                          borderColor: label.color + '55',
+                        }}
+                      >
+                        {label.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="flex justify-end gap-2 pt-2">
                 <Button type="button" variant="outline" onClick={handleClose} disabled={loading}>Cancel</Button>

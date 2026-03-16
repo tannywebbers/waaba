@@ -203,6 +203,25 @@ export function ContactListItem({
               </>
             )}
           </div>
+
+          {/* Label badges */}
+          {labels.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-1">
+              {labels.map((label) => (
+                <span
+                  key={label.id}
+                  className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                  style={{
+                    backgroundColor: label.color + '22',
+                    color: label.color,
+                    border: `1px solid ${label.color}44`,
+                  }}
+                >
+                  {label.name}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </button>
 

@@ -113,16 +113,16 @@ export function MobileLayout() {
             onClick={() => setViewMode(mode)}
             className={cn(
               'relative flex flex-col items-center gap-0.5 px-6 py-2 min-w-[72px] rounded-xl transition-all',
-              viewMode === mode ? 'text-black bg-primary/20 ring-1 ring-primary/40' : 'text-black hover:bg-accent/60'
+              viewMode === mode ? 'text-foreground bg-primary/20 ring-1 ring-primary/40' : 'text-foreground/70 hover:bg-accent/60'
             )}
           >
             {imgSrc ? (
               <img src={imgSrc} alt={label} className={cn(
-                "h-[26px] w-[26px] object-contain",
+                "h-[28px] w-[28px] object-contain dark:invert",
                 viewMode === mode ? "opacity-100" : "opacity-75"
               )} />
             ) : (
-              <svg className={cn("h-[26px] w-[26px]", viewMode === mode && "stroke-[2.5px]")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg className={cn("h-[28px] w-[28px]", viewMode === mode && "stroke-[2.5px]")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="3" />
                 <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
               </svg>
