@@ -223,6 +223,19 @@ export function AddContactModal() {
         id: c.id, loanId: c.loan_id, name: c.name, phone: c.phone,
         createdAt: new Date(c.created_at), updatedAt: new Date(c.updated_at),
       }));
+
+      // Assign labels to all bulk contacts
+      if (bulkSelectedLabelIds.length > 0 && contactsData && contactsData.length > 0) {
+        const labelInserts = contactsData.flatMap(c =>
+          bulkSelectedLabelIds.map(labelId => ({
+            chat_id: c.id,
+            label_id: labelId,
+            user_id: user.id,
+          }))
+        );
+        await supabase.from('chat_labels').insert(labelInserts);
+      }
+
       addContacts(newContacts);
       toast({ title: 'Contacts added', description: `${newContacts.length} contacts added.` });
       handleClose();
