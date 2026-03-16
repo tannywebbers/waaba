@@ -150,7 +150,6 @@ export function AddContactModal() {
           }))
         );
       }
-      }
 
       addContact({
         id: contactData.id,
