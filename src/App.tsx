@@ -16,6 +16,7 @@ import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
 const AdminSettings = lazy(() => import("./pages/AdminSettings"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 
 const queryClient = new QueryClient();
 
@@ -128,6 +129,18 @@ function AppRoutes() {
             <ProtectedRoute>
               <AdminSettings />
             </ProtectedRoute>
+          </Suspense>
+        } 
+      />
+      <Route 
+        path="/reset-password" 
+        element={
+          <Suspense fallback={
+            <div className="flex min-h-screen items-center justify-center">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            </div>
+          }>
+            <ResetPassword />
           </Suspense>
         } 
       />
