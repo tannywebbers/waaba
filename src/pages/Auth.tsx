@@ -196,10 +196,41 @@ const Auth = () => {
                     </div>
                   </div>
 
+                  <div className="flex justify-end">
+                    <Button type="button" variant="link" className="px-0 text-xs text-muted-foreground" onClick={() => setShowForgot(true)}>
+                      Forgot password?
+                    </Button>
+                  </div>
+
                   <Button type="submit" className="w-full" disabled={loading}>
                     {loading ? 'Signing in...' : 'Sign In'}
                   </Button>
                 </form>
+
+                {/* Forgot password dialog */}
+                {showForgot && (
+                  <div className="mt-4 p-4 border rounded-lg bg-muted/30 space-y-3">
+                    <p className="text-sm font-medium">Reset your password</p>
+                    <p className="text-xs text-muted-foreground">Enter your email and we'll send a reset link.</p>
+                    <form onSubmit={handleForgotPassword} className="space-y-3">
+                      <Input
+                        type="email"
+                        value={forgotEmail}
+                        onChange={(e) => setForgotEmail(e.target.value)}
+                        placeholder="you@example.com"
+                        required
+                      />
+                      <div className="flex gap-2">
+                        <Button type="submit" size="sm" disabled={forgotLoading} className="flex-1">
+                          {forgotLoading ? 'Sending...' : 'Send Reset Link'}
+                        </Button>
+                        <Button type="button" size="sm" variant="outline" onClick={() => setShowForgot(false)}>
+                          Cancel
+                        </Button>
+                      </div>
+                    </form>
+                  </div>
+                )}
               </TabsContent>
 
               <TabsContent value="signup">
