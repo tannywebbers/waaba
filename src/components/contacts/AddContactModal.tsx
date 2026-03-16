@@ -140,6 +140,18 @@ export function AddContactModal() {
         if (accountError) console.error('Error saving account details:', accountError);
       }
 
+      // Assign labels
+      if (selectedLabelIds.length > 0) {
+        await supabase.from('chat_labels').insert(
+          selectedLabelIds.map(labelId => ({
+            chat_id: contactData.id,
+            label_id: labelId,
+            user_id: user.id,
+          }))
+        );
+      }
+      }
+
       addContact({
         id: contactData.id,
         loanId: contactData.loan_id,
