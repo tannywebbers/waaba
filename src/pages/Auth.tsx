@@ -40,6 +40,9 @@ const Auth = () => {
     password: '', 
     confirmPassword: '' 
   });
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
