@@ -73,6 +73,8 @@ export function AddContactModal() {
     setSingleForm({ loanId: '', name: '', phone: '', amount: '', appType: 'tloan', appTypeCustom: '', dayType: '0' });
     setAccountDetails([]);
     setBulkForm({ contactIds: '', customerNames: '', phoneNumbers: '', appType: 'tloan', dayType: '0' });
+    setSelectedLabelIds([]);
+    setBulkSelectedLabelIds([]);
   };
 
   const handleClose = () => {

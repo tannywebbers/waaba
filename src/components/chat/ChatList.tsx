@@ -446,6 +446,16 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
 
           {contactSelectionMode && (
             <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => {
+                if (selectedContactIds.length === filteredContacts.length) {
+                  setSelectedContactIds([]);
+                } else {
+                  setSelectedContactIds(filteredContacts.map(c => c.id));
+                }
+              }}>
+                <CheckSquare className="h-4 w-4 mr-1" />
+                {selectedContactIds.length === filteredContacts.length ? 'Deselect All' : 'Select All'}
+              </Button>
               <Button size="sm" variant="destructive" onClick={handleDeleteSelectedContacts} disabled={selectedContactIds.length === 0}><Trash2 className="h-4 w-4 mr-1" />Delete ({selectedContactIds.length})</Button>
               <Button size="sm" onClick={() => setShowBulkDialog(true)} disabled={selectedContactIds.length === 0}><Send className="h-4 w-4 mr-1" />Message ({selectedContactIds.length})</Button>
             </div>
