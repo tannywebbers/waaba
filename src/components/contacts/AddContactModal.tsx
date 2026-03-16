@@ -55,6 +55,20 @@ export function AddContactModal() {
     dayType: '0',
   });
 
+  // Labels
+  interface LabelOption { id: string; name: string; color: string }
+  const [availableLabels, setAvailableLabels] = useState<LabelOption[]>([]);
+  const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([]);
+  const [bulkSelectedLabelIds, setBulkSelectedLabelIds] = useState<string[]>([]);
+
+  const fetchLabels = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase.from('labels').select('*').eq('user_id', user.id);
+    setAvailableLabels((data || []) as LabelOption[]);
+  }, [user]);
+
+  useEffect(() => { fetchLabels(); }, [fetchLabels]);
+
   const resetForms = () => {
     setSingleForm({ loanId: '', name: '', phone: '', amount: '', appType: 'tloan', appTypeCustom: '', dayType: '0' });
     setAccountDetails([]);
