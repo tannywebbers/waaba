@@ -98,7 +98,7 @@ export function DesktopLayout() {
           onClick={() => setSidebarOpen(true)}
           className="absolute top-3 left-3 z-50 h-9 w-9 flex items-center justify-center rounded-lg bg-panel-header border border-panel-border hover:bg-accent transition-colors"
         >
-          <Menu className="h-5 w-5 text-black" />
+          <Menu className="h-5 w-5 text-foreground" />
         </button>
       )}
 
