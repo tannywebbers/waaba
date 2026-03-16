@@ -35,7 +35,7 @@ export function DesktopLayout() {
         {/* Hamburger */}
         <div className="flex items-center justify-center py-4">
           <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)} className="h-10 w-10">
-            <Menu className="h-5 w-5 text-black" />
+            <Menu className="h-5 w-5 text-foreground" />
           </Button>
         </div>
 
