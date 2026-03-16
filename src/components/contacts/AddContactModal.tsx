@@ -1,6 +1,6 @@
 // @ts-nocheck
-import { useState } from 'react';
-import { X, User, Phone, CreditCard, Banknote, Users, Plus, Calendar, Smartphone, Trash2 } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { X, User, Phone, CreditCard, Banknote, Users, Plus, Calendar, Smartphone, Trash2, Tag } from 'lucide-react';
 import { useAppStore } from '@/stores/appStore';
 import { useAuth } from '@/hooks/useAuth';
 import { useSharedInbox } from '@/hooks/useSharedInbox';
@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 interface AccountDetail {
   bank: string;
