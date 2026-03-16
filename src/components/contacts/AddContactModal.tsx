@@ -423,6 +423,33 @@ export function AddContactModal() {
                 </div>
               </div>
 
+              {/* Label Selector for Bulk */}
+              {availableLabels.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1.5"><Tag className="h-3.5 w-3.5" /> Labels (all)</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {availableLabels.map((label) => (
+                      <button
+                        key={label.id}
+                        type="button"
+                        onClick={() => setBulkSelectedLabelIds(prev => prev.includes(label.id) ? prev.filter(id => id !== label.id) : [...prev, label.id])}
+                        className={cn(
+                          "px-3 py-1 rounded-full text-xs font-semibold border transition-colors",
+                          bulkSelectedLabelIds.includes(label.id) ? "ring-2 ring-offset-1" : "opacity-60"
+                        )}
+                        style={{
+                          backgroundColor: label.color + '22',
+                          color: label.color,
+                          borderColor: label.color + '55',
+                        }}
+                      >
+                        {label.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="flex justify-end gap-2 pt-2">
                 <Button type="button" variant="outline" onClick={handleClose} disabled={loading}>Cancel</Button>
                 <Button type="submit" disabled={loading}>{loading ? 'Adding...' : 'Add Contacts'}</Button>
