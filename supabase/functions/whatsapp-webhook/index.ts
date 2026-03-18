@@ -108,12 +108,11 @@ serve(async (req) => {
           .from('whatsapp_settings')
           .select('api_token, user_id, phone_number_id')
           .eq('user_id', userId)
-          .eq('is_connected', true)
           .single();
 
         if (error) {
           console.error('❌ Settings lookup by userId error:', error.message);
-        } else {
+        } else if (data?.api_token) {
           settings = data;
           console.log('✅ Found settings via URL userId:', userId);
         }
