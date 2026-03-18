@@ -143,8 +143,7 @@ serve(async (req) => {
 
         const { data: allSettings, error: settingsError } = await supabase
           .from('whatsapp_settings')
-          .select('api_token, user_id, phone_number_id')
-          .eq('is_connected', true);
+          .select('api_token, user_id, phone_number_id');
 
         if (settingsError) {
           console.error('❌ All settings query error:', settingsError.message);
