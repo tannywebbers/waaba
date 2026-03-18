@@ -127,7 +127,6 @@ serve(async (req) => {
           .from('whatsapp_settings')
           .select('api_token, user_id, phone_number_id')
           .eq('phone_number_id', phoneNumberId)
-          .eq('is_connected', true)
           .single();
 
         if (error) {
