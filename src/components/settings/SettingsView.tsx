@@ -78,6 +78,7 @@ export function SettingsView() {
                 <TemplateMappingSettings />
               </div>
             )}
+            {activeTab === 'logs' && <WebhookLogsSettings />}
             {activeTab === 'theme' && <ThemeSettings />}
             {activeTab === 'account' && <AccountSettings />}
           </div>
