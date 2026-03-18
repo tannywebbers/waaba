@@ -1,10 +1,11 @@
-import { Key, Palette, User, ChevronRight, ArrowLeft, FileText } from 'lucide-react';
+import { Key, Palette, User, ChevronRight, ArrowLeft, FileText, Activity } from 'lucide-react';
 import { useState } from 'react';
 import { WhatsAppApiSettings } from '@/components/settings/WhatsAppApiSettings';
 import { ThemeSettings } from '@/components/settings/ThemeSettings';
 import { AccountSettings } from '@/components/settings/AccountSettings';
 import { TemplateMappingSettings } from '@/components/settings/TemplateMappingSettings';
 import { AppTemplateSettings } from '@/components/settings/AppTemplateSettings';
+import { WebhookLogsSettings } from '@/components/settings/WebhookLogsSettings';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { SettingsTab } from '@/types';
@@ -14,6 +15,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 const settingsTabs: { id: SettingsTab; label: string; icon: typeof Key; description: string }[] = [
   { id: 'api', label: 'WhatsApp API', icon: Key, description: 'Configure WhatsApp Cloud API' },
   { id: 'templates', label: 'Templates', icon: FileText, description: 'App templates & mapping' },
+  { id: 'logs', label: 'Webhook Logs', icon: Activity, description: 'Real-time webhook events' },
   { id: 'theme', label: 'Appearance', icon: Palette, description: 'Theme and colors' },
   { id: 'account', label: 'Account', icon: User, description: 'Profile and security' },
 ];
@@ -76,6 +78,7 @@ export function SettingsView() {
                 <TemplateMappingSettings />
               </div>
             )}
+            {activeTab === 'logs' && <WebhookLogsSettings />}
             {activeTab === 'theme' && <ThemeSettings />}
             {activeTab === 'account' && <AccountSettings />}
           </div>
@@ -121,6 +124,7 @@ export function SettingsView() {
               <TemplateMappingSettings />
             </div>
           )}
+          {activeTab === 'logs' && <WebhookLogsSettings />}
           {activeTab === 'theme' && <ThemeSettings />}
           {activeTab === 'account' && <AccountSettings />}
         </div>
