@@ -873,6 +873,18 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
                   <li>Click <strong>"Verify and Save"</strong></li>
                 </ol>
               </div>
+
+              <Separator className="my-4" />
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[14px] font-medium">Regenerate Credentials</p>
+                  <p className="text-[12px] text-muted-foreground">Get a new verify token without resetting your entire connection</p>
+                </div>
+                <Button variant="outline" size="sm" onClick={handleGenerateWebhook} className="text-[13px]">
+                  <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                  Regenerate
+                </Button>
+              </div>
             </>
           )}
         </CardContent>

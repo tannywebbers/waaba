@@ -5,7 +5,7 @@ import { ThemeSettings } from '@/components/settings/ThemeSettings';
 import { AccountSettings } from '@/components/settings/AccountSettings';
 import { TemplateMappingSettings } from '@/components/settings/TemplateMappingSettings';
 import { AppTemplateSettings } from '@/components/settings/AppTemplateSettings';
-import { WebhookLogsSettings } from '@/components/settings/WebhookLogsSettings';
+import { ApiStatsPage } from '@/components/settings/ApiStatsPage';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { SettingsTab } from '@/types';
@@ -15,12 +15,10 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 const settingsTabs: { id: SettingsTab; label: string; icon: typeof Key; description: string }[] = [
   { id: 'api', label: 'WhatsApp API', icon: Key, description: 'Configure WhatsApp Cloud API' },
   { id: 'templates', label: 'Templates', icon: FileText, description: 'App templates & mapping' },
-  { id: 'logs', label: 'Webhook Logs', icon: Activity, description: 'Real-time webhook events' },
+  { id: 'logs', label: 'API Stats & Logs', icon: Activity, description: 'Stats, delivery rates & webhook logs' },
   { id: 'theme', label: 'Appearance', icon: Palette, description: 'Theme and colors' },
   { id: 'account', label: 'Account', icon: User, description: 'Profile and security' },
 ];
-
-// Note: AppTemplateSettings is imported and used in the templates tab
 
 export function SettingsView() {
   const [activeTab, setActiveTab] = useState<SettingsTab | null>(null);
@@ -53,7 +51,6 @@ export function SettingsView() {
       );
     }
 
-    // Show detail view
     const currentTab = settingsTabs.find(t => t.id === activeTab);
     
     return (
@@ -78,7 +75,7 @@ export function SettingsView() {
                 <TemplateMappingSettings />
               </div>
             )}
-            {activeTab === 'logs' && <WebhookLogsSettings />}
+            {activeTab === 'logs' && <ApiStatsPage />}
             {activeTab === 'theme' && <ThemeSettings />}
             {activeTab === 'account' && <AccountSettings />}
           </div>
@@ -90,7 +87,6 @@ export function SettingsView() {
   // Desktop: show sidebar with content
   return (
     <div className="h-full flex">
-      {/* Settings Sidebar */}
       <div className="w-64 border-r border-panel-border bg-panel-header/50">
         <div className="p-4">
           <h2 className="font-semibold text-lg">Settings</h2>
@@ -114,7 +110,6 @@ export function SettingsView() {
         </nav>
       </div>
 
-      {/* Settings Content */}
       <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
         <div className="max-w-2xl">
           {(!activeTab || activeTab === 'api') && <WhatsAppApiSettings />}
@@ -124,7 +119,7 @@ export function SettingsView() {
               <TemplateMappingSettings />
             </div>
           )}
-          {activeTab === 'logs' && <WebhookLogsSettings />}
+          {activeTab === 'logs' && <ApiStatsPage />}
           {activeTab === 'theme' && <ThemeSettings />}
           {activeTab === 'account' && <AccountSettings />}
         </div>

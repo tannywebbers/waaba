@@ -4,6 +4,7 @@ import { BarChart3, Send, CheckCheck, Eye, AlertTriangle, Loader2 } from 'lucide
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { WebhookLogsSettings } from '@/components/settings/WebhookLogsSettings';
 
 interface Stats {
   total: number;
@@ -65,7 +66,7 @@ export function ApiStatsPage() {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="grid grid-cols-2 gap-3">
         {statCards.map(({ label, value, icon: Icon, color, bg }) => (
           <Card key={label}>
@@ -105,6 +106,9 @@ export function ApiStatsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Webhook Logs Section */}
+      <WebhookLogsSettings />
     </div>
   );
 }

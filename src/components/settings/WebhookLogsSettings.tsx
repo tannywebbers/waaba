@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import {
   Activity, ArrowDownLeft, ArrowUpRight, Loader2, Trash2, Search,
-  RefreshCw, Wifi, AlertCircle, CheckCircle, Clock
+  RefreshCw, Wifi, AlertCircle
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -32,7 +32,7 @@ function EventBadge({ type }: { type: string }) {
     message_received: 'bg-primary/20 text-primary',
     message_sent: 'bg-accent text-accent-foreground',
     status_update: 'bg-muted text-muted-foreground',
-    webhook_verified: 'bg-green-500/20 text-green-600',
+    webhook_verified: 'bg-[hsl(145,63%,49%)]/20 text-[hsl(145,63%,49%)]',
     error: 'bg-destructive/20 text-destructive',
   };
   return (
@@ -54,7 +54,7 @@ export function WebhookLogsSettings() {
     if (user) loadLogs();
   }, [user]);
 
-  // Real-time subscription
+  // Real-time subscription for new logs
   useEffect(() => {
     if (!user || !isLive) return;
 
@@ -66,16 +66,30 @@ export function WebhookLogsSettings() {
         table: 'webhook_logs',
         filter: `user_id=eq.${user.id}`,
       }, (payload) => {
-        setLogs(prev => [payload.new as WebhookLog, ...prev].slice(0, 200));
+        const newLog = payload.new as WebhookLog;
+        setLogs(prev => {
+          // Prevent duplicates
+          if (prev.find(l => l.id === newLog.id)) return prev;
+          return [newLog, ...prev].slice(0, 200);
+        });
       })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
   }, [user, isLive]);
 
-  const loadLogs = async () => {
+  // Polling fallback every 10s for resilience
+  useEffect(() => {
+    if (!user || !isLive) return;
+    const interval = setInterval(() => {
+      loadLogs(true);
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [user, isLive]);
+
+  const loadLogs = async (silent = false) => {
     if (!user) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     const { data, error } = await supabase
       .from('webhook_logs')
       .select('*')
@@ -83,8 +97,19 @@ export function WebhookLogsSettings() {
       .order('created_at', { ascending: false })
       .limit(200);
 
-    if (!error && data) setLogs(data);
-    setLoading(false);
+    if (!error && data) {
+      setLogs(prev => {
+        if (silent && prev.length > 0) {
+          // Merge: keep new items that aren't already in the list
+          const existingIds = new Set(prev.map(l => l.id));
+          const newItems = data.filter(d => !existingIds.has(d.id));
+          if (newItems.length === 0) return prev;
+          return [...newItems, ...prev].slice(0, 200);
+        }
+        return data;
+      });
+    }
+    if (!silent) setLoading(false);
   };
 
   const clearLogs = async () => {
@@ -118,7 +143,7 @@ export function WebhookLogsSettings() {
           </button>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={loadLogs}>
+          <Button variant="outline" size="sm" onClick={() => loadLogs()}>
             <RefreshCw className="h-3.5 w-3.5 mr-1" /> Refresh
           </Button>
           <Button variant="outline" size="sm" onClick={clearLogs} className="text-destructive">
