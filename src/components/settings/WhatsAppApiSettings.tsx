@@ -28,6 +28,7 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
   const [webhookGenerated, setWebhookGenerated] = useState(false);
   const [showRevokeDialog, setShowRevokeDialog] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
@@ -40,27 +41,113 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
   // This prevents tab-switch / focus-return from wiping half-typed credentials.
   const hasDraft = useRef(false);
 
-  const [settings, setSettings] = useState({
+  const defaultSettings = {
     apiToken: '',
     phoneNumberId: '',
     businessAccountId: '',
     webhookUrl: '',
     verifyToken: '',
     isConnected: false,
-  });
+  };
+
+  const [settings, setSettings] = useState(defaultSettings);
+
+  const buildWebhookUrl = (userId: string, verifyToken: string) => {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const connectionKey = verifyToken.split('-')[0];
+    return `${supabaseUrl}/functions/v1/whatsapp-webhook?user_id=${userId}&connection=${connectionKey}`;
+  };
+
+  const createVerifyToken = () => crypto.randomUUID();
+
+  const applySettingsState = (overrides = {}) => {
+    const nextSettings = { ...defaultSettings, ...overrides };
+    hasDraft.current = false;
+    setSettings(nextSettings);
+    setWebhookGenerated(Boolean(nextSettings.webhookUrl && nextSettings.verifyToken));
+  };
 
   // Helper to clear all settings (only called on explicit reset/revoke)
   const clearSettings = () => {
-    hasDraft.current = false;
-    setSettings({
-      apiToken: '',
-      phoneNumberId: '',
-      businessAccountId: '',
-      webhookUrl: '',
-      verifyToken: '',
-      isConnected: false,
-    });
-    setWebhookGenerated(false);
+    applySettingsState();
+  };
+
+  const resetStoredConnectionState = async () => {
+    if (!user) return;
+
+    const { error: logsError } = await supabase
+      .from('webhook_logs')
+      .delete()
+      .eq('user_id', user.id);
+
+    if (logsError) throw logsError;
+
+    const resetPayload = {
+      api_token: null,
+      phone_number_id: null,
+      business_account_id: null,
+      webhook_url: null,
+      verify_token: null,
+      is_connected: false,
+    };
+
+    const { data: existing, error: existingError } = await supabase
+      .from('whatsapp_settings')
+      .select('id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (existingError && existingError.code !== 'PGRST116') throw existingError;
+
+    if (existing) {
+      const { error: resetError } = await supabase
+        .from('whatsapp_settings')
+        .update(resetPayload)
+        .eq('user_id', user.id);
+
+      if (resetError) throw resetError;
+    }
+  };
+
+  const persistFreshWebhookCredentials = async () => {
+    if (!user) throw new Error('User not found');
+
+    const newVerifyToken = createVerifyToken();
+    const webhookUrl = buildWebhookUrl(user.id, newVerifyToken);
+
+    const { data: existing, error: existingError } = await supabase
+      .from('whatsapp_settings')
+      .select('id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (existingError && existingError.code !== 'PGRST116') throw existingError;
+
+    if (existing) {
+      const { error: updateError } = await supabase
+        .from('whatsapp_settings')
+        .update({
+          verify_token: newVerifyToken,
+          webhook_url: webhookUrl,
+          is_connected: false,
+        })
+        .eq('user_id', user.id);
+
+      if (updateError) throw updateError;
+    } else {
+      const { error: insertError } = await supabase
+        .from('whatsapp_settings')
+        .insert({
+          user_id: user.id,
+          verify_token: newVerifyToken,
+          webhook_url: webhookUrl,
+          is_connected: false,
+        });
+
+      if (insertError) throw insertError;
+    }
+
+    return { newVerifyToken, webhookUrl };
   };
 
   useEffect(() => {
@@ -142,10 +229,6 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
     }
   };
 
-  const generateVerifyToken = () => {
-    return 'waba_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-  };
-
   const handleSave = async () => {
     if (!user) return;
     if (!settings.apiToken || !settings.phoneNumberId) {
@@ -210,13 +293,13 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
       return;
     }
 
-    const verifyToken = generateVerifyToken();
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const webhookUrl = `${supabaseUrl}/functions/v1/whatsapp-webhook?user_id=${user.id}`;
+    const verifyToken = createVerifyToken();
+    const webhookUrl = buildWebhookUrl(user.id, verifyToken);
     
-    const newSettings = { ...settings, webhookUrl, verifyToken };
+    const newSettings = { ...settings, webhookUrl, verifyToken, isConnected: false };
     setSettings(newSettings);
     setWebhookGenerated(true);
+    onConnectionChange?.(false);
 
     // Save immediately
     try {
@@ -229,7 +312,7 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
           business_account_id: newSettings.businessAccountId,
           webhook_url: webhookUrl,
           verify_token: verifyToken,
-          is_connected: newSettings.isConnected,
+          is_connected: false,
         }).eq('user_id', user.id);
       } else {
         await supabase.from('whatsapp_settings').insert({
@@ -239,7 +322,7 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
           business_account_id: newSettings.businessAccountId,
           webhook_url: webhookUrl,
           verify_token: verifyToken,
-          is_connected: newSettings.isConnected,
+          is_connected: false,
         });
       }
 
@@ -249,6 +332,38 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
     } catch (error) {
       console.error('Error saving webhook:', error);
       toast({ title: 'Error saving webhook', variant: 'destructive' });
+    }
+  };
+
+  const handleRegenerateWebhook = async () => {
+    if (!user) return;
+
+    setRegenerating(true);
+    try {
+      await resetStoredConnectionState();
+      const { newVerifyToken, webhookUrl } = await persistFreshWebhookCredentials();
+
+      applySettingsState({
+        webhookUrl,
+        verifyToken: newVerifyToken,
+        isConnected: false,
+      });
+
+      onConnectionChange?.(false);
+
+      toast({
+        title: 'Webhook regenerated',
+        description: 'After regenerating webhook, you must reconnect it in Meta using new credentials or messages will stop.',
+      });
+    } catch (error: any) {
+      console.error('Error regenerating webhook:', error);
+      toast({
+        title: 'Webhook regeneration failed',
+        description: error.message || 'Failed to regenerate webhook credentials',
+        variant: 'destructive',
+      });
+    } finally {
+      setRegenerating(false);
     }
   };
 
@@ -284,6 +399,9 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
     } catch (error: any) {
       setSettings(prev => ({ ...prev, isConnected: false }));
       onConnectionChange?.(false);
+      if (user) {
+        await supabase.from('whatsapp_settings').update({ is_connected: false }).eq('user_id', user.id);
+      }
       toast({ title: 'Connection failed', description: error.message || 'Please check your credentials', variant: 'destructive' });
     } finally {
       setTesting(false);
@@ -427,18 +545,9 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
     try {
       console.log('[Manual Reset] Starting reset process for user:', user.id);
 
-      // Delete user's whatsapp_settings (clears everything)
-      const { error: deleteError } = await supabase
-        .from('whatsapp_settings')
-        .delete()
-        .eq('user_id', user.id);
+      await resetStoredConnectionState();
 
-      if (deleteError) {
-        console.error('[Manual Reset] Error deleting settings:', deleteError);
-        throw deleteError;
-      }
-
-      console.log('[Manual Reset] ✅ Settings deleted from database');
+      console.log('[Manual Reset] ✅ Settings and webhook logs cleared from database');
 
       // Clear local state
       clearSettings();
@@ -447,7 +556,7 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
 
       toast({ 
         title: '✅ Connection Reset', 
-        description: 'Your WhatsApp connection has been reset to brand new.' 
+        description: 'Your WhatsApp connection has been reset to a fresh state.' 
       });
 
       setShowResetDialog(false);
@@ -508,18 +617,10 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
         console.log('[Reset] ✅ Removed all shared user connections');
       }
 
-      // Step 3: Delete super user's own WhatsApp settings
-      const { error: deleteError } = await supabase
-        .from('whatsapp_settings')
-        .delete()
-        .eq('user_id', user.id);
+      // Step 3: Fully clear webhook logs and stale WhatsApp settings
+      await resetStoredConnectionState();
 
-      if (deleteError) {
-        console.error('[Reset] Error deleting settings:', deleteError);
-        throw deleteError;
-      }
-
-      console.log('[Reset] ✅ Deleted WhatsApp settings');
+      console.log('[Reset] ✅ Cleared WhatsApp settings and webhook logs');
 
       // Step 4: Clear local state
       clearSettings();
@@ -875,14 +976,27 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
               </div>
 
               <Separator className="my-4" />
+              {webhookGenerated && !settings.isConnected && (
+                <div className="flex gap-3 rounded-xl border border-destructive/20 bg-destructive/10 p-4">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+                  <div className="space-y-1">
+                    <p className="text-[13px] font-medium text-foreground">Reconnect in Meta required</p>
+                    <p className="text-[12px] text-muted-foreground">
+                      After regenerating webhook, you must reconnect it in Meta using new credentials or messages will stop.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <Separator className="my-4" />
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-[14px] font-medium">Regenerate Credentials</p>
-                  <p className="text-[12px] text-muted-foreground">Get a new verify token without resetting your entire connection</p>
+                  <p className="text-[12px] text-muted-foreground">Wipe old webhook state, issue a fresh verify token, and force a clean Meta reconnect</p>
                 </div>
-                <Button variant="outline" size="sm" onClick={handleGenerateWebhook} className="text-[13px]">
-                  <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                  Regenerate
+                <Button variant="outline" size="sm" onClick={handleRegenerateWebhook} disabled={regenerating} className="text-[13px]">
+                  {regenerating ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
+                  Regenerate Webhook
                 </Button>
               </div>
             </>
