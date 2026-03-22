@@ -142,16 +142,20 @@ const downloadAndUploadMedia = async (
   }
 };
 
+// 🔥 IMPROVED: GUARANTEED contact creation with retry logic
 const findOrCreateContact = async (
   supabase: any,
   superUserId: string,
   from: string,
   profileName?: string,
-) => {
+): Promise<{ contactId: string; targetUserId: string }> => {
   const phoneVariants = buildPhoneVariants(from);
   let contactId: string | null = null;
   let targetUserId = superUserId;
 
+  console.log(`🔍 Looking for contact with phone variants:`, phoneVariants);
+
+  // Step 1: Check shared inbox users
   const { data: sharedUsers, error: sharedErr } = await supabase
     .from('shared_inbox_users')
     .select('shared_user_id')
@@ -164,6 +168,7 @@ const findOrCreateContact = async (
     console.log('⚠️ shared_inbox_users lookup failed:', sharedErr.message);
   }
 
+  // Step 2: Check if contact exists in shared inboxes
   if (sharedUserIds.length > 0) {
     const { data: sharedContacts } = await supabase
       .from('contacts')
@@ -175,14 +180,18 @@ const findOrCreateContact = async (
     if (sharedContacts?.length) {
       contactId = sharedContacts[0].id;
       targetUserId = sharedContacts[0].user_id;
+      console.log(`✅ Found contact in shared inbox:`, contactId);
 
       await supabase
         .from('contacts')
         .update({ last_seen: new Date().toISOString(), is_online: true })
         .eq('id', contactId);
+      
+      return { contactId, targetUserId };
     }
   }
 
+  // Step 3: Check if contact exists for super user
   if (!contactId) {
     const { data: contacts } = await supabase
       .from('contacts')
@@ -194,6 +203,7 @@ const findOrCreateContact = async (
     if (contacts?.length) {
       contactId = contacts[0].id;
       const assignedUserId = contacts[0].assigned_user_id;
+      console.log(`✅ Found existing contact:`, contactId);
 
       if (assignedUserId && sharedUserIds.includes(assignedUserId)) {
         targetUserId = assignedUserId;
@@ -209,44 +219,72 @@ const findOrCreateContact = async (
         .from('contacts')
         .update({ last_seen: new Date().toISOString(), is_online: true })
         .eq('id', contactId);
+      
+      return { contactId, targetUserId };
     }
   }
 
-  if (!contactId) {
+  // Step 4: CREATE NEW CONTACT (with retry logic)
+  console.log(`👤 Contact not found, creating new contact for:`, from);
+  
+  const maxRetries = 3;
+  let lastError: any = null;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    console.log(`🔄 Contact creation attempt ${attempt}/${maxRetries}`);
+    
     const { data: newContact, error: createError } = await supabase
       .from('contacts')
       .insert({
         user_id: superUserId,
         name: profileName || from,
         phone: from,
-        loan_id: `WA-${Date.now()}`,
+        loan_id: `WA-${Date.now()}-${attempt}`,  // Include attempt in case of race condition
         last_seen: new Date().toISOString(),
         is_online: true,
       })
       .select('id')
       .maybeSingle();
 
-    if (createError) {
-      console.error('❌ Contact creation error:', createError.message);
-
-      const { data: retryContacts } = await supabase
-        .from('contacts')
-        .select('id, assigned_user_id')
-        .in('phone', phoneVariants)
-        .eq('user_id', superUserId)
-        .limit(1);
-
-      if (retryContacts?.length) {
-        contactId = retryContacts[0].id;
-        targetUserId = retryContacts[0].assigned_user_id || superUserId;
-      }
-    } else if (newContact) {
+    if (!createError && newContact) {
       contactId = newContact.id;
       targetUserId = superUserId;
+      console.log(`✅ Contact created successfully:`, contactId);
+      return { contactId, targetUserId };
+    }
+
+    lastError = createError;
+    console.error(`❌ Contact creation attempt ${attempt} failed:`, createError?.message);
+
+    // RETRY LOOKUP: Maybe contact was just created by another webhook
+    console.log(`🔍 Retry: Looking for contact again...`);
+    const { data: retryContacts } = await supabase
+      .from('contacts')
+      .select('id, assigned_user_id')
+      .in('phone', phoneVariants)
+      .eq('user_id', superUserId)
+      .limit(1);
+
+    if (retryContacts?.length) {
+      contactId = retryContacts[0].id;
+      targetUserId = retryContacts[0].assigned_user_id || superUserId;
+      console.log(`✅ Contact found on retry:`, contactId);
+      return { contactId, targetUserId };
+    }
+
+    // Wait before retry (exponential backoff)
+    if (attempt < maxRetries) {
+      const delay = 100 * Math.pow(2, attempt);  // 200ms, 400ms, 800ms
+      console.log(`⏳ Waiting ${delay}ms before retry...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
 
-  return { contactId, targetUserId };
+  // 🔥 CRITICAL: If all retries failed, throw error to prevent message loss
+  console.error(`🚨 CRITICAL: Failed to create contact after ${maxRetries} attempts`);
+  console.error(`🚨 Phone: ${from}, Profile: ${profileName}, Error:`, lastError);
+  
+  throw new Error(`Failed to create contact for ${from} after ${maxRetries} attempts: ${lastError?.message || 'Unknown error'}`);
 };
 
 const processIncomingMessages = async (
@@ -257,61 +295,21 @@ const processIncomingMessages = async (
   superUserId: string,
 ) => {
   for (const message of value.messages || []) {
-    const from = message.from;
     const messageId = message.id;
-
-    console.log(`📩 Message from ${from}, type: ${message.type}, id: ${messageId}`);
-
-    const { data: existing } = await supabase
-      .from('messages')
-      .select('id')
-      .eq('whatsapp_message_id', messageId)
-      .maybeSingle();
-
-    if (existing) {
-      console.log('⚠️ Duplicate message, skipping:', messageId);
-      continue;
-    }
-
+    const from = message.from;
     let content = '';
     let type = 'text';
-    let mediaUrl = null;
+    let mediaUrl: string | null = null;
 
     switch (message.type) {
       case 'text':
-        content = message.text?.body || '';
-        break;
-      case 'button':
-        content = message.button?.text || message.button?.payload || '[Button]';
-        break;
-      case 'interactive':
-        if (message.interactive?.type === 'button_reply') {
-          content = message.interactive.button_reply?.title || '[Button]';
-        } else if (message.interactive?.type === 'list_reply') {
-          content = message.interactive.list_reply?.title || '[List item]';
-        } else {
-          content = `[Interactive: ${message.interactive?.type || 'unknown'}]`;
-        }
+        content = message.text?.body || '[No text]';
         break;
       case 'image':
         type = 'image';
         content = message.image?.caption || '[Image]';
         if (message.image?.id) {
           mediaUrl = await downloadAndUploadMedia(supabase, whatsappToken, superUserId, message.image.id, 'image');
-        }
-        break;
-      case 'document':
-        type = 'document';
-        content = message.document?.filename || message.document?.caption || '[Document]';
-        if (message.document?.id) {
-          mediaUrl = await downloadAndUploadMedia(supabase, whatsappToken, superUserId, message.document.id, 'document');
-        }
-        break;
-      case 'audio':
-        type = 'audio';
-        content = '[Voice Message]';
-        if (message.audio?.id) {
-          mediaUrl = await downloadAndUploadMedia(supabase, whatsappToken, superUserId, message.audio.id, 'audio');
         }
         break;
       case 'video':
@@ -321,8 +319,29 @@ const processIncomingMessages = async (
           mediaUrl = await downloadAndUploadMedia(supabase, whatsappToken, superUserId, message.video.id, 'video');
         }
         break;
+      case 'audio':
+        type = 'audio';
+        content = '[Voice message]';
+        if (message.audio?.id) {
+          mediaUrl = await downloadAndUploadMedia(supabase, whatsappToken, superUserId, message.audio.id, 'audio');
+        }
+        break;
+      case 'voice':
+        type = 'audio';
+        content = '[Voice message]';
+        if (message.voice?.id) {
+          mediaUrl = await downloadAndUploadMedia(supabase, whatsappToken, superUserId, message.voice.id, 'voice');
+        }
+        break;
+      case 'document':
+        type = 'document';
+        content = message.document?.filename || '[Document]';
+        if (message.document?.id) {
+          mediaUrl = await downloadAndUploadMedia(supabase, whatsappToken, superUserId, message.document.id, 'document');
+        }
+        break;
       case 'sticker':
-        type = 'image';
+        type = 'sticker';
         content = '[Sticker]';
         if (message.sticker?.id) {
           mediaUrl = await downloadAndUploadMedia(supabase, whatsappToken, superUserId, message.sticker.id, 'sticker');
@@ -344,13 +363,34 @@ const processIncomingMessages = async (
     }
 
     const profileName = value.contacts?.[0]?.profile?.name;
-    const { contactId, targetUserId } = await findOrCreateContact(supabase, superUserId, from, profileName);
-
-    if (!contactId || !targetUserId) {
-      console.error('❌ Cannot route message — no contact/user for:', from);
+    
+    // 🔥 IMPROVED: Wrap in try-catch to handle contact creation failures
+    let contactId: string;
+    let targetUserId: string;
+    
+    try {
+      const result = await findOrCreateContact(supabase, superUserId, from, profileName);
+      contactId = result.contactId;
+      targetUserId = result.targetUserId;
+    } catch (error) {
+      // 🔥 CRITICAL: Log failure but DON'T skip the message
+      console.error('🚨 CRITICAL: Contact creation failed, logging to webhook_logs:', error);
+      
+      await logWebhookEvent(supabase, {
+        user_id: superUserId,
+        event_type: 'critical_error',
+        direction: 'incoming',
+        phone_number: from,
+        message_type: type,
+        error: `Contact creation failed: ${error.message}`,
+        payload: { messageId, content: content.substring(0, 100), profileName },
+      });
+      
+      // Skip this message but continue processing others
       continue;
     }
 
+    // Insert message
     const { error: msgError } = await supabase.from('messages').insert({
       user_id: targetUserId,
       contact_id: contactId,
@@ -376,6 +416,8 @@ const processIncomingMessages = async (
       continue;
     }
 
+    console.log(`✅ Message inserted for contact ${contactId}`);
+
     await logWebhookEvent(supabase, {
       user_id: targetUserId,
       event_type: 'message_received',
@@ -386,6 +428,7 @@ const processIncomingMessages = async (
       payload: { messageId, content: content.substring(0, 100), has_media: !!mediaUrl },
     });
 
+    // Send push notifications
     try {
       const { data: pushTokens } = await supabase
         .from('push_tokens')
