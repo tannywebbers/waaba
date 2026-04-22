@@ -127,8 +127,8 @@ export const useAppStore = create<AppState>()((set, get) => ({
   setContacts: (contacts) => set({ contacts }),
   addContact: (contact) => {
     set((state) => ({
-      contacts: [...state.contacts, contact],
-      chats: [...state.chats, { id: contact.id, contact, unreadCount: 0 }],
+      contacts: [...state.contacts.filter((c) => c.id !== contact.id), contact],
+      chats: [...state.chats.filter((c) => c.id !== contact.id), { id: contact.id, contact, unreadCount: 0 }],
     }));
   },
   addContacts: (contacts) => {
@@ -146,11 +146,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
       ? { ...state.activeChat, contact: { ...state.activeChat.contact, ...updates, updatedAt: new Date() }, ...(updates.isPinned !== undefined ? { isPinned: updates.isPinned } : {}), ...(updates.isMuted !== undefined ? { isMuted: updates.isMuted } : {}), ...(updates.isArchived !== undefined ? { isArchived: updates.isArchived } : {}) }
       : state.activeChat,
   })),
-  deleteContact: (id) => set((state) => ({
-    contacts: state.contacts.filter(c => c.id !== id),
-    chats: state.chats.filter(c => c.id !== id),
-    activeChat: state.activeChat?.id === id ? null : state.activeChat,
-  })),
+  deleteContact: (id) => get().updateContact(id, { isDeleted: true, deletedAt: new Date() } as any),
 
   chats: [],
   setChats: (chats) => set({ chats }),
