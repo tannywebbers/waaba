@@ -368,16 +368,17 @@ export const useAppStore = create<AppState>()((set, get) => ({
         lastSeen: c.last_seen ? new Date(c.last_seen) : undefined,
         avatar: c.avatar_url || undefined,
         isPinned: c.is_pinned || false, isMuted: c.is_muted || false, isArchived: c.is_archived || false,
+        isBlocked: c.is_blocked || false, isDeleted: c.is_deleted || false, deletedAt: c.deleted_at ? new Date(c.deleted_at) : undefined,
         assignedUserId: c.assigned_user_id || undefined,
         createdAt: new Date(c.created_at), updatedAt: new Date(c.updated_at),
         accountDetails: (c.account_details || []).map((ad: any) => ({
           id: ad.id, bank: ad.bank, accountNumber: ad.account_number, accountName: ad.account_name,
         })),
-      }));
+      })).filter((c: any) => !c.isDeleted);
 
       const contactIds = contacts.map(c => c.id);
       const { data: messagesData, error: messagesError } = contactIds.length > 0
-        ? await supabase.from('messages').select('*').in('contact_id', contactIds).order('created_at', { ascending: true })
+        ? await supabase.from('messages').select('*').in('contact_id', contactIds).eq('is_deleted', false).order('created_at', { ascending: true })
         : { data: [], error: null };
       if (messagesError) throw messagesError;
 
@@ -394,6 +395,8 @@ export const useAppStore = create<AppState>()((set, get) => ({
           whatsappMessageId: m.whatsapp_message_id || undefined,
           templateName: m.template_name || undefined,
           templateParams: m.template_params as Record<string, string> || undefined,
+          isDeleted: m.is_deleted || false,
+          deletedAt: m.deleted_at ? new Date(m.deleted_at) : undefined,
         };
         if (!messagesMap[m.contact_id]) messagesMap[m.contact_id] = [];
         messagesMap[m.contact_id].push(message);
