@@ -477,7 +477,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         user_id: user.id, contact_id: activeChat.id, content: displayName,
         type: msgType, status, is_outgoing: true,
         media_url: mediaUrl, whatsapp_message_id: whatsappMessageId || null,
-      }).select().single();
+      }).select().maybeSingle();
       
       if (error) throw error;
 
@@ -518,7 +518,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       const mp3File = new File([blob], `voice-${Date.now()}.mp3`, { type: blob.type || 'audio/mpeg' });
 
       // Get WhatsApp settings
-      const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', user.id).single();
+      const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', user.id).maybeSingle();
       if (!settings?.api_token || !settings?.phone_number_id) {
         toast({ title: '❌ WhatsApp not configured', variant: 'destructive' });
         return;
@@ -571,7 +571,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         user_id: user.id, contact_id: activeChat.id, content: '🎵 Voice note',
         type: 'audio', status: 'sent', is_outgoing: true,
         media_url: urlData.publicUrl, whatsapp_message_id: whatsappMessageId,
-      }).select().single();
+      }).select().maybeSingle();
 
       if (dbError) throw dbError;
 
@@ -680,7 +680,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
             const { data } = await supabase.from('messages').insert({
               user_id: user.id, contact_id: activeChat.id, content: caption.trim(), type: 'text', is_outgoing: true,
               status, whatsapp_message_id: whatsappMessageId || null,
-            }).select().single();
+            }).select().maybeSingle();
             if (data) {
               addMessage(activeChat.id, {
                 id: data.id, contactId: data.contact_id, content: data.content, type: 'text',
