@@ -407,6 +407,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
         <div className="flex items-center gap-1">
           {viewMode === 'chats' && (
             <>
+              <Button variant={showTrash ? 'default' : 'ghost'} size="icon" className="h-10 w-10" onClick={() => setShowTrash((v) => !v)}><Trash2 className="h-5 w-5 stroke-[2.8px]" /></Button>
               <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setShowLabelManager(true)}><Settings2 className="h-5 w-5 stroke-[2.8px]" /></Button>
               <Button variant="ghost" size="icon" className="h-10 w-10" onClick={onNewChat}><SquarePen className="h-5 w-5 stroke-[2.8px]" /></Button>
             </>
@@ -500,7 +501,15 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
                 key={chat.id}
                 chat={chat}
                 isActive={activeChat?.id === chat.id}
-                onClick={() => { setActiveChat(chat); onChatSelect?.(chat); }}
+                onClick={async () => {
+                  if (chat.contact.isDeleted && user) {
+                    await supabase.from('contacts').update({ is_deleted: false, deleted_at: null } as any).eq('id', chat.id).eq('user_id', user.id);
+                    updateContact(chat.id, { isDeleted: false, deletedAt: undefined } as any);
+                    setShowTrash(false);
+                  }
+                  setActiveChat({ ...chat, contact: { ...chat.contact, isDeleted: false } });
+                  onChatSelect?.(chat);
+                }}
                 chatLabels={labels.filter((l) => (chatLabelMap[chat.id] || []).includes(l.id))}
                 allLabels={labels}
               />
@@ -595,8 +604,14 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
             </Tabs>
           </div>
           <div className="shrink-0 pt-2 border-t border-border">
+            <Input
+              type="datetime-local"
+              value={bulkScheduleAt}
+              onChange={(e) => setBulkScheduleAt(e.target.value)}
+              className="mb-2"
+            />
             <Button className="w-full" onClick={handleBulkTemplateSend} disabled={sendingBulk || !selectedTemplateId || selectedContactIds.length === 0}>
-              {sendingBulk ? 'Sending...' : `Send to ${selectedContactIds.length} contact(s)`}
+              {sendingBulk ? 'Sending...' : bulkScheduleAt ? `Schedule for ${selectedContactIds.length} contact(s)` : `Send to ${selectedContactIds.length} contact(s)`}
             </Button>
           </div>
         </DialogContent>
