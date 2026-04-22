@@ -177,7 +177,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
   ) => {
     if (!activeChat || !user) return null;
 
-    const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', user.id).single();
+    const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', user.id).maybeSingle();
     if (!settings?.api_token || !settings?.phone_number_id) {
       toast({ title: '❌ WhatsApp not configured', description: 'Go to Settings > WhatsApp API to configure your credentials.', variant: 'destructive', duration: 5000 });
       return null;
@@ -255,7 +255,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         }
       }
 
-      const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', user.id).single();
+      const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', user.id).maybeSingle();
       if (!settings?.api_token || !settings?.phone_number_id) {
         toast({ title: '❌ WhatsApp not configured', variant: 'destructive', duration: 5000 });
         return;
@@ -283,7 +283,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         const { data: msgData } = await supabase.from('messages').insert({
           user_id: user.id, contact_id: activeChat.id, content: previewText,
           type: 'template', status: 'failed', is_outgoing: true, template_name: template.name, template_params: params,
-        }).select().single();
+        }).select().maybeSingle();
         
         if (msgData) {
           addMessage(activeChat.id, {
@@ -309,7 +309,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         user_id: user.id, contact_id: activeChat.id, content: previewText,
         type: 'template', status: 'sent', is_outgoing: true, whatsapp_message_id: data.messageId,
         template_name: template.name, template_params: params,
-      }).select().single();
+      }).select().maybeSingle();
       
       if (msgData) {
         addMessage(activeChat.id, {
@@ -346,7 +346,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       const { data, error } = await supabase.from('messages').insert({
         user_id: user.id, contact_id: activeChat.id, content, type: 'text', is_outgoing: true,
         status, whatsapp_message_id: whatsappMessageId || null,
-      }).select().single();
+      }).select().maybeSingle();
 
       if (error) throw error;
 
