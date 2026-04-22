@@ -791,7 +791,16 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
 
               {/* Send or Voice button - OUTSIDE message area */}
               {inputValue.trim()
-                ? <Button size="icon" className="h-[46px] w-[46px] shrink-0 rounded-full bg-primary hover:bg-primary/90 shadow-md" onClick={handleSend} disabled={sending || uploading}>
+                ? <Button
+                    size="icon"
+                    className="h-[46px] w-[46px] shrink-0 rounded-full bg-primary hover:bg-primary/90 shadow-md"
+                    onClick={handleSend}
+                    onContextMenu={(e) => { e.preventDefault(); setShowScheduleDialog(true); }}
+                    onTouchStart={() => { schedulePressTimer.current = setTimeout(() => setShowScheduleDialog(true), 550); }}
+                    onTouchEnd={() => { if (schedulePressTimer.current) clearTimeout(schedulePressTimer.current); }}
+                    disabled={sending || uploading}
+                    title="Send. Right-click or long-press to schedule."
+                  >
                     <Send className="h-5 w-5" strokeWidth={2.25} />
                   </Button>
                 : (
@@ -823,6 +832,18 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
           />
         </div>
       )}
+
+      <Dialog open={showScheduleDialog} onOpenChange={setShowScheduleDialog}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Schedule message</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <Input type="datetime-local" value={scheduleAt} onChange={(e) => setScheduleAt(e.target.value)} />
+            <Button className="w-full" onClick={handleScheduleText} disabled={!scheduleAt || !inputValue.trim()}>
+              <Clock className="h-4 w-4 mr-2" />Schedule
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
