@@ -58,6 +58,11 @@ const toUtcIsoFromLocalInput = (value: string) => {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 };
 
+const toDateTimeLocalValue = (date = new Date()) => {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
 export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -617,7 +622,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
               type="datetime-local"
               value={bulkScheduleAt}
               onChange={(e) => setBulkScheduleAt(e.target.value)}
-              min={toUtcIsoFromLocalInput(new Date().toISOString())?.slice(0, 16)}
+              min={toDateTimeLocalValue()}
               className="mb-2"
             />
             <Button className="w-full" onClick={handleBulkTemplateSend} disabled={sendingBulk || !selectedTemplateId || selectedContactIds.length === 0}>
