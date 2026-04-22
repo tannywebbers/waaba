@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { useAppStore } from '@/stores/appStore';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -263,9 +264,12 @@ export function ChatOptionsMenu({
           <div className="space-y-3 max-h-[420px] overflow-y-auto">
             {scheduledMessages.length === 0 ? <p className="text-sm text-muted-foreground">No pending scheduled messages.</p> : scheduledMessages.map((item) => (
               <div key={item.id} className="rounded-lg border p-3 space-y-2">
-                <p className="text-sm whitespace-pre-wrap">{item.content}</p>
+                <Textarea defaultValue={item.content} onBlur={async (e) => {
+                  await supabase.from('scheduled_messages' as any).update({ content: e.target.value, updated_at: new Date().toISOString() } as any).eq('id', item.id).eq('status', 'pending');
+                  loadScheduledMessages();
+                }} />
                 <Input type="datetime-local" value={new Date(item.scheduled_at).toISOString().slice(0, 16)} onChange={async (e) => {
-                  await supabase.from('scheduled_messages' as any).update({ scheduled_at: new Date(e.target.value).toISOString(), updated_at: new Date().toISOString() } as any).eq('id', item.id);
+                  await supabase.from('scheduled_messages' as any).update({ scheduled_at: new Date(e.target.value).toISOString(), updated_at: new Date().toISOString() } as any).eq('id', item.id).eq('status', 'pending');
                   loadScheduledMessages();
                 }} />
                 <Button variant="outline" size="sm" onClick={async () => {
