@@ -184,7 +184,7 @@ const findOrCreateContact = async (
 
       await supabase
         .from('contacts')
-        .update({ last_seen: new Date().toISOString(), is_online: true })
+        .update({ last_seen: new Date().toISOString(), is_online: true, is_deleted: false, deleted_at: null })
         .eq('id', contactId);
       
       return { contactId, targetUserId };
@@ -217,7 +217,7 @@ const findOrCreateContact = async (
 
       await supabase
         .from('contacts')
-        .update({ last_seen: new Date().toISOString(), is_online: true })
+        .update({ last_seen: new Date().toISOString(), is_online: true, is_deleted: false, deleted_at: null })
         .eq('id', contactId);
       
       return { contactId, targetUserId };
@@ -242,6 +242,7 @@ const findOrCreateContact = async (
         loan_id: `WA-${Date.now()}-${attempt}`,  // Include attempt in case of race condition
         last_seen: new Date().toISOString(),
         is_online: true,
+        is_deleted: false,
       })
       .select('id')
       .maybeSingle();
