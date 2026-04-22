@@ -294,6 +294,7 @@ const processIncomingMessages = async (
   whatsappToken: string,
   settingsUserId: string,
   superUserId: string,
+  settings: any,
 ) => {
   for (const message of value.messages || []) {
     const messageId = message.id;
@@ -561,7 +562,7 @@ const processWebhookPayload = async (
   const superUserId = explicitUserId || settingsUserId;
 
   if (value.messages?.length) {
-    await processIncomingMessages(supabase, value, settings.api_token, settingsUserId, superUserId);
+    await processIncomingMessages(supabase, value, settings.api_token, settingsUserId, superUserId, settings);
   }
 
   if (value.statuses?.length) {
