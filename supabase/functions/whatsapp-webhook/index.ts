@@ -391,6 +391,31 @@ const processIncomingMessages = async (
       continue;
     }
 
+    const { data: contactState } = await supabase
+      .from('contacts')
+      .select('is_blocked')
+      .eq('id', contactId)
+      .maybeSingle();
+
+    if (contactState?.is_blocked) {
+      await fetch(`${WHATSAPP_API_URL}/${settings.phone_number_id}/messages`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${settings.api_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messaging_product: 'whatsapp', to: from, type: 'text', text: { body: '_This business blocked you_' } }),
+      });
+
+      await logWebhookEvent(supabase, {
+        user_id: targetUserId,
+        event_type: 'blocked_auto_reply',
+        direction: 'outgoing',
+        phone_number: from,
+        message_type: 'text',
+        status: 'sent',
+        payload: { contactId, incomingMessageId: messageId },
+      });
+      continue;
+    }
+
     // Insert message
     const { error: msgError } = await supabase.from('messages').insert({
       user_id: targetUserId,
