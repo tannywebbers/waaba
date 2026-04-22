@@ -269,7 +269,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
             const { data: msgData } = await supabase.from('messages').insert({
               user_id: user.id, contact_id: contact.id, content, type: 'text',
               status, is_outgoing: true, whatsapp_message_id: data?.messageId || null,
-            }).select().single();
+            }).select().maybeSingle();
 
             if (msgData) {
               addMessage(contact.id, {
@@ -370,7 +370,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
               type: 'template', status, is_outgoing: true,
               whatsapp_message_id: data?.messageId || null, template_name: metaTemplate.name,
               template_params: templateParams,
-            }).select().single();
+            }).select().maybeSingle();
 
             if (msgData) {
               addMessage(contact.id, {
