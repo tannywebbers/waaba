@@ -93,12 +93,33 @@ export function ChatOptionsMenu({
     onClose?.();
   };
 
-  // Clear chat - delete messages only
+  const loadScheduledMessages = async () => {
+    const { data } = await supabase
+      .from('scheduled_messages' as any)
+      .select('*')
+      .eq('contact_id', chatId)
+      .eq('status', 'pending')
+      .order('scheduled_at', { ascending: true });
+    setScheduledMessages((data as any[]) || []);
+  };
+
+  const handleToggleBlock = async () => {
+    const { error } = await supabase.from('contacts').update({ is_blocked: !isBlocked } as any).eq('id', chatId);
+    if (error) {
+      toast({ title: 'Failed to update block status', description: error.message, variant: 'destructive' });
+      return;
+    }
+    updateContact(chatId, { isBlocked: !isBlocked } as any);
+    toast({ title: isBlocked ? 'Contact unblocked' : 'Contact blocked' });
+    setOpen(false);
+  };
+
+  // Clear chat - soft-delete messages only
   const handleClearChat = async () => {
     try {
       const { error } = await supabase
         .from('messages')
-        .delete()
+        .update({ is_deleted: true, deleted_at: new Date().toISOString() } as any)
         .eq('contact_id', chatId);
       
       if (error) throw error;
@@ -112,7 +133,7 @@ export function ChatOptionsMenu({
       );
       setChats(updatedChats);
       
-      toast({ title: 'Chat cleared' });
+      toast({ title: 'Messages moved to trash' });
     } catch (error) {
       console.error('Error clearing chat:', error);
       toast({ title: 'Failed to clear chat', variant: 'destructive' });
@@ -120,6 +141,19 @@ export function ChatOptionsMenu({
     setShowClearDialog(false);
     setOpen(false);
     onClose?.();
+  };
+
+  const handleMoveChatToTrash = async () => {
+    const { error } = await supabase.from('contacts').update({ is_deleted: true, deleted_at: new Date().toISOString() } as any).eq('id', chatId);
+    if (error) {
+      toast({ title: 'Failed to move chat to trash', description: error.message, variant: 'destructive' });
+      return;
+    }
+    updateContact(chatId, { isDeleted: true, deletedAt: new Date() } as any);
+    setShowDeleteDialog(false);
+    setOpen(false);
+    onClose?.();
+    toast({ title: 'Chat moved to trash' });
   };
 
   return (
