@@ -617,6 +617,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
               type="datetime-local"
               value={bulkScheduleAt}
               onChange={(e) => setBulkScheduleAt(e.target.value)}
+              min={toUtcIsoFromLocalInput(new Date().toISOString())?.slice(0, 16)}
               className="mb-2"
             />
             <Button className="w-full" onClick={handleBulkTemplateSend} disabled={sendingBulk || !selectedTemplateId || selectedContactIds.length === 0}>
