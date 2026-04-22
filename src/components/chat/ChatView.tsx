@@ -633,6 +633,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
           isPinned={activeChat.isPinned || contact.isPinned}
           isMuted={activeChat.isMuted || contact.isMuted}
           isArchived={activeChat.isArchived || contact.isArchived}
+          isBlocked={contact.isBlocked}
           assignedUserId={contact.assignedUserId}
           onViewContact={() => setShowContactPanel(true)}
         />
