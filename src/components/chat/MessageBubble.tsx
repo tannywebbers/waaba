@@ -1,12 +1,13 @@
 // @ts-nocheck
 import { useRef, useState } from 'react';
-import { AlertCircle, FileText, Image as ImageIcon, Music, MoreVertical, Pause, Play, Trash2 } from 'lucide-react';
+import { AlertCircle, Copy, FileText, Image as ImageIcon, Music, MoreVertical, Pause, Play, Trash2 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Message } from '@/types';
 import { MessageStatus } from '@/components/shared/MessageStatus';
 import { MediaPreviewModal } from '@/components/chat/MediaPreviewModal';
 import { formatMessageTime } from '@/lib/utils/format';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 
 interface MessageBubbleProps {
   message: Message;
@@ -21,6 +22,7 @@ export function MessageBubble({ message, onDelete }: MessageBubbleProps) {
   const [audioProgress, setAudioProgress] = useState(0);
   const [audioError, setAudioError] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const { toast } = useToast();
 
   const isSticker = (type as string) === 'sticker' || (type === 'image' && content === '[Sticker]');
 
@@ -156,6 +158,12 @@ export function MessageBubble({ message, onDelete }: MessageBubbleProps) {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align={isOutgoing ? 'start' : 'end'}>
+                  <DropdownMenuItem onClick={async () => {
+                    await navigator.clipboard.writeText(content || '');
+                    toast({ title: 'Message copied' });
+                  }}>
+                    <Copy className="h-4 w-4 mr-2" />Copy message
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
                     <Trash2 className="h-4 w-4 mr-2" />Delete message
                   </DropdownMenuItem>
