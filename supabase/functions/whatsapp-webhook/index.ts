@@ -23,6 +23,16 @@ const logWebhookEvent = async (supabase: any, payload: Record<string, any>) => {
   }
 };
 
+const sendBlockedReply = async (settings: any, to: string) => {
+  const response = await fetch(`${WHATSAPP_API_URL}/${settings.phone_number_id}/messages`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${settings.api_token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messaging_product: 'whatsapp', to, type: 'text', text: { body: '_This business blocked you_' } }),
+  });
+  await response.text();
+  return response.ok;
+};
+
 const getSettingsByUserId = async (supabase: any, userId: string) => {
   const { data, error } = await supabase
     .from('whatsapp_settings')
@@ -365,6 +375,26 @@ const processIncomingMessages = async (
     }
 
     const profileName = value.contacts?.[0]?.profile?.name;
+
+    const { data: duplicate } = await supabase
+      .from('messages')
+      .select('id')
+      .eq('whatsapp_message_id', messageId)
+      .maybeSingle();
+
+    if (duplicate) {
+      console.log('⚠️ Duplicate incoming message skipped:', messageId);
+      await logWebhookEvent(supabase, {
+        user_id: settingsUserId,
+        event_type: 'duplicate_message',
+        direction: 'incoming',
+        phone_number: from,
+        message_type: type,
+        status: 'skipped',
+        payload: { messageId },
+      });
+      continue;
+    }
     
     // 🔥 IMPROVED: Wrap in try-catch to handle contact creation failures
     let contactId: string;
@@ -399,11 +429,7 @@ const processIncomingMessages = async (
       .maybeSingle();
 
     if (contactState?.is_blocked) {
-      await fetch(`${WHATSAPP_API_URL}/${settings.phone_number_id}/messages`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${settings.api_token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messaging_product: 'whatsapp', to: from, type: 'text', text: { body: '_This business blocked you_' } }),
-      });
+      const replied = await sendBlockedReply(settings, from);
 
       await logWebhookEvent(supabase, {
         user_id: targetUserId,
@@ -411,7 +437,7 @@ const processIncomingMessages = async (
         direction: 'outgoing',
         phone_number: from,
         message_type: 'text',
-        status: 'sent',
+        status: replied ? 'sent' : 'failed',
         payload: { contactId, incomingMessageId: messageId },
       });
       continue;
