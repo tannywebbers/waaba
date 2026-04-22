@@ -27,6 +27,11 @@ import { getWhatsAppErrorExplanation } from '@/lib/whatsappErrors';
 
 interface ChatViewProps { onBack?: () => void; showBackButton?: boolean }
 
+const toDateTimeLocalValue = (date = new Date()) => {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
 export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
   const { activeChat, messages, addMessage, setMessages, setShowContactPanel, setDraft, updateMessageStatus } = useAppStore();
   const { user } = useAuth();
@@ -172,7 +177,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
   ) => {
     if (!activeChat || !user) return null;
 
-    const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', user.id).single();
+    const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', user.id).maybeSingle();
     if (!settings?.api_token || !settings?.phone_number_id) {
       toast({ title: '❌ WhatsApp not configured', description: 'Go to Settings > WhatsApp API to configure your credentials.', variant: 'destructive', duration: 5000 });
       return null;
@@ -250,7 +255,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         }
       }
 
-      const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', user.id).single();
+      const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', user.id).maybeSingle();
       if (!settings?.api_token || !settings?.phone_number_id) {
         toast({ title: '❌ WhatsApp not configured', variant: 'destructive', duration: 5000 });
         return;
@@ -278,7 +283,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         const { data: msgData } = await supabase.from('messages').insert({
           user_id: user.id, contact_id: activeChat.id, content: previewText,
           type: 'template', status: 'failed', is_outgoing: true, template_name: template.name, template_params: params,
-        }).select().single();
+        }).select().maybeSingle();
         
         if (msgData) {
           addMessage(activeChat.id, {
@@ -304,7 +309,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         user_id: user.id, contact_id: activeChat.id, content: previewText,
         type: 'template', status: 'sent', is_outgoing: true, whatsapp_message_id: data.messageId,
         template_name: template.name, template_params: params,
-      }).select().single();
+      }).select().maybeSingle();
       
       if (msgData) {
         addMessage(activeChat.id, {
@@ -341,7 +346,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       const { data, error } = await supabase.from('messages').insert({
         user_id: user.id, contact_id: activeChat.id, content, type: 'text', is_outgoing: true,
         status, whatsapp_message_id: whatsappMessageId || null,
-      }).select().single();
+      }).select().maybeSingle();
 
       if (error) throw error;
 
@@ -382,12 +387,18 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
   const handleScheduleText = async () => {
     if (!inputValue.trim() || !activeChat || !user || !scheduleAt) return;
     const content = inputValue.trim();
+    const scheduledDate = new Date(scheduleAt);
+    if (Number.isNaN(scheduledDate.getTime())) {
+      toast({ title: 'Invalid schedule time', variant: 'destructive' });
+      return;
+    }
+
     const { error } = await supabase.from('scheduled_messages' as any).insert({
       user_id: user.id,
       contact_id: activeChat.id,
       content,
       type: 'text',
-      scheduled_at: new Date(scheduleAt).toISOString(),
+      scheduled_at: scheduledDate.toISOString(),
       status: 'pending',
     } as any);
     if (error) {
@@ -466,7 +477,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         user_id: user.id, contact_id: activeChat.id, content: displayName,
         type: msgType, status, is_outgoing: true,
         media_url: mediaUrl, whatsapp_message_id: whatsappMessageId || null,
-      }).select().single();
+      }).select().maybeSingle();
       
       if (error) throw error;
 
@@ -507,7 +518,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       const mp3File = new File([blob], `voice-${Date.now()}.mp3`, { type: blob.type || 'audio/mpeg' });
 
       // Get WhatsApp settings
-      const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', user.id).single();
+      const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', user.id).maybeSingle();
       if (!settings?.api_token || !settings?.phone_number_id) {
         toast({ title: '❌ WhatsApp not configured', variant: 'destructive' });
         return;
@@ -560,7 +571,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         user_id: user.id, contact_id: activeChat.id, content: '🎵 Voice note',
         type: 'audio', status: 'sent', is_outgoing: true,
         media_url: urlData.publicUrl, whatsapp_message_id: whatsappMessageId,
-      }).select().single();
+      }).select().maybeSingle();
 
       if (dbError) throw dbError;
 
@@ -669,7 +680,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
             const { data } = await supabase.from('messages').insert({
               user_id: user.id, contact_id: activeChat.id, content: caption.trim(), type: 'text', is_outgoing: true,
               status, whatsapp_message_id: whatsappMessageId || null,
-            }).select().single();
+            }).select().maybeSingle();
             if (data) {
               addMessage(activeChat.id, {
                 id: data.id, contactId: data.contact_id, content: data.content, type: 'text',
@@ -838,7 +849,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         <DialogContent>
           <DialogHeader><DialogTitle>Schedule message</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <Input type="datetime-local" value={scheduleAt} onChange={(e) => setScheduleAt(e.target.value)} />
+            <Input type="datetime-local" min={toDateTimeLocalValue()} value={scheduleAt} onChange={(e) => setScheduleAt(e.target.value)} />
             <Button className="w-full" onClick={handleScheduleText} disabled={!scheduleAt || !inputValue.trim()}>
               <Clock className="h-4 w-4 mr-2" />Schedule
             </Button>
