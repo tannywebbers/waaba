@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useState } from 'react';
-import { MoreVertical, Archive, Pin, BellOff, Bell, MessageSquareOff, User, Search, Eraser, Users } from 'lucide-react';
+import { MoreVertical, Archive, Pin, BellOff, Bell, MessageSquareOff, User, Search, Eraser, Users, Ban, Clock, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -19,6 +19,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { useAppStore } from '@/stores/appStore';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -31,6 +33,7 @@ interface ChatOptionsMenuProps {
   isPinned?: boolean;
   isMuted?: boolean;
   isArchived?: boolean;
+  isBlocked?: boolean;
   assignedUserId?: string | null;
   onViewContact?: () => void;
   onSearch?: () => void;
@@ -43,6 +46,7 @@ export function ChatOptionsMenu({
   isPinned, 
   isMuted, 
   isArchived,
+  isBlocked,
   assignedUserId,
   onViewContact,
   onSearch,
@@ -55,6 +59,8 @@ export function ChatOptionsMenu({
   const [showClearDialog, setShowClearDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showScheduledDialog, setShowScheduledDialog] = useState(false);
+  const [scheduledMessages, setScheduledMessages] = useState<any[]>([]);
 
   const handleAction = async (action: 'pin' | 'mute' | 'archive') => {
     try {
