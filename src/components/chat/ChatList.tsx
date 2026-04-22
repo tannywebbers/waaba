@@ -58,7 +58,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const { toast } = useToast();
   const {
     viewMode, setViewMode, chats, contacts, activeChat, setActiveChat, searchQuery, setSearchQuery,
-    setShowAddContactModal, favorites, deleteContact, addMessage,
+    setShowAddContactModal, favorites, deleteContact, updateContact, addMessage,
   } = useAppStore();
 
   const [chatFilter, setChatFilter] = useState<ChatFilter>('all');
@@ -86,6 +86,8 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
   const [bulkMetaSearch, setBulkMetaSearch] = useState('');
   const [bulkAppSearch, setBulkAppSearch] = useState('');
+  const [showTrash, setShowTrash] = useState(false);
+  const [bulkScheduleAt, setBulkScheduleAt] = useState('');
 
   const listContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -137,6 +139,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
 
   const filteredChats = chats
     .filter((chat) => {
+      if (showTrash !== !!chat.contact.isDeleted) return false;
       const matchesSearch = chat.contact.name.toLowerCase().includes(searchQuery.toLowerCase()) || chat.contact.phone.includes(searchQuery);
       if (!matchesSearch) return false;
       if (chatFilter === 'archived') return !!(chat.isArchived || chat.contact.isArchived);
@@ -162,6 +165,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const dayTypeOptions = useMemo(() => ['all', ...Array.from(new Set(contacts.map((c) => String(c.dayType ?? '0'))))], [contacts]);
 
   const filteredContacts = contacts
+    .filter((contact) => showTrash === !!contact.isDeleted)
     .filter((contact) => contact.name.toLowerCase().includes(searchQuery.toLowerCase()) || contact.phone.includes(searchQuery) || contact.loanId.toLowerCase().includes(searchQuery.toLowerCase()))
     .filter((contact) => contactAppTypeFilter === 'all' ? true : (contact.appType || '').toLowerCase() === contactAppTypeFilter)
     .filter((contact) => contactDayTypeFilter === 'all' ? true : String(contact.dayType ?? '0') === contactDayTypeFilter)
@@ -180,7 +184,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
 
   const handleDeleteSelectedContacts = async () => {
     if (!user || selectedContactIds.length === 0) return;
-    const { error } = await supabase.from('contacts').delete().eq('user_id', user.id).in('id', selectedContactIds as any);
+    const { error } = await supabase.from('contacts').update({ is_deleted: true, deleted_at: new Date().toISOString() } as any).eq('user_id', user.id).in('id', selectedContactIds as any);
     if (error) {
       toast({ title: 'Failed to delete selected contacts', description: error.message, variant: 'destructive' });
       return;
@@ -189,7 +193,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
     selectedContactIds.forEach((id) => deleteContact(id));
     setSelectedContactIds([]);
     setContactSelectionMode(false);
-    toast({ title: 'Selected contacts deleted' });
+    toast({ title: 'Selected contacts moved to trash' });
   };
 
   const handleBulkTemplateSend = async () => {
