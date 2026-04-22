@@ -647,7 +647,14 @@ serve(async (req) => {
         settings = await getSettingsByPhoneNumberId(supabase, phoneNumberId);
       }
 
-      const resolvedUserId = settings?.user_id || explicitUserId || null;
+      const mappingIsValid = Boolean(
+        settings?.user_id && (
+          (phoneNumberId && settings.phone_number_id === phoneNumberId) ||
+          (explicitUserId && settings.user_id === explicitUserId)
+        )
+      );
+
+      const resolvedUserId = mappingIsValid ? settings.user_id : (explicitUserId || null);
 
       await logWebhookEvent(supabase, {
         user_id: resolvedUserId,
@@ -655,6 +662,18 @@ serve(async (req) => {
         direction: 'incoming',
         payload: body,
       });
+
+      if (!mappingIsValid) {
+        console.log('⚠️ Webhook strict mapping failed; acknowledged without processing', { explicitUserId, phoneNumberId });
+        await logWebhookEvent(supabase, {
+          user_id: resolvedUserId,
+          event_type: 'strict_mapping_skipped',
+          direction: 'incoming',
+          status: 'skipped',
+          payload: { explicitUserId, phoneNumberId },
+        });
+        return okResponse();
+      }
 
       const processPromise = processWebhookPayload(supabase, body, explicitUserId, settings)
         .catch((error) => {
