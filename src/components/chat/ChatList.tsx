@@ -53,6 +53,11 @@ const VARIABLE_MAP: Record<string, (c: any) => string> = {
 const resolveTemplate = (body: string, contact: any): string =>
   body.replace(/\{\{(\w+)\}\}/g, (match, variableName) => VARIABLE_MAP[variableName]?.(contact) || match);
 
+const toUtcIsoFromLocalInput = (value: string) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+};
+
 export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -203,7 +208,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
     let failedCount = 0;
     const failReasons: string[] = [];
     try {
-      const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', user.id).single();
+      const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', user.id).maybeSingle();
       if (!settings?.api_token || !settings?.phone_number_id) {
         toast({ title: 'WhatsApp not configured', variant: 'destructive' });
         return;
@@ -227,7 +232,11 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
       const selectedContacts = enrichedContacts.filter((c: any) => selectedContactIds.includes(c.id));
       const appTemplate = appTemplates.find((t) => t.id === selectedTemplateId);
       const metaTemplate = metaTemplates.find((t) => t.id === selectedTemplateId);
-      const scheduledAtIso = bulkScheduleAt ? new Date(bulkScheduleAt).toISOString() : null;
+      const scheduledAtIso = bulkScheduleAt ? toUtcIsoFromLocalInput(bulkScheduleAt) : null;
+      if (bulkScheduleAt && !scheduledAtIso) {
+        toast({ title: 'Invalid schedule time', variant: 'destructive' });
+        return;
+      }
 
       if (bulkSource === 'app' && appTemplate) {
         for (const contact of selectedContacts) {
