@@ -192,6 +192,14 @@ export function ChatOptionsMenu({
             <Archive className="h-4 w-4 mr-3" />
             {isArchived ? 'Unarchive' : 'Archive'}
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => { loadScheduledMessages(); setShowScheduledDialog(true); setOpen(false); }}>
+            <Clock className="h-4 w-4 mr-3" />
+            Scheduled messages
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleToggleBlock}>
+            <Ban className="h-4 w-4 mr-3" />
+            {isBlocked ? 'Unblock contact' : 'Block contact'}
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => setShowClearDialog(true)}>
             <Eraser className="h-4 w-4 mr-3" />
@@ -211,9 +219,9 @@ export function ChatOptionsMenu({
       <AlertDialog open={showClearDialog} onOpenChange={setShowClearDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Clear chat?</AlertDialogTitle>
+            <AlertDialogTitle>Move messages to trash?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will delete all messages in this chat. This action cannot be undone.
+              This hides all messages in this chat without permanently deleting them.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -222,7 +230,7 @@ export function ChatOptionsMenu({
               onClick={handleClearChat}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Clear
+              Move messages
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -232,23 +240,43 @@ export function ChatOptionsMenu({
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete chat?</AlertDialogTitle>
+            <AlertDialogTitle>Move chat to trash?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will delete all messages in this chat. The contact "{contactName}" will be preserved. 
-              To delete the contact, go to Contacts tab.
+              This hides "{contactName}" and its chat until it is restored or the contact sends a new message.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction 
-              onClick={handleClearChat}
+              onClick={handleMoveChatToTrash}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete chat
+              Move to trash
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={showScheduledDialog} onOpenChange={setShowScheduledDialog}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Scheduled messages</DialogTitle></DialogHeader>
+          <div className="space-y-3 max-h-[420px] overflow-y-auto">
+            {scheduledMessages.length === 0 ? <p className="text-sm text-muted-foreground">No pending scheduled messages.</p> : scheduledMessages.map((item) => (
+              <div key={item.id} className="rounded-lg border p-3 space-y-2">
+                <p className="text-sm whitespace-pre-wrap">{item.content}</p>
+                <Input type="datetime-local" value={new Date(item.scheduled_at).toISOString().slice(0, 16)} onChange={async (e) => {
+                  await supabase.from('scheduled_messages' as any).update({ scheduled_at: new Date(e.target.value).toISOString(), updated_at: new Date().toISOString() } as any).eq('id', item.id);
+                  loadScheduledMessages();
+                }} />
+                <Button variant="outline" size="sm" onClick={async () => {
+                  await supabase.from('scheduled_messages' as any).update({ status: 'cancelled', updated_at: new Date().toISOString() } as any).eq('id', item.id);
+                  loadScheduledMessages();
+                }}><X className="h-4 w-4 mr-2" />Cancel</Button>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Assign Contact Modal */}
       <AssignContactModal
