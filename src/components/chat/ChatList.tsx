@@ -227,12 +227,22 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
       const selectedContacts = enrichedContacts.filter((c: any) => selectedContactIds.includes(c.id));
       const appTemplate = appTemplates.find((t) => t.id === selectedTemplateId);
       const metaTemplate = metaTemplates.find((t) => t.id === selectedTemplateId);
+      const scheduledAtIso = bulkScheduleAt ? new Date(bulkScheduleAt).toISOString() : null;
 
       if (bulkSource === 'app' && appTemplate) {
         for (const contact of selectedContacts) {
           const normalizedPhone = contact.phone.replace(/[^\d+]/g, '').replace(/^\+/, '');
           const content = resolveTemplate(appTemplate.body, contact);
           try {
+            if (scheduledAtIso) {
+              const { error: scheduleError } = await supabase.from('scheduled_messages' as any).insert({
+                user_id: user.id, contact_id: contact.id, content, type: 'text', scheduled_at: scheduledAtIso, status: 'pending',
+              } as any);
+              if (scheduleError) throw scheduleError;
+              sentCount++;
+              continue;
+            }
+
             const { data, error } = await supabase.functions.invoke('whatsapp-api', {
               body: {
                 action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
@@ -312,6 +322,19 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
           if (hasEmptyParam) continue;
 
           try {
+            if (scheduledAtIso) {
+              let resolvedText = previewText;
+              Object.entries(templateParams).forEach(([key, value]) => { resolvedText = resolvedText.replace(key, value || key); });
+              const { error: scheduleError } = await supabase.from('scheduled_messages' as any).insert({
+                user_id: user.id, contact_id: contact.id, content: resolvedText,
+                type: 'template', template_name: metaTemplate.name, template_language: (metaTemplate as any).language || 'en',
+                template_params: templateParams, scheduled_at: scheduledAtIso, status: 'pending',
+              } as any);
+              if (scheduleError) throw scheduleError;
+              sentCount++;
+              continue;
+            }
+
             const { data, error } = await supabase.functions.invoke('whatsapp-api', {
               body: {
                 action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
@@ -356,7 +379,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
 
       // Show detailed results
       if (failedCount === 0) {
-        toast({ title: `✅ Sent to ${sentCount} contact(s)`, duration: 4000 });
+        toast({ title: scheduledAtIso ? `✅ Scheduled for ${sentCount} contact(s)` : `✅ Sent to ${sentCount} contact(s)`, duration: 4000 });
       } else {
         toast({
           title: `⚠️ ${sentCount} sent, ${failedCount} failed`,
@@ -369,6 +392,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
       setSelectedContactIds([]);
       setContactSelectionMode(false);
       setShowBulkDialog(false);
+      setBulkScheduleAt('');
     } catch (error: any) {
       toast({ title: 'Bulk send failed', description: error.message, variant: 'destructive' });
     } finally {
