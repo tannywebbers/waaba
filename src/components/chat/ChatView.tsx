@@ -27,6 +27,11 @@ import { getWhatsAppErrorExplanation } from '@/lib/whatsappErrors';
 
 interface ChatViewProps { onBack?: () => void; showBackButton?: boolean }
 
+const toDateTimeLocalValue = (date = new Date()) => {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
 export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
   const { activeChat, messages, addMessage, setMessages, setShowContactPanel, setDraft, updateMessageStatus } = useAppStore();
   const { user } = useAuth();
@@ -382,12 +387,18 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
   const handleScheduleText = async () => {
     if (!inputValue.trim() || !activeChat || !user || !scheduleAt) return;
     const content = inputValue.trim();
+    const scheduledDate = new Date(scheduleAt);
+    if (Number.isNaN(scheduledDate.getTime())) {
+      toast({ title: 'Invalid schedule time', variant: 'destructive' });
+      return;
+    }
+
     const { error } = await supabase.from('scheduled_messages' as any).insert({
       user_id: user.id,
       contact_id: activeChat.id,
       content,
       type: 'text',
-      scheduled_at: new Date(scheduleAt).toISOString(),
+      scheduled_at: scheduledDate.toISOString(),
       status: 'pending',
     } as any);
     if (error) {
@@ -838,7 +849,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         <DialogContent>
           <DialogHeader><DialogTitle>Schedule message</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <Input type="datetime-local" value={scheduleAt} onChange={(e) => setScheduleAt(e.target.value)} />
+            <Input type="datetime-local" min={toDateTimeLocalValue()} value={scheduleAt} onChange={(e) => setScheduleAt(e.target.value)} />
             <Button className="w-full" onClick={handleScheduleText} disabled={!scheduleAt || !inputValue.trim()}>
               <Clock className="h-4 w-4 mr-2" />Schedule
             </Button>
