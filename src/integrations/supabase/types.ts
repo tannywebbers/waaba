@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.4"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -123,8 +123,11 @@ export type Database = {
           avatar_url: string | null
           created_at: string
           day_type: number | null
+          deleted_at: string | null
           id: string
           is_archived: boolean | null
+          is_blocked: boolean | null
+          is_deleted: boolean | null
           is_muted: boolean | null
           is_online: boolean | null
           is_pinned: boolean | null
@@ -142,8 +145,11 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           day_type?: number | null
+          deleted_at?: string | null
           id?: string
           is_archived?: boolean | null
+          is_blocked?: boolean | null
+          is_deleted?: boolean | null
           is_muted?: boolean | null
           is_online?: boolean | null
           is_pinned?: boolean | null
@@ -161,8 +167,11 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           day_type?: number | null
+          deleted_at?: string | null
           id?: string
           is_archived?: boolean | null
+          is_blocked?: boolean | null
+          is_deleted?: boolean | null
           is_muted?: boolean | null
           is_online?: boolean | null
           is_pinned?: boolean | null
@@ -204,7 +213,9 @@ export type Database = {
           contact_id: string
           content: string
           created_at: string
+          deleted_at: string | null
           id: string
+          is_deleted: boolean | null
           is_outgoing: boolean
           media_url: string | null
           status: string
@@ -218,7 +229,9 @@ export type Database = {
           contact_id: string
           content: string
           created_at?: string
+          deleted_at?: string | null
           id?: string
+          is_deleted?: boolean | null
           is_outgoing?: boolean
           media_url?: string | null
           status?: string
@@ -232,7 +245,9 @@ export type Database = {
           contact_id?: string
           content?: string
           created_at?: string
+          deleted_at?: string | null
           id?: string
+          is_deleted?: boolean | null
           is_outgoing?: boolean
           media_url?: string | null
           status?: string
@@ -311,6 +326,62 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      scheduled_messages: {
+        Row: {
+          contact_id: string | null
+          content: string
+          created_at: string
+          error: string | null
+          id: string
+          scheduled_at: string
+          status: string
+          template_language: string | null
+          template_name: string | null
+          template_params: Json | null
+          type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          contact_id?: string | null
+          content: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          scheduled_at: string
+          status?: string
+          template_language?: string | null
+          template_name?: string | null
+          template_params?: Json | null
+          type?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          contact_id?: string | null
+          content?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          scheduled_at?: string
+          status?: string
+          template_language?: string | null
+          template_name?: string | null
+          template_params?: Json | null
+          type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_messages_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       shared_inbox_users: {
         Row: {
