@@ -16,6 +16,15 @@ serve(async (req) => {
 
   try {
     const now = new Date().toISOString();
+    console.log('SCHEDULED WORKER HIT:', now);
+
+    await supabase.from('webhook_logs').insert({
+      event_type: 'scheduled_worker_execution',
+      direction: 'outgoing',
+      status: 'running',
+      payload: { now },
+    });
+
     const { data: dueMessages, error } = await supabase
       .from('scheduled_messages')
       .select('*')
@@ -47,6 +56,15 @@ serve(async (req) => {
         if (!settings?.api_token || !settings?.phone_number_id || !contact?.phone) {
           throw new Error('Missing WhatsApp settings or recipient contact');
         }
+
+        const { data: alreadySent } = await supabase
+          .from('scheduled_messages')
+          .select('id')
+          .eq('id', claimed.id)
+          .eq('status', 'sent')
+          .maybeSingle();
+
+        if (alreadySent) continue;
 
         const to = String(contact.phone).replace(/[^\d+]/g, '').replace(/^\+/, '');
         const sendRes = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/whatsapp-api`, {
@@ -89,8 +107,21 @@ serve(async (req) => {
       }
     }
 
+    await supabase.from('webhook_logs').insert({
+      event_type: 'scheduled_worker_execution',
+      direction: 'outgoing',
+      status: 'success',
+      payload: { now, processed },
+    });
+
     return new Response(JSON.stringify({ success: true, processed }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (error) {
+    await supabase.from('webhook_logs').insert({
+      event_type: 'scheduled_worker_execution',
+      direction: 'outgoing',
+      status: 'failed',
+      error: error instanceof Error ? error.message : String(error),
+    });
     return new Response(JSON.stringify({ success: false, error: error instanceof Error ? error.message : String(error) }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 });
