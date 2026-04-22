@@ -1,9 +1,11 @@
 // @ts-nocheck
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, MessageCircle, Send } from 'lucide-react';
+import { ArrowLeft, Clock, MessageCircle, Send } from 'lucide-react';
 import { EmojiPickerButton, MobileEmojiPanel } from '@/components/chat/EmojiPickerButton';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { useAppStore } from '@/stores/appStore';
 import { useAuth } from '@/hooks/useAuth';
 import { useSharedInbox } from '@/hooks/useSharedInbox';
@@ -38,6 +40,9 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
   const [recorderState, setRecorderState] = useState(globalVoiceRecorder.getState());
   const [pastedImageFile, setPastedImageFile] = useState<File | null>(null);
   const [emojiPanelOpen, setEmojiPanelOpen] = useState(false);
+  const [showScheduleDialog, setShowScheduleDialog] = useState(false);
+  const [scheduleAt, setScheduleAt] = useState('');
+  const schedulePressTimer = useRef<NodeJS.Timeout | null>(null);
 
   // Check if the phone number is assigned to another user in the shared inbox (uses SECURITY DEFINER to bypass RLS)
   const checkConflictingAssignment = useCallback(async (): Promise<boolean> => {
@@ -374,17 +379,39 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
     }
   };
 
+  const handleScheduleText = async () => {
+    if (!inputValue.trim() || !activeChat || !user || !scheduleAt) return;
+    const content = inputValue.trim();
+    const { error } = await supabase.from('scheduled_messages' as any).insert({
+      user_id: user.id,
+      contact_id: activeChat.id,
+      content,
+      type: 'text',
+      scheduled_at: new Date(scheduleAt).toISOString(),
+      status: 'pending',
+    } as any);
+    if (error) {
+      toast({ title: 'Failed to schedule message', description: error.message, variant: 'destructive' });
+      return;
+    }
+    setInputValue('');
+    setDraft(activeChat.id, '');
+    setScheduleAt('');
+    setShowScheduleDialog(false);
+    toast({ title: 'Message scheduled' });
+  };
+
   const handleDeleteMessage = async (messageId: string) => {
     if (!activeChat) return;
     const currentMessages = messages[activeChat.id] || [];
-    const updatedMessages = currentMessages.filter((m) => m.id !== messageId);
+      const updatedMessages = currentMessages.filter((m) => m.id !== messageId);
     setMessages(activeChat.id, updatedMessages);
     const lastMessage = updatedMessages.length > 0 ? updatedMessages[updatedMessages.length - 1] : undefined;
     useAppStore.setState((state) => ({
       chats: state.chats.map((chat) => chat.id === activeChat.id ? { ...chat, lastMessage } : chat),
     }));
     try {
-      const { error } = await supabase.from('messages').delete().eq('id', messageId);
+      const { error } = await supabase.from('messages').update({ is_deleted: true, deleted_at: new Date().toISOString() } as any).eq('id', messageId);
       if (error) throw error;
     } catch (error: any) {
       setMessages(activeChat.id, currentMessages);
@@ -606,6 +633,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
           isPinned={activeChat.isPinned || contact.isPinned}
           isMuted={activeChat.isMuted || contact.isMuted}
           isArchived={activeChat.isArchived || contact.isArchived}
+          isBlocked={contact.isBlocked}
           assignedUserId={contact.assignedUserId}
           onViewContact={() => setShowContactPanel(true)}
         />
@@ -764,7 +792,16 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
 
               {/* Send or Voice button - OUTSIDE message area */}
               {inputValue.trim()
-                ? <Button size="icon" className="h-[46px] w-[46px] shrink-0 rounded-full bg-primary hover:bg-primary/90 shadow-md" onClick={handleSend} disabled={sending || uploading}>
+                ? <Button
+                    size="icon"
+                    className="h-[46px] w-[46px] shrink-0 rounded-full bg-primary hover:bg-primary/90 shadow-md"
+                    onClick={handleSend}
+                    onContextMenu={(e) => { e.preventDefault(); setShowScheduleDialog(true); }}
+                    onTouchStart={() => { schedulePressTimer.current = setTimeout(() => setShowScheduleDialog(true), 550); }}
+                    onTouchEnd={() => { if (schedulePressTimer.current) clearTimeout(schedulePressTimer.current); }}
+                    disabled={sending || uploading}
+                    title="Send. Right-click or long-press to schedule."
+                  >
                     <Send className="h-5 w-5" strokeWidth={2.25} />
                   </Button>
                 : (
@@ -796,6 +833,18 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
           />
         </div>
       )}
+
+      <Dialog open={showScheduleDialog} onOpenChange={setShowScheduleDialog}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Schedule message</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <Input type="datetime-local" value={scheduleAt} onChange={(e) => setScheduleAt(e.target.value)} />
+            <Button className="w-full" onClick={handleScheduleText} disabled={!scheduleAt || !inputValue.trim()}>
+              <Clock className="h-4 w-4 mr-2" />Schedule
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

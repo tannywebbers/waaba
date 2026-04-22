@@ -23,11 +23,11 @@ export function ContactPanel() {
     if (!window.confirm(`Are you sure you want to delete ${contact.name}?`)) return;
     
     try {
-      const { error } = await supabase.from('contacts').delete().eq('id', contact.id);
+      const { error } = await supabase.from('contacts').update({ is_deleted: true, deleted_at: new Date().toISOString() } as any).eq('id', contact.id);
       if (error) throw error;
       deleteContact(contact.id);
       setShowContactPanel(false);
-      toast({ title: 'Contact deleted', description: `${contact.name} has been removed.` });
+      toast({ title: 'Contact moved to trash', description: `${contact.name} can be restored from trash.` });
     } catch (error: any) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     }
@@ -158,7 +158,7 @@ export function ContactPanel() {
           onClick={handleDelete}
         >
           <Trash2 className="h-4 w-4" />
-          Delete Contact
+          Move Contact to Trash
         </Button>
       </div>
     </div>

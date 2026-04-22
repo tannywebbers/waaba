@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useState } from 'react';
-import { MoreVertical, Archive, Pin, BellOff, Bell, MessageSquareOff, User, Search, Eraser, Users } from 'lucide-react';
+import { MoreVertical, Archive, Pin, BellOff, Bell, MessageSquareOff, User, Search, Eraser, Users, Ban, Clock, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -19,6 +19,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { useAppStore } from '@/stores/appStore';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -31,6 +33,7 @@ interface ChatOptionsMenuProps {
   isPinned?: boolean;
   isMuted?: boolean;
   isArchived?: boolean;
+  isBlocked?: boolean;
   assignedUserId?: string | null;
   onViewContact?: () => void;
   onSearch?: () => void;
@@ -43,6 +46,7 @@ export function ChatOptionsMenu({
   isPinned, 
   isMuted, 
   isArchived,
+  isBlocked,
   assignedUserId,
   onViewContact,
   onSearch,
@@ -55,6 +59,8 @@ export function ChatOptionsMenu({
   const [showClearDialog, setShowClearDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showScheduledDialog, setShowScheduledDialog] = useState(false);
+  const [scheduledMessages, setScheduledMessages] = useState<any[]>([]);
 
   const handleAction = async (action: 'pin' | 'mute' | 'archive') => {
     try {
@@ -87,12 +93,33 @@ export function ChatOptionsMenu({
     onClose?.();
   };
 
-  // Clear chat - delete messages only
+  const loadScheduledMessages = async () => {
+    const { data } = await supabase
+      .from('scheduled_messages' as any)
+      .select('*')
+      .eq('contact_id', chatId)
+      .eq('status', 'pending')
+      .order('scheduled_at', { ascending: true });
+    setScheduledMessages((data as any[]) || []);
+  };
+
+  const handleToggleBlock = async () => {
+    const { error } = await supabase.from('contacts').update({ is_blocked: !isBlocked } as any).eq('id', chatId);
+    if (error) {
+      toast({ title: 'Failed to update block status', description: error.message, variant: 'destructive' });
+      return;
+    }
+    updateContact(chatId, { isBlocked: !isBlocked } as any);
+    toast({ title: isBlocked ? 'Contact unblocked' : 'Contact blocked' });
+    setOpen(false);
+  };
+
+  // Clear chat - soft-delete messages only
   const handleClearChat = async () => {
     try {
       const { error } = await supabase
         .from('messages')
-        .delete()
+        .update({ is_deleted: true, deleted_at: new Date().toISOString() } as any)
         .eq('contact_id', chatId);
       
       if (error) throw error;
@@ -106,7 +133,7 @@ export function ChatOptionsMenu({
       );
       setChats(updatedChats);
       
-      toast({ title: 'Chat cleared' });
+      toast({ title: 'Messages moved to trash' });
     } catch (error) {
       console.error('Error clearing chat:', error);
       toast({ title: 'Failed to clear chat', variant: 'destructive' });
@@ -114,6 +141,19 @@ export function ChatOptionsMenu({
     setShowClearDialog(false);
     setOpen(false);
     onClose?.();
+  };
+
+  const handleMoveChatToTrash = async () => {
+    const { error } = await supabase.from('contacts').update({ is_deleted: true, deleted_at: new Date().toISOString() } as any).eq('id', chatId);
+    if (error) {
+      toast({ title: 'Failed to move chat to trash', description: error.message, variant: 'destructive' });
+      return;
+    }
+    updateContact(chatId, { isDeleted: true, deletedAt: new Date() } as any);
+    setShowDeleteDialog(false);
+    setOpen(false);
+    onClose?.();
+    toast({ title: 'Chat moved to trash' });
   };
 
   return (
@@ -152,6 +192,14 @@ export function ChatOptionsMenu({
             <Archive className="h-4 w-4 mr-3" />
             {isArchived ? 'Unarchive' : 'Archive'}
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => { loadScheduledMessages(); setShowScheduledDialog(true); setOpen(false); }}>
+            <Clock className="h-4 w-4 mr-3" />
+            Scheduled messages
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleToggleBlock}>
+            <Ban className="h-4 w-4 mr-3" />
+            {isBlocked ? 'Unblock contact' : 'Block contact'}
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => setShowClearDialog(true)}>
             <Eraser className="h-4 w-4 mr-3" />
@@ -171,9 +219,9 @@ export function ChatOptionsMenu({
       <AlertDialog open={showClearDialog} onOpenChange={setShowClearDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Clear chat?</AlertDialogTitle>
+            <AlertDialogTitle>Move messages to trash?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will delete all messages in this chat. This action cannot be undone.
+              This hides all messages in this chat without permanently deleting them.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -182,7 +230,7 @@ export function ChatOptionsMenu({
               onClick={handleClearChat}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Clear
+              Move messages
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -192,23 +240,43 @@ export function ChatOptionsMenu({
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete chat?</AlertDialogTitle>
+            <AlertDialogTitle>Move chat to trash?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will delete all messages in this chat. The contact "{contactName}" will be preserved. 
-              To delete the contact, go to Contacts tab.
+              This hides "{contactName}" and its chat until it is restored or the contact sends a new message.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction 
-              onClick={handleClearChat}
+              onClick={handleMoveChatToTrash}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete chat
+              Move to trash
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={showScheduledDialog} onOpenChange={setShowScheduledDialog}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Scheduled messages</DialogTitle></DialogHeader>
+          <div className="space-y-3 max-h-[420px] overflow-y-auto">
+            {scheduledMessages.length === 0 ? <p className="text-sm text-muted-foreground">No pending scheduled messages.</p> : scheduledMessages.map((item) => (
+              <div key={item.id} className="rounded-lg border p-3 space-y-2">
+                <p className="text-sm whitespace-pre-wrap">{item.content}</p>
+                <Input type="datetime-local" value={new Date(item.scheduled_at).toISOString().slice(0, 16)} onChange={async (e) => {
+                  await supabase.from('scheduled_messages' as any).update({ scheduled_at: new Date(e.target.value).toISOString(), updated_at: new Date().toISOString() } as any).eq('id', item.id);
+                  loadScheduledMessages();
+                }} />
+                <Button variant="outline" size="sm" onClick={async () => {
+                  await supabase.from('scheduled_messages' as any).update({ status: 'cancelled', updated_at: new Date().toISOString() } as any).eq('id', item.id);
+                  loadScheduledMessages();
+                }}><X className="h-4 w-4 mr-2" />Cancel</Button>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Assign Contact Modal */}
       <AssignContactModal

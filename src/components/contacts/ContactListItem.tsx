@@ -127,13 +127,13 @@ export function ContactListItem({
     try {
       const { error } = await supabase
         .from('contacts')
-        .delete()
+        .update({ is_deleted: true, deleted_at: new Date().toISOString() } as any)
         .eq('id', contact.id);
 
       if (error) throw error;
 
       deleteContact(contact.id);
-      toast({ title: 'Contact deleted' });
+      toast({ title: 'Contact moved to trash' });
     } catch (err: any) {
       toast({
         title: 'Error',

@@ -136,17 +136,16 @@ export function ChatListItem({ chat, isActive, onClick, chatLabels = [], allLabe
   };
 
   const handleDeleteChat = async () => {
-    const { error } = await supabase.from('messages').delete().eq('contact_id', chat.id);
+    const { error } = await supabase.from('contacts').update({ is_deleted: true, deleted_at: new Date().toISOString() } as any).eq('id', chat.id);
     if (error) {
-      toast({ title: 'Failed to clear chat', description: error.message, variant: 'destructive' });
+      toast({ title: 'Failed to move chat to trash', description: error.message, variant: 'destructive' });
       return;
     }
 
-    setMessages(chat.id, []);
-    setChats(chats.map((c) => (c.id === chat.id ? { ...c, lastMessage: undefined, unreadCount: 0 } : c)));
+    setChats(chats.map((c) => (c.id === chat.id ? { ...c, contact: { ...c.contact, isDeleted: true, deletedAt: new Date() } } : c)));
     setShowDeleteDialog(false);
     setShowOptions(false);
-    toast({ title: 'Chat cleared' });
+    toast({ title: 'Chat moved to trash' });
   };
 
   const handleAction = async (action: 'pin' | 'mute' | 'archive') => {
@@ -303,14 +302,14 @@ export function ChatListItem({ chat, isActive, onClick, chatLabels = [], allLabe
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete chat messages?</AlertDialogTitle>
+            <AlertDialogTitle>Move chat to trash?</AlertDialogTitle>
             <AlertDialogDescription>
-              This clears messages for {contact.name}. Contact remains in your list.
+              This hides {contact.name} and their messages until you restore the chat.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteChat}>Delete messages</AlertDialogAction>
+            <AlertDialogAction onClick={handleDeleteChat}>Move to trash</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

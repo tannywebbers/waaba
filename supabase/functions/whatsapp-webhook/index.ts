@@ -184,7 +184,7 @@ const findOrCreateContact = async (
 
       await supabase
         .from('contacts')
-        .update({ last_seen: new Date().toISOString(), is_online: true })
+        .update({ last_seen: new Date().toISOString(), is_online: true, is_deleted: false, deleted_at: null })
         .eq('id', contactId);
       
       return { contactId, targetUserId };
@@ -217,7 +217,7 @@ const findOrCreateContact = async (
 
       await supabase
         .from('contacts')
-        .update({ last_seen: new Date().toISOString(), is_online: true })
+        .update({ last_seen: new Date().toISOString(), is_online: true, is_deleted: false, deleted_at: null })
         .eq('id', contactId);
       
       return { contactId, targetUserId };
@@ -242,6 +242,7 @@ const findOrCreateContact = async (
         loan_id: `WA-${Date.now()}-${attempt}`,  // Include attempt in case of race condition
         last_seen: new Date().toISOString(),
         is_online: true,
+        is_deleted: false,
       })
       .select('id')
       .maybeSingle();
@@ -293,6 +294,7 @@ const processIncomingMessages = async (
   whatsappToken: string,
   settingsUserId: string,
   superUserId: string,
+  settings: any,
 ) => {
   for (const message of value.messages || []) {
     const messageId = message.id;
@@ -387,6 +389,31 @@ const processIncomingMessages = async (
       });
       
       // Skip this message but continue processing others
+      continue;
+    }
+
+    const { data: contactState } = await supabase
+      .from('contacts')
+      .select('is_blocked')
+      .eq('id', contactId)
+      .maybeSingle();
+
+    if (contactState?.is_blocked) {
+      await fetch(`${WHATSAPP_API_URL}/${settings.phone_number_id}/messages`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${settings.api_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messaging_product: 'whatsapp', to: from, type: 'text', text: { body: '_This business blocked you_' } }),
+      });
+
+      await logWebhookEvent(supabase, {
+        user_id: targetUserId,
+        event_type: 'blocked_auto_reply',
+        direction: 'outgoing',
+        phone_number: from,
+        message_type: 'text',
+        status: 'sent',
+        payload: { contactId, incomingMessageId: messageId },
+      });
       continue;
     }
 
@@ -535,7 +562,7 @@ const processWebhookPayload = async (
   const superUserId = explicitUserId || settingsUserId;
 
   if (value.messages?.length) {
-    await processIncomingMessages(supabase, value, settings.api_token, settingsUserId, superUserId);
+    await processIncomingMessages(supabase, value, settings.api_token, settingsUserId, superUserId, settings);
   }
 
   if (value.statuses?.length) {

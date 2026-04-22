@@ -80,7 +80,7 @@ export function SharedInboxSettings() {
       } as any);
       if (error) throw error;
 
-      const { error: copyErr } = await supabase.rpc('copy_super_user_credentials', {
+      const { error: copyErr } = await supabase.rpc('copy_super_user_credentials' as any, {
         _super_user_id: user.id,
         _shared_user_id: foundUser.user_id,
       });
@@ -111,9 +111,9 @@ export function SharedInboxSettings() {
           .update({ assigned_user_id: null })
           .eq('user_id', user.id)
           .eq('assigned_user_id', sharedUserId);
-        await supabase.rpc('remove_shared_credentials', { _shared_user_id: sharedUserId });
+        await supabase.rpc('remove_shared_credentials' as any, { _shared_user_id: sharedUserId });
       } else {
-        await supabase.rpc('copy_super_user_credentials', {
+        await supabase.rpc('copy_super_user_credentials' as any, {
           _super_user_id: user.id,
           _shared_user_id: sharedUserId,
         });
@@ -134,7 +134,7 @@ export function SharedInboxSettings() {
         .eq('user_id', user.id)
         .eq('assigned_user_id', removeUserId);
 
-      await supabase.rpc('remove_shared_credentials', { _shared_user_id: removeUserId });
+      await supabase.rpc('remove_shared_credentials' as any, { _shared_user_id: removeUserId });
 
       const { error } = await supabase
         .from('shared_inbox_users' as any)
@@ -194,7 +194,7 @@ export function SharedInboxSettings() {
           .eq('assigned_user_id', user.id);
       }
 
-      await supabase.rpc('remove_shared_credentials', { _shared_user_id: user.id });
+      await supabase.rpc('remove_shared_credentials' as any, { _shared_user_id: user.id });
 
       const { error } = await supabase
         .from('shared_inbox_users' as any)

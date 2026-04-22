@@ -58,7 +58,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const { toast } = useToast();
   const {
     viewMode, setViewMode, chats, contacts, activeChat, setActiveChat, searchQuery, setSearchQuery,
-    setShowAddContactModal, favorites, deleteContact, addMessage,
+    setShowAddContactModal, favorites, deleteContact, updateContact, addMessage,
   } = useAppStore();
 
   const [chatFilter, setChatFilter] = useState<ChatFilter>('all');
@@ -86,6 +86,8 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
   const [bulkMetaSearch, setBulkMetaSearch] = useState('');
   const [bulkAppSearch, setBulkAppSearch] = useState('');
+  const [showTrash, setShowTrash] = useState(false);
+  const [bulkScheduleAt, setBulkScheduleAt] = useState('');
 
   const listContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -137,6 +139,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
 
   const filteredChats = chats
     .filter((chat) => {
+      if (showTrash !== !!chat.contact.isDeleted) return false;
       const matchesSearch = chat.contact.name.toLowerCase().includes(searchQuery.toLowerCase()) || chat.contact.phone.includes(searchQuery);
       if (!matchesSearch) return false;
       if (chatFilter === 'archived') return !!(chat.isArchived || chat.contact.isArchived);
@@ -162,6 +165,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const dayTypeOptions = useMemo(() => ['all', ...Array.from(new Set(contacts.map((c) => String(c.dayType ?? '0'))))], [contacts]);
 
   const filteredContacts = contacts
+    .filter((contact) => showTrash === !!contact.isDeleted)
     .filter((contact) => contact.name.toLowerCase().includes(searchQuery.toLowerCase()) || contact.phone.includes(searchQuery) || contact.loanId.toLowerCase().includes(searchQuery.toLowerCase()))
     .filter((contact) => contactAppTypeFilter === 'all' ? true : (contact.appType || '').toLowerCase() === contactAppTypeFilter)
     .filter((contact) => contactDayTypeFilter === 'all' ? true : String(contact.dayType ?? '0') === contactDayTypeFilter)
@@ -180,7 +184,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
 
   const handleDeleteSelectedContacts = async () => {
     if (!user || selectedContactIds.length === 0) return;
-    const { error } = await supabase.from('contacts').delete().eq('user_id', user.id).in('id', selectedContactIds as any);
+    const { error } = await supabase.from('contacts').update({ is_deleted: true, deleted_at: new Date().toISOString() } as any).eq('user_id', user.id).in('id', selectedContactIds as any);
     if (error) {
       toast({ title: 'Failed to delete selected contacts', description: error.message, variant: 'destructive' });
       return;
@@ -189,7 +193,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
     selectedContactIds.forEach((id) => deleteContact(id));
     setSelectedContactIds([]);
     setContactSelectionMode(false);
-    toast({ title: 'Selected contacts deleted' });
+    toast({ title: 'Selected contacts moved to trash' });
   };
 
   const handleBulkTemplateSend = async () => {
@@ -223,12 +227,22 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
       const selectedContacts = enrichedContacts.filter((c: any) => selectedContactIds.includes(c.id));
       const appTemplate = appTemplates.find((t) => t.id === selectedTemplateId);
       const metaTemplate = metaTemplates.find((t) => t.id === selectedTemplateId);
+      const scheduledAtIso = bulkScheduleAt ? new Date(bulkScheduleAt).toISOString() : null;
 
       if (bulkSource === 'app' && appTemplate) {
         for (const contact of selectedContacts) {
           const normalizedPhone = contact.phone.replace(/[^\d+]/g, '').replace(/^\+/, '');
           const content = resolveTemplate(appTemplate.body, contact);
           try {
+            if (scheduledAtIso) {
+              const { error: scheduleError } = await supabase.from('scheduled_messages' as any).insert({
+                user_id: user.id, contact_id: contact.id, content, type: 'text', scheduled_at: scheduledAtIso, status: 'pending',
+              } as any);
+              if (scheduleError) throw scheduleError;
+              sentCount++;
+              continue;
+            }
+
             const { data, error } = await supabase.functions.invoke('whatsapp-api', {
               body: {
                 action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
@@ -308,6 +322,19 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
           if (hasEmptyParam) continue;
 
           try {
+            if (scheduledAtIso) {
+              let resolvedText = previewText;
+              Object.entries(templateParams).forEach(([key, value]) => { resolvedText = resolvedText.replace(key, value || key); });
+              const { error: scheduleError } = await supabase.from('scheduled_messages' as any).insert({
+                user_id: user.id, contact_id: contact.id, content: resolvedText,
+                type: 'template', template_name: metaTemplate.name, template_language: (metaTemplate as any).language || 'en',
+                template_params: templateParams, scheduled_at: scheduledAtIso, status: 'pending',
+              } as any);
+              if (scheduleError) throw scheduleError;
+              sentCount++;
+              continue;
+            }
+
             const { data, error } = await supabase.functions.invoke('whatsapp-api', {
               body: {
                 action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
@@ -352,7 +379,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
 
       // Show detailed results
       if (failedCount === 0) {
-        toast({ title: `✅ Sent to ${sentCount} contact(s)`, duration: 4000 });
+        toast({ title: scheduledAtIso ? `✅ Scheduled for ${sentCount} contact(s)` : `✅ Sent to ${sentCount} contact(s)`, duration: 4000 });
       } else {
         toast({
           title: `⚠️ ${sentCount} sent, ${failedCount} failed`,
@@ -365,6 +392,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
       setSelectedContactIds([]);
       setContactSelectionMode(false);
       setShowBulkDialog(false);
+      setBulkScheduleAt('');
     } catch (error: any) {
       toast({ title: 'Bulk send failed', description: error.message, variant: 'destructive' });
     } finally {
@@ -379,6 +407,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
         <div className="flex items-center gap-1">
           {viewMode === 'chats' && (
             <>
+              <Button variant={showTrash ? 'default' : 'ghost'} size="icon" className="h-10 w-10" onClick={() => setShowTrash((v) => !v)}><Trash2 className="h-5 w-5 stroke-[2.8px]" /></Button>
               <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setShowLabelManager(true)}><Settings2 className="h-5 w-5 stroke-[2.8px]" /></Button>
               <Button variant="ghost" size="icon" className="h-10 w-10" onClick={onNewChat}><SquarePen className="h-5 w-5 stroke-[2.8px]" /></Button>
             </>
@@ -472,7 +501,15 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
                 key={chat.id}
                 chat={chat}
                 isActive={activeChat?.id === chat.id}
-                onClick={() => { setActiveChat(chat); onChatSelect?.(chat); }}
+                onClick={async () => {
+                  if (chat.contact.isDeleted && user) {
+                    await supabase.from('contacts').update({ is_deleted: false, deleted_at: null } as any).eq('id', chat.id).eq('user_id', user.id);
+                    updateContact(chat.id, { isDeleted: false, deletedAt: undefined } as any);
+                    setShowTrash(false);
+                  }
+                  setActiveChat({ ...chat, contact: { ...chat.contact, isDeleted: false } });
+                  onChatSelect?.(chat);
+                }}
                 chatLabels={labels.filter((l) => (chatLabelMap[chat.id] || []).includes(l.id))}
                 allLabels={labels}
               />
@@ -567,8 +604,14 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
             </Tabs>
           </div>
           <div className="shrink-0 pt-2 border-t border-border">
+            <Input
+              type="datetime-local"
+              value={bulkScheduleAt}
+              onChange={(e) => setBulkScheduleAt(e.target.value)}
+              className="mb-2"
+            />
             <Button className="w-full" onClick={handleBulkTemplateSend} disabled={sendingBulk || !selectedTemplateId || selectedContactIds.length === 0}>
-              {sendingBulk ? 'Sending...' : `Send to ${selectedContactIds.length} contact(s)`}
+              {sendingBulk ? 'Sending...' : bulkScheduleAt ? `Schedule for ${selectedContactIds.length} contact(s)` : `Send to ${selectedContactIds.length} contact(s)`}
             </Button>
           </div>
         </DialogContent>

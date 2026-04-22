@@ -13,6 +13,9 @@ export interface Contact {
   isPinned?: boolean;
   isMuted?: boolean;
   isArchived?: boolean;
+  isBlocked?: boolean;
+  isDeleted?: boolean;
+  deletedAt?: Date;
   assignedUserId?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -37,6 +40,8 @@ export interface Message {
   whatsappMessageId?: string;
   templateName?: string;
   templateParams?: Record<string, string>;
+  isDeleted?: boolean;
+  deletedAt?: Date;
 }
 
 export interface Chat {
@@ -48,6 +53,7 @@ export interface Chat {
   isMuted?: boolean;
   isArchived?: boolean;
   isFavorite?: boolean;
+  isDeleted?: boolean;
 }
 
 export interface User {
