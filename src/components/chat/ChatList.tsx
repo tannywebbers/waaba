@@ -260,6 +260,9 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
 
   const handlePermanentDeleteContacts = async (ids: string[]) => {
     if (!user || ids.length === 0 || !window.confirm('Permanently delete selected chat(s)? This cannot be undone.')) return;
+    await supabase.from('messages').delete().eq('user_id', user.id).in('contact_id', ids as any);
+    await supabase.from('chat_labels' as any).delete().eq('user_id', user.id).in('chat_id', ids as any);
+    await supabase.from('account_details').delete().in('contact_id', ids as any);
     const { error } = await supabase.from('contacts').delete().eq('user_id', user.id).in('id', ids as any);
     if (error) return toast({ title: 'Failed to delete permanently', description: error.message, variant: 'destructive' });
     setContacts(contacts.filter((contact) => !ids.includes(contact.id)));
