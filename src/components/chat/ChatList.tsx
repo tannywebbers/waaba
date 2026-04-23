@@ -55,6 +55,14 @@ const VARIABLE_MAP: Record<string, (c: any) => string> = {
 const resolveTemplate = (body: string, contact: any): string =>
   body.replace(/\{\{(\w+)\}\}/g, (match, variableName) => VARIABLE_MAP[variableName]?.(contact) || match);
 
+const resolveMappedField = (field: string, contact: any, appTemplatesMap: Record<string, string>) => {
+  if (field.startsWith('app_template:')) {
+    const templateName = field.replace('app_template:', '');
+    return appTemplatesMap[templateName] || '';
+  }
+  return VARIABLE_MAP[field]?.(contact) || '';
+};
+
 const toUtcIsoFromLocalInput = (value: string) => {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
@@ -102,12 +110,15 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
 
   const [showBulkDialog, setShowBulkDialog] = useState(false);
+  const [bulkStep, setBulkStep] = useState<'recipients' | 'templates'>('recipients');
   const [bulkSource, setBulkSource] = useState<'app' | 'meta'>('app');
   const [appTemplates, setAppTemplates] = useState<AppTemplate[]>([]);
   const [metaTemplates, setMetaTemplates] = useState<MetaTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [sendingBulk, setSendingBulk] = useState(false);
   const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
+  const [bulkAppType, setBulkAppType] = useState('tloan');
+  const [bulkSelectedLabelIds, setBulkSelectedLabelIds] = useState<string[]>([]);
   const [bulkMetaSearch, setBulkMetaSearch] = useState('');
   const [bulkAppSearch, setBulkAppSearch] = useState('');
   const [showTrash, setShowTrash] = useState(false);
@@ -118,6 +129,10 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
 
   const bulkFilteredMeta = metaTemplates.filter(t => t.name.toLowerCase().includes(bulkMetaSearch.toLowerCase()));
   const bulkFilteredApp = appTemplates.filter(t => t.name.toLowerCase().includes(bulkAppSearch.toLowerCase()));
+  const bulkParsedNumbers = parsePhoneNumbers(bulkNumbers);
+  const bulkRecipientCount = Array.from(new Set([...selectedContactIds, ...bulkParsedNumbers])).length;
+  const appChoices = useMemo(() => Array.from(new Set(['tloan', 'quickash', ...contacts.map((c) => (c.appType || '').toLowerCase()).filter(Boolean)])), [contacts]);
+  const appTemplatesMap = useMemo(() => Object.fromEntries(appTemplates.map((template) => [template.name, template.body])), [appTemplates]);
 
   const fetchLabels = useCallback(async () => {
     if (!user) return;
@@ -207,6 +222,12 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
     setSelectedContactIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
   };
 
+  const openBulkDialog = (step: 'recipients' | 'templates' = 'recipients') => {
+    setBulkStep(step);
+    setSelectedTemplateId('');
+    setShowBulkDialog(true);
+  };
+
   const handleDeleteSelectedContacts = async () => {
     if (!user || selectedContactIds.length === 0) return;
     const { error } = await supabase.from('contacts').update({ is_deleted: true, deleted_at: new Date().toISOString() } as any).eq('user_id', user.id).in('id', selectedContactIds as any);
@@ -223,12 +244,13 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
 
   const createOrUpdateBulkContacts = async () => {
     if (!user) return [];
-    const manualNumbers = parsePhoneNumbers(bulkNumbers);
+    const manualNumbers = bulkParsedNumbers;
     const selectedContacts = contacts.filter((contact) => selectedContactIds.includes(contact.id));
     const selectedNumbers = selectedContacts.map((contact) => normalizePhoneNumber(contact.phone));
     const allNumbers = Array.from(new Set([...selectedNumbers, ...manualNumbers])).filter(Boolean);
 
     const savedContacts: any[] = [];
+    const labelInserts: any[] = [];
     for (const phone of allNumbers) {
       const selected = selectedContacts.find((contact) => normalizePhoneNumber(contact.phone) === phone);
       const { data: existingContact, error: findError } = await supabase
@@ -245,27 +267,41 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
         name: selected?.name || existingContact?.name || phone,
         loan_id: selected?.loanId || existingContact?.loan_id || '',
         amount: selected?.amount ?? existingContact?.amount ?? null,
-        app_type: selected?.appType || existingContact?.app_type || 'tloan',
+        app_type: bulkAppType || selected?.appType || existingContact?.app_type || 'tloan',
         day_type: selected?.dayType ?? existingContact?.day_type ?? 0,
         is_deleted: false,
         deleted_at: null,
-        created_at: new Date().toISOString(),
       };
 
       const { data: savedContact, error: saveError } = existingContact
         ? await supabase.from('contacts').update(payload).eq('id', existingContact.id).select('*, account_details(*)').maybeSingle()
         : await supabase.from('contacts').insert(payload).select('*, account_details(*)').maybeSingle();
       if (saveError) throw saveError;
-      if (savedContact) savedContacts.push(savedContact);
+      if (savedContact) {
+        savedContacts.push(savedContact);
+        bulkSelectedLabelIds.forEach((labelId) => labelInserts.push({ user_id: user.id, chat_id: savedContact.id, label_id: labelId }));
+      }
+    }
+
+    if (labelInserts.length > 0) {
+      const { data: existingLabels } = await supabase
+        .from('chat_labels' as any)
+        .select('chat_id,label_id')
+        .eq('user_id', user.id)
+        .in('chat_id', savedContacts.map((contact) => contact.id) as any);
+      const existingLabelKeys = new Set(((existingLabels || []) as any[]).map((label) => `${label.chat_id}:${label.label_id}`));
+      const labelsToInsert = labelInserts.filter((label) => !existingLabelKeys.has(`${label.chat_id}:${label.label_id}`));
+      if (labelsToInsert.length > 0) await supabase.from('chat_labels' as any).insert(labelsToInsert);
     }
 
     const contactModels = savedContacts.map(toContactModel);
     if (contactModels.length > 0) addContacts(contactModels);
+    await fetchLabels();
     return contactModels;
   };
 
   const handleBulkTemplateSend = async () => {
-    if (!user || !selectedTemplateId || (selectedContactIds.length === 0 && parsePhoneNumbers(bulkNumbers).length === 0)) return;
+    if (!user || !selectedTemplateId || bulkRecipientCount === 0) return;
     setSendingBulk(true);
     let sentCount = 0;
     let failedCount = 0;
@@ -370,8 +406,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
 
           for (const m of (mappings || [])) {
             const fieldKey = (m as any).mapped_field;
-            const resolver = VARIABLE_MAP[fieldKey];
-            const value = resolver ? resolver(contact) : '';
+            const value = resolveMappedField(fieldKey, contact, appTemplatesMap);
             if (!value) {
               failedCount++;
               failReasons.push(`${contact.name}: Missing field "${fieldKey}"`);
@@ -458,11 +493,27 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
 
       setSelectedContactIds([]);
       setBulkNumbers('');
+      setBulkSelectedLabelIds([]);
       setContactSelectionMode(false);
       setShowBulkDialog(false);
+      setBulkStep('recipients');
       setBulkScheduleAt('');
     } catch (error: any) {
       toast({ title: 'Bulk send failed', description: error.message, variant: 'destructive' });
+    } finally {
+      setSendingBulk(false);
+    }
+  };
+
+  const handleBulkRecipientsNext = async () => {
+    if (bulkRecipientCount === 0) return;
+    setSendingBulk(true);
+    try {
+      await createOrUpdateBulkContacts();
+      setBulkStep('templates');
+      toast({ title: `Prepared ${bulkRecipientCount} contact(s)` });
+    } catch (error: any) {
+      toast({ title: 'Failed to prepare contacts', description: error.message, variant: 'destructive' });
     } finally {
       setSendingBulk(false);
     }
@@ -475,6 +526,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
         <div className="flex items-center gap-1">
           {viewMode === 'chats' && (
             <>
+              <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => openBulkDialog('recipients')}><Send className="h-5 w-5 stroke-[2.8px]" /></Button>
               <Button variant={showTrash ? 'default' : 'ghost'} size="icon" className="h-10 w-10" onClick={() => setShowTrash((v) => !v)}><Trash2 className="h-5 w-5 stroke-[2.8px]" /></Button>
               <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setShowLabelManager(true)}><Settings2 className="h-5 w-5 stroke-[2.8px]" /></Button>
               <Button variant="ghost" size="icon" className="h-10 w-10" onClick={onNewChat}><SquarePen className="h-5 w-5 stroke-[2.8px]" /></Button>
@@ -554,7 +606,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
                 {selectedContactIds.length === filteredContacts.length ? 'Deselect All' : 'Select All'}
               </Button>
               <Button size="sm" variant="destructive" onClick={handleDeleteSelectedContacts} disabled={selectedContactIds.length === 0}><Trash2 className="h-4 w-4 mr-1" />Delete ({selectedContactIds.length})</Button>
-              <Button size="sm" onClick={() => setShowBulkDialog(true)} disabled={selectedContactIds.length === 0}><Send className="h-4 w-4 mr-1" />Message ({selectedContactIds.length})</Button>
+              <Button size="sm" onClick={() => openBulkDialog('recipients')} disabled={selectedContactIds.length === 0}><Send className="h-4 w-4 mr-1" />Message ({selectedContactIds.length})</Button>
             </div>
           )}
         </div>
@@ -617,9 +669,43 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
 
       <LabelManagerPanel open={showLabelManager} onOpenChange={setShowLabelManager} onLabelsChanged={fetchLabels} />
 
-      <Dialog open={showBulkDialog} onOpenChange={setShowBulkDialog}>
+      <Dialog open={showBulkDialog} onOpenChange={(open) => { setShowBulkDialog(open); if (!open) setBulkStep('recipients'); }}>
         <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
-          <DialogHeader><DialogTitle>Templates</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{bulkStep === 'recipients' ? 'Bulk message recipients' : 'Bulk message templates'}</DialogTitle></DialogHeader>
+          {bulkStep === 'recipients' ? (
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1">
+              <Textarea
+                value={bulkNumbers}
+                onChange={(e) => setBulkNumbers(e.target.value)}
+                placeholder="Paste numbers separated by commas or new lines, e.g. 09012345678, 2349012345678"
+                rows={8}
+              />
+              <div className="text-sm text-muted-foreground">{bulkParsedNumbers.length} pasted number(s) parsed. Local 090 numbers will be saved as 23490 international format.</div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">App</label>
+                <select value={bulkAppType} onChange={(e) => setBulkAppType(e.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                  {appChoices.map((app) => <option key={app} value={app}>{app.toUpperCase()}</option>)}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Labels</label>
+                <div className="flex flex-wrap gap-2">
+                  {labels.length === 0 ? <span className="text-sm text-muted-foreground">No labels available</span> : labels.map((label) => {
+                    const active = bulkSelectedLabelIds.includes(label.id);
+                    return (
+                      <button key={label.id} type="button" onClick={() => setBulkSelectedLabelIds((prev) => active ? prev.filter((id) => id !== label.id) : [...prev, label.id])}
+                        className={cn('rounded-full border px-3 py-1 text-sm transition-colors', active ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-secondary hover:bg-accent')}>
+                        {label.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <Button className="w-full" onClick={handleBulkRecipientsNext} disabled={sendingBulk || bulkRecipientCount === 0}>
+                {sendingBulk ? 'Creating contacts...' : `Next: create ${bulkRecipientCount} contact(s)`}
+              </Button>
+            </div>
+          ) : (
           <div className="flex-1 min-h-0 overflow-y-auto">
             <Tabs value={bulkSource} onValueChange={(v) => { setBulkSource(v as 'app' | 'meta'); setSelectedTemplateId(''); }}>
               <TabsList className="grid w-full grid-cols-2">
@@ -671,14 +757,9 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
               </TabsContent>
             </Tabs>
           </div>
+          )}
+          {bulkStep === 'templates' && (
           <div className="shrink-0 pt-2 border-t border-border">
-            <Textarea
-              value={bulkNumbers}
-              onChange={(e) => setBulkNumbers(e.target.value)}
-              placeholder="Add phone numbers separated by commas or new lines"
-              rows={3}
-              className="mb-2"
-            />
             <Input
               type="datetime-local"
               value={bulkScheduleAt}
@@ -686,10 +767,14 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
               min={toDateTimeLocalValue()}
               className="mb-2"
             />
-            <Button className="w-full" onClick={handleBulkTemplateSend} disabled={sendingBulk || !selectedTemplateId || (selectedContactIds.length === 0 && parsePhoneNumbers(bulkNumbers).length === 0)}>
-              {sendingBulk ? 'Sending...' : bulkScheduleAt ? `Schedule for ${selectedContactIds.length + parsePhoneNumbers(bulkNumbers).length} contact(s)` : `Send to ${selectedContactIds.length + parsePhoneNumbers(bulkNumbers).length} contact(s)`}
-            </Button>
+            <div className="grid grid-cols-[auto_1fr] gap-2">
+              <Button variant="outline" onClick={() => setBulkStep('recipients')}>Back</Button>
+              <Button onClick={handleBulkTemplateSend} disabled={sendingBulk || !selectedTemplateId || bulkRecipientCount === 0}>
+                {sendingBulk ? 'Sending...' : bulkScheduleAt ? `Schedule for ${bulkRecipientCount} contact(s)` : `Send to ${bulkRecipientCount} contact(s)`}
+              </Button>
+            </div>
           </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
