@@ -247,6 +247,29 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
     toast({ title: 'Selected contacts moved to trash' });
   };
 
+  const handleRestoreContacts = async (ids: string[]) => {
+    if (!user || ids.length === 0) return;
+    const { error } = await supabase.from('contacts').update({ is_deleted: false, deleted_at: null } as any).eq('user_id', user.id).in('id', ids as any);
+    if (error) return toast({ title: 'Failed to restore', description: error.message, variant: 'destructive' });
+    ids.forEach((id) => updateContact(id, { isDeleted: false, deletedAt: undefined } as any));
+    setSelectedContactIds([]);
+    setChatSelectionMode(false);
+    setContactSelectionMode(false);
+    toast({ title: ids.length > 1 ? 'Chats restored' : 'Chat restored' });
+  };
+
+  const handlePermanentDeleteContacts = async (ids: string[]) => {
+    if (!user || ids.length === 0 || !window.confirm('Permanently delete selected chat(s)? This cannot be undone.')) return;
+    const { error } = await supabase.from('contacts').delete().eq('user_id', user.id).in('id', ids as any);
+    if (error) return toast({ title: 'Failed to delete permanently', description: error.message, variant: 'destructive' });
+    setContacts(contacts.filter((contact) => !ids.includes(contact.id)));
+    setChats(chats.filter((chat) => !ids.includes(chat.id)));
+    setSelectedContactIds([]);
+    setChatSelectionMode(false);
+    setContactSelectionMode(false);
+    toast({ title: ids.length > 1 ? 'Chats permanently deleted' : 'Chat permanently deleted' });
+  };
+
   const createOrUpdateBulkContacts = async () => {
     if (!user) return [];
     const manualNumbers = bulkParsedNumbers;
