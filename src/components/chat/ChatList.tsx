@@ -573,7 +573,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
         <SearchInput value={searchQuery} onChange={setSearchQuery} placeholder={viewMode === 'contacts' ? 'Search contacts' : 'Search'} />
       </div>
 
-      {viewMode === 'chats' && (
+      {viewMode === 'chats' && !showTrash && (
         <div className="px-4 pb-2 shrink-0 flex flex-wrap gap-2">
           <Button size="sm" variant={chatFilter === 'all' ? 'default' : 'secondary'} className={cn('rounded-full', chatFilter === 'all' && 'text-white')} onClick={() => setChatFilter('all')}>All</Button>
           <Button size="sm" variant={chatFilter === 'unread' ? 'default' : 'secondary'} className={cn('rounded-full flex items-center gap-1', chatFilter === 'unread' && 'text-white')} onClick={() => setChatFilter('unread')}>
@@ -594,6 +594,21 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
               <DropdownMenuItem onClick={() => setSortDir(sortDir === 'asc' ? 'desc' : 'asc')}>{sortDir === 'asc' ? 'Descending' : 'Ascending'}</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+        </div>
+      )}
+
+      {viewMode === 'chats' && showTrash && (
+        <div className="px-4 pb-2 shrink-0 flex items-center gap-2">
+          <Button size="sm" variant={chatSelectionMode ? 'default' : 'outline'} onClick={() => { setChatSelectionMode((v) => !v); setSelectedContactIds([]); }}>
+            <CheckSquare className="h-4 w-4 mr-1" />Select
+          </Button>
+          {chatSelectionMode && (
+            <>
+              <Button size="sm" variant="outline" onClick={() => setSelectedContactIds(selectedContactIds.length === filteredChats.length ? [] : filteredChats.map((chat) => chat.id))}>{selectedContactIds.length === filteredChats.length ? 'Deselect All' : 'Select All'}</Button>
+              <Button size="sm" variant="outline" onClick={() => handleRestoreContacts(selectedContactIds)} disabled={selectedContactIds.length === 0}><RotateCcw className="h-4 w-4 mr-1" />Restore ({selectedContactIds.length})</Button>
+              <Button size="sm" variant="destructive" onClick={() => handlePermanentDeleteContacts(selectedContactIds)} disabled={selectedContactIds.length === 0}><Trash2 className="h-4 w-4 mr-1" />Delete ({selectedContactIds.length})</Button>
+            </>
+          )}
         </div>
       )}
 
