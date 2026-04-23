@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useEffect, useRef, useState } from 'react';
-import { Archive, BellOff, MessageSquareOff, Pin, Star, Tag } from 'lucide-react';
+import { Archive, BellOff, CheckSquare, MessageSquareOff, Pin, RotateCcw, Star, Tag, Trash2 } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -44,9 +44,16 @@ interface ChatListItemProps {
   onClick: () => void;
   chatLabels?: Label[];
   allLabels?: Label[];
+  isTrash?: boolean;
+  selectionMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (id: string) => void;
+  onEnterSelectionMode?: () => void;
+  onRestore?: (id: string) => void;
+  onPermanentDelete?: (id: string) => void;
 }
 
-export function ChatListItem({ chat, isActive, onClick, chatLabels = [], allLabels: labelsProp = [] }: ChatListItemProps) {
+export function ChatListItem({ chat, isActive, onClick, chatLabels = [], allLabels: labelsProp = [], isTrash = false, selectionMode = false, selected = false, onToggleSelect, onEnterSelectionMode, onRestore, onPermanentDelete }: ChatListItemProps) {
   const { contact, lastMessage, unreadCount, isPinned, isMuted, isArchived } = chat;
   const { updateContact, setMessages, chats, setChats, favorites, toggleFavorite } = useAppStore();
   const { toast } = useToast();
@@ -91,7 +98,10 @@ export function ChatListItem({ chat, isActive, onClick, chatLabels = [], allLabe
 
   const handleTouchEnd = () => {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
-    if (!isLongPress && !isScrolling.current) onClick();
+    if (!isLongPress && !isScrolling.current) {
+      if (selectionMode && onToggleSelect) onToggleSelect(chat.id);
+      else onClick();
+    }
     setIsLongPress(false);
   };
 
@@ -188,7 +198,10 @@ export function ChatListItem({ chat, isActive, onClick, chatLabels = [], allLabe
         hasUnread && 'chat-item-unread'
       )}>
         <button
-          onClick={onClick}
+          onClick={() => {
+            if (selectionMode && onToggleSelect) onToggleSelect(chat.id);
+            else onClick();
+          }}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
@@ -196,8 +209,13 @@ export function ChatListItem({ chat, isActive, onClick, chatLabels = [], allLabe
             e.preventDefault();
             setShowOptions(true);
           }}
-          className="w-full flex items-center gap-3 p-3 text-left hover:bg-accent/50"
+          className={cn("w-full flex items-center gap-3 p-3 text-left hover:bg-accent/50", selected && 'bg-primary/10')}
         >
+          {selectionMode && (
+            <div className={cn('h-5 w-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors', selected ? 'bg-primary border-primary' : 'border-muted-foreground/40')}>
+              {selected && <CheckSquare className="h-4 w-4 text-primary-foreground" />}
+            </div>
+          )}
           <ContactAvatar name={contact.name} avatar={contact.avatar} isOnline={contact.isOnline} size="md" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-2">
