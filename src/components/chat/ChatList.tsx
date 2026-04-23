@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Archive, CheckSquare, MessageCircle, Plus, Search, Send, Settings2, SortAsc, SortDesc, SquarePen, Trash2, Users } from 'lucide-react';
+import { Archive, CheckSquare, MessageCircle, Plus, RotateCcw, Search, Send, Settings2, SortAsc, SortDesc, SquarePen, Trash2, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { Input } from '@/components/ui/input';
@@ -90,7 +90,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const { toast } = useToast();
   const {
     viewMode, setViewMode, chats, contacts, activeChat, setActiveChat, searchQuery, setSearchQuery,
-    setShowAddContactModal, favorites, deleteContact, updateContact, addContacts, addMessage,
+    setShowAddContactModal, favorites, deleteContact, updateContact, addContacts, addMessage, setContacts, setChats,
   } = useAppStore();
 
   const [chatFilter, setChatFilter] = useState<ChatFilter>('all');
@@ -107,6 +107,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const [showLabelManager, setShowLabelManager] = useState(false);
 
   const [contactSelectionMode, setContactSelectionMode] = useState(false);
+  const [chatSelectionMode, setChatSelectionMode] = useState(false);
   const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
 
   const [showBulkDialog, setShowBulkDialog] = useState(false);
@@ -222,6 +223,10 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
     setSelectedContactIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
   };
 
+  const toggleChatSelection = (id: string) => {
+    setSelectedContactIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  };
+
   const openBulkDialog = (step: 'recipients' | 'templates' = 'recipients') => {
     setBulkStep(step);
     setSelectedTemplateId('');
@@ -240,6 +245,32 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
     setSelectedContactIds([]);
     setContactSelectionMode(false);
     toast({ title: 'Selected contacts moved to trash' });
+  };
+
+  const handleRestoreContacts = async (ids: string[]) => {
+    if (!user || ids.length === 0) return;
+    const { error } = await supabase.from('contacts').update({ is_deleted: false, deleted_at: null } as any).eq('user_id', user.id).in('id', ids as any);
+    if (error) return toast({ title: 'Failed to restore', description: error.message, variant: 'destructive' });
+    ids.forEach((id) => updateContact(id, { isDeleted: false, deletedAt: undefined } as any));
+    setSelectedContactIds([]);
+    setChatSelectionMode(false);
+    setContactSelectionMode(false);
+    toast({ title: ids.length > 1 ? 'Chats restored' : 'Chat restored' });
+  };
+
+  const handlePermanentDeleteContacts = async (ids: string[]) => {
+    if (!user || ids.length === 0 || !window.confirm('Permanently delete selected chat(s)? This cannot be undone.')) return;
+    await supabase.from('messages').delete().eq('user_id', user.id).in('contact_id', ids as any);
+    await supabase.from('chat_labels' as any).delete().eq('user_id', user.id).in('chat_id', ids as any);
+    await supabase.from('account_details').delete().in('contact_id', ids as any);
+    const { error } = await supabase.from('contacts').delete().eq('user_id', user.id).in('id', ids as any);
+    if (error) return toast({ title: 'Failed to delete permanently', description: error.message, variant: 'destructive' });
+    setContacts(contacts.filter((contact) => !ids.includes(contact.id)));
+    setChats(chats.filter((chat) => !ids.includes(chat.id)));
+    setSelectedContactIds([]);
+    setChatSelectionMode(false);
+    setContactSelectionMode(false);
+    toast({ title: ids.length > 1 ? 'Chats permanently deleted' : 'Chat permanently deleted' });
   };
 
   const createOrUpdateBulkContacts = async () => {
@@ -522,7 +553,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   return (
     <div className="flex flex-col h-full bg-panel border-r border-panel-border">
       <div className="flex items-center justify-between px-4 pt-3 pb-1 bg-panel shrink-0">
-        <h1 className="text-[32px] sm:text-[28px] font-extrabold tracking-tight text-foreground ios-header">{viewMode === 'contacts' ? 'Contacts' : 'Chats'}</h1>
+        <h1 className="text-[32px] sm:text-[28px] font-extrabold tracking-tight text-foreground ios-header">{showTrash ? 'Trash' : viewMode === 'contacts' ? 'Contacts' : 'Chats'}</h1>
         <div className="flex items-center gap-1">
           {viewMode === 'chats' && (
             <>
@@ -545,7 +576,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
         <SearchInput value={searchQuery} onChange={setSearchQuery} placeholder={viewMode === 'contacts' ? 'Search contacts' : 'Search'} />
       </div>
 
-      {viewMode === 'chats' && (
+      {viewMode === 'chats' && !showTrash && (
         <div className="px-4 pb-2 shrink-0 flex flex-wrap gap-2">
           <Button size="sm" variant={chatFilter === 'all' ? 'default' : 'secondary'} className={cn('rounded-full', chatFilter === 'all' && 'text-white')} onClick={() => setChatFilter('all')}>All</Button>
           <Button size="sm" variant={chatFilter === 'unread' ? 'default' : 'secondary'} className={cn('rounded-full flex items-center gap-1', chatFilter === 'unread' && 'text-white')} onClick={() => setChatFilter('unread')}>
@@ -566,6 +597,21 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
               <DropdownMenuItem onClick={() => setSortDir(sortDir === 'asc' ? 'desc' : 'asc')}>{sortDir === 'asc' ? 'Descending' : 'Ascending'}</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+        </div>
+      )}
+
+      {viewMode === 'chats' && showTrash && (
+        <div className="px-4 pb-2 shrink-0 flex items-center gap-2">
+          <Button size="sm" variant={chatSelectionMode ? 'default' : 'outline'} onClick={() => { setChatSelectionMode((v) => !v); setSelectedContactIds([]); }}>
+            <CheckSquare className="h-4 w-4 mr-1" />Select
+          </Button>
+          {chatSelectionMode && (
+            <>
+              <Button size="sm" variant="outline" onClick={() => setSelectedContactIds(selectedContactIds.length === filteredChats.length ? [] : filteredChats.map((chat) => chat.id))}>{selectedContactIds.length === filteredChats.length ? 'Deselect All' : 'Select All'}</Button>
+              <Button size="sm" variant="outline" onClick={() => handleRestoreContacts(selectedContactIds)} disabled={selectedContactIds.length === 0}><RotateCcw className="h-4 w-4 mr-1" />Restore ({selectedContactIds.length})</Button>
+              <Button size="sm" variant="destructive" onClick={() => handlePermanentDeleteContacts(selectedContactIds)} disabled={selectedContactIds.length === 0}><Trash2 className="h-4 w-4 mr-1" />Delete ({selectedContactIds.length})</Button>
+            </>
+          )}
         </div>
       )}
 
@@ -621,17 +667,20 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
                 key={chat.id}
                 chat={chat}
                 isActive={activeChat?.id === chat.id}
-                onClick={async () => {
-                  if (chat.contact.isDeleted && user) {
-                    await supabase.from('contacts').update({ is_deleted: false, deleted_at: null } as any).eq('id', chat.id).eq('user_id', user.id);
-                    updateContact(chat.id, { isDeleted: false, deletedAt: undefined } as any);
-                    setShowTrash(false);
-                  }
-                  setActiveChat({ ...chat, contact: { ...chat.contact, isDeleted: false } });
+                onClick={() => {
+                  if (showTrash) return;
+                  setActiveChat(chat);
                   onChatSelect?.(chat);
                 }}
                 chatLabels={labels.filter((l) => (chatLabelMap[chat.id] || []).includes(l.id))}
                 allLabels={labels}
+                isTrash={showTrash}
+                selectionMode={chatSelectionMode}
+                selected={selectedContactIds.includes(chat.id)}
+                onToggleSelect={toggleChatSelection}
+                onEnterSelectionMode={() => setChatSelectionMode(true)}
+                onRestore={(id) => handleRestoreContacts([id])}
+                onPermanentDelete={(id) => handlePermanentDeleteContacts([id])}
               />
             ))
         )}
@@ -653,7 +702,12 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
                 selectionMode={contactSelectionMode}
                 selected={selectedContactIds.includes(contact.id)}
                 onToggleSelect={toggleContactSelection}
+                onEnterSelectionMode={() => setContactSelectionMode(true)}
+                isTrash={showTrash}
+                onRestore={(id) => handleRestoreContacts([id])}
+                onPermanentDelete={(id) => handlePermanentDeleteContacts([id])}
                 onClick={() => {
+                  if (showTrash) return;
                   const chat = chats.find((c) => c.contact.id === contact.id);
                   if (chat) {
                     setActiveChat(chat);

@@ -38,7 +38,7 @@ export function EmojiPickerButton({ onEmojiSelect, onDeleteChar, onToggle }: Emo
       <button
         type="button"
         onClick={togglePicker}
-        className="p-1.5 text-muted-foreground hover:text-foreground transition-colors"
+        className="p-1.5 text-status-typing hover:text-status-typing hover:bg-status-typing/10 rounded-full transition-colors"
       >
         {open
           ? <Keyboard className="h-6 w-6" strokeWidth={2.25} />

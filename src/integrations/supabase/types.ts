@@ -132,7 +132,7 @@ export type Database = {
           is_online: boolean | null
           is_pinned: boolean | null
           last_seen: string | null
-          loan_id: string
+          loan_id: string | null
           name: string
           phone: string
           updated_at: string
@@ -154,7 +154,7 @@ export type Database = {
           is_online?: boolean | null
           is_pinned?: boolean | null
           last_seen?: string | null
-          loan_id: string
+          loan_id?: string | null
           name: string
           phone: string
           updated_at?: string
@@ -176,7 +176,7 @@ export type Database = {
           is_online?: boolean | null
           is_pinned?: boolean | null
           last_seen?: string | null
-          loan_id?: string
+          loan_id?: string | null
           name?: string
           phone?: string
           updated_at?: string

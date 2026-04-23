@@ -88,7 +88,7 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
       const parsedDayType = parseInt(formData.dayType);
       const normalizedPhone = normalizePhoneNumber(formData.phone);
       const updatePayload: Record<string, any> = {
-        loan_id: formData.loanId,
+        loan_id: formData.loanId || '',
         name: formData.name,
         phone: normalizedPhone,
         amount: formData.amount ? parseFloat(formData.amount) : null,
@@ -122,7 +122,7 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
       }
 
       updateContact(contactId, {
-        loanId: formData.loanId,
+        loanId: formData.loanId || '',
         name: formData.name,
         phone: normalizedPhone,
         amount: formData.amount ? parseFloat(formData.amount) : undefined,
@@ -170,7 +170,7 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
         <div className="space-y-4">
           <div className="space-y-2">
             <Label>Loan ID</Label>
-            <Input value={formData.loanId} onChange={(e) => setFormData({ ...formData, loanId: e.target.value })} placeholder="Enter loan ID" />
+            <Input value={formData.loanId} onChange={(e) => setFormData({ ...formData, loanId: e.target.value })} placeholder="Optional" />
           </div>
 
           <div className="space-y-2">

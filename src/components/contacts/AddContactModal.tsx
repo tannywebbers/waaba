@@ -94,8 +94,8 @@ export function AddContactModal() {
 
   const handleSingleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!singleForm.loanId || !singleForm.name || !singleForm.phone) {
-      toast({ title: 'Missing required fields', description: 'Please fill in Loan ID, Name, and Phone number.', variant: 'destructive' });
+    if (!singleForm.name || !singleForm.phone) {
+      toast({ title: 'Missing required fields', description: 'Please fill in Name and Phone number.', variant: 'destructive' });
       return;
     }
     if (!user) return;
@@ -207,12 +207,12 @@ export function AddContactModal() {
     const names = bulkForm.customerNames.trim().split(/[\n,]+/).filter(Boolean);
     const phones = bulkForm.phoneNumbers.trim().split(/[\n,]+/).filter(Boolean).map(autoFormatPhone);
 
-    if (ids.length === 0 || names.length === 0 || phones.length === 0) {
-      toast({ title: 'Missing data', description: 'Please fill in all three fields.', variant: 'destructive' });
+    if (names.length === 0 || phones.length === 0) {
+      toast({ title: 'Missing data', description: 'Please fill in Names and Phone Numbers.', variant: 'destructive' });
       return;
     }
-    if (ids.length !== names.length || names.length !== phones.length) {
-      toast({ title: 'Data mismatch', description: `IDs (${ids.length}), Names (${names.length}), and Phones (${phones.length}) must have the same count.`, variant: 'destructive' });
+    if ((ids.length > 0 && ids.length !== names.length) || names.length !== phones.length) {
+      toast({ title: 'Data mismatch', description: `Loan IDs (${ids.length || 'optional'}), Names (${names.length}), and Phones (${phones.length}) must line up.`, variant: 'destructive' });
       return;
     }
     if (!user) return;
@@ -234,7 +234,7 @@ export function AddContactModal() {
         const payload = {
         user_id: contactOwnerId,
         assigned_user_id: assignedUserId,
-          loan_id: id.trim() || existingContact?.loan_id || '',
+          loan_id: ids[i]?.trim() || existingContact?.loan_id || '',
         name: names[i].trim(),
           phone: phones[i],
         app_type: bulkForm.appType,
@@ -299,9 +299,9 @@ export function AddContactModal() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="loanId" className="flex items-center gap-1.5">
-                    <CreditCard className="h-3.5 w-3.5" /> Loan ID <span className="text-destructive">*</span>
+                    <CreditCard className="h-3.5 w-3.5" /> Loan ID
                   </Label>
-                  <Input id="loanId" value={singleForm.loanId} onChange={(e) => setSingleForm({ ...singleForm, loanId: e.target.value })} placeholder="LN-001" />
+                  <Input id="loanId" value={singleForm.loanId} onChange={(e) => setSingleForm({ ...singleForm, loanId: e.target.value })} placeholder="Optional" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="amount" className="flex items-center gap-1.5"><Banknote className="h-3.5 w-3.5" /> Amount</Label>
@@ -420,8 +420,8 @@ export function AddContactModal() {
             <form onSubmit={handleBulkSubmit} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label className="flex items-center gap-1.5"><CreditCard className="h-3.5 w-3.5" /> Contact IDs (one per line)</Label>
-                  <Textarea value={bulkForm.contactIds} onChange={(e) => setBulkForm({ ...bulkForm, contactIds: e.target.value })} placeholder={`ID001\nID002`} rows={8} className="font-mono text-sm" />
+                  <Label className="flex items-center gap-1.5"><CreditCard className="h-3.5 w-3.5" /> Loan IDs (optional)</Label>
+                  <Textarea value={bulkForm.contactIds} onChange={(e) => setBulkForm({ ...bulkForm, contactIds: e.target.value })} placeholder={`Optional\nLN-002`} rows={8} className="font-mono text-sm" />
                 </div>
                 <div className="space-y-2">
                   <Label className="flex items-center gap-1.5"><User className="h-3.5 w-3.5" /> Customer Names (one per line)</Label>

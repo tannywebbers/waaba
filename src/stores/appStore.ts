@@ -380,7 +380,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
         accountDetails: (c.account_details || []).map((ad: any) => ({
           id: ad.id, bank: ad.bank, accountNumber: ad.account_number, accountName: ad.account_name,
         })),
-      })).filter((c: any) => !c.isDeleted);
+      }));
 
       const contactIds = contacts.map(c => c.id);
       const { data: messagesData, error: messagesError } = contactIds.length > 0
