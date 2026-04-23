@@ -133,8 +133,14 @@ export const useAppStore = create<AppState>()((set, get) => ({
   },
   addContacts: (contacts) => {
     set((state) => ({
-      contacts: [...state.contacts, ...contacts],
-      chats: [...state.chats, ...contacts.map(c => ({ id: c.id, contact: c, unreadCount: 0 }))],
+      contacts: [
+        ...state.contacts.filter((existing) => !contacts.some((incoming) => incoming.id === existing.id || incoming.phone === existing.phone)),
+        ...contacts,
+      ],
+      chats: [
+        ...state.chats.filter((existing) => !contacts.some((incoming) => incoming.id === existing.id || incoming.id === existing.contact.id || incoming.phone === existing.contact.phone)),
+        ...contacts.map(c => ({ id: c.id, contact: c, unreadCount: 0 })),
+      ],
     }));
   },
   updateContact: (id, updates) => set((state) => ({
