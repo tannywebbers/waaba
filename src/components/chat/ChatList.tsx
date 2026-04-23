@@ -550,7 +550,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   return (
     <div className="flex flex-col h-full bg-panel border-r border-panel-border">
       <div className="flex items-center justify-between px-4 pt-3 pb-1 bg-panel shrink-0">
-        <h1 className="text-[32px] sm:text-[28px] font-extrabold tracking-tight text-foreground ios-header">{viewMode === 'contacts' ? 'Contacts' : 'Chats'}</h1>
+        <h1 className="text-[32px] sm:text-[28px] font-extrabold tracking-tight text-foreground ios-header">{showTrash ? 'Trash' : viewMode === 'contacts' ? 'Contacts' : 'Chats'}</h1>
         <div className="flex items-center gap-1">
           {viewMode === 'chats' && (
             <>
@@ -664,17 +664,20 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
                 key={chat.id}
                 chat={chat}
                 isActive={activeChat?.id === chat.id}
-                onClick={async () => {
-                  if (chat.contact.isDeleted && user) {
-                    await supabase.from('contacts').update({ is_deleted: false, deleted_at: null } as any).eq('id', chat.id).eq('user_id', user.id);
-                    updateContact(chat.id, { isDeleted: false, deletedAt: undefined } as any);
-                    setShowTrash(false);
-                  }
-                  setActiveChat({ ...chat, contact: { ...chat.contact, isDeleted: false } });
+                onClick={() => {
+                  if (showTrash) return;
+                  setActiveChat(chat);
                   onChatSelect?.(chat);
                 }}
                 chatLabels={labels.filter((l) => (chatLabelMap[chat.id] || []).includes(l.id))}
                 allLabels={labels}
+                isTrash={showTrash}
+                selectionMode={chatSelectionMode}
+                selected={selectedContactIds.includes(chat.id)}
+                onToggleSelect={toggleChatSelection}
+                onEnterSelectionMode={() => setChatSelectionMode(true)}
+                onRestore={(id) => handleRestoreContacts([id])}
+                onPermanentDelete={(id) => handlePermanentDeleteContacts([id])}
               />
             ))
         )}
