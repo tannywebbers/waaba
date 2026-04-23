@@ -13,6 +13,7 @@ import {
 import { useAppStore } from '@/stores/appStore';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { normalizePhoneNumber } from '@/lib/utils/phone';
 
 interface AccountDetail {
   id?: string;
@@ -85,10 +86,11 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
 
     try {
       const parsedDayType = parseInt(formData.dayType);
+      const normalizedPhone = normalizePhoneNumber(formData.phone);
       const updatePayload: Record<string, any> = {
         loan_id: formData.loanId,
         name: formData.name,
-        phone: formData.phone,
+        phone: normalizedPhone,
         amount: formData.amount ? parseFloat(formData.amount) : null,
         app_type: resolvedAppType,
         day_type: isNaN(parsedDayType) ? 0 : parsedDayType,
@@ -122,7 +124,7 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
       updateContact(contactId, {
         loanId: formData.loanId,
         name: formData.name,
-        phone: formData.phone,
+        phone: normalizedPhone,
         amount: formData.amount ? parseFloat(formData.amount) : undefined,
         appType: resolvedAppType,
         dayType: parseInt(formData.dayType),

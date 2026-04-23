@@ -14,6 +14,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Contact } from '@/types';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { normalizePhoneNumber } from '@/lib/utils/phone';
 
 interface NewChatModalProps {
   open: boolean;
@@ -50,12 +51,13 @@ export function NewChatModal({ open, onClose, onSelectContact }: NewChatModalPro
     onClose();
   };
 
-  const isPhoneNumber = /^\+?\d{7,15}$/.test(search.replace(/\s/g, ''));
-  const existingContactForPhone = contacts.find(c => c.phone === search.replace(/\s/g, ''));
+  const normalizedSearchPhone = normalizePhoneNumber(search);
+  const isPhoneNumber = /^\d{10,15}$/.test(normalizedSearchPhone);
+  const existingContactForPhone = contacts.find(c => normalizePhoneNumber(c.phone) === normalizedSearchPhone);
 
   const handleQuickChat = async () => {
     if (!user || !isPhoneNumber) return;
-    const phone = search.replace(/\s/g, '');
+    const phone = normalizedSearchPhone;
 
     if (existingContactForPhone) {
       handleSelect(existingContactForPhone);
@@ -68,15 +70,30 @@ export function NewChatModal({ open, onClose, onSelectContact }: NewChatModalPro
       const contactOwnerId = user.id;
       const assignedUserId = isSharedUser ? user.id : null;
 
-      const { data, error } = await supabase.from('contacts').insert({
+      const { data: existingContact } = await supabase
+        .from('contacts')
+        .select('*')
+        .eq('user_id', contactOwnerId)
+        .eq('phone', phone)
+        .maybeSingle();
+
+      const payload = {
         user_id: contactOwnerId,
         assigned_user_id: assignedUserId,
-        name: phone,
-        phone: phone,
-        loan_id: `QC-${Date.now()}`,
-      }).select().single();
+        name: existingContact?.name || phone,
+        phone,
+        loan_id: existingContact?.loan_id || '',
+        is_deleted: false,
+        deleted_at: null,
+        created_at: new Date().toISOString(),
+      };
+
+      const { data, error } = existingContact
+        ? await supabase.from('contacts').update(payload).eq('id', existingContact.id).select().maybeSingle()
+        : await supabase.from('contacts').insert(payload).select().maybeSingle();
 
       if (error) throw error;
+      if (!data) throw new Error('Contact could not be saved.');
 
       const newContact: Contact = {
         id: data.id, loanId: data.loan_id, name: data.name, phone: data.phone,
