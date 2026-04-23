@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Archive, CheckSquare, MessageCircle, Plus, Search, Send, Settings2, SortAsc, SortDesc, SquarePen, Trash2, Users } from 'lucide-react';
+import { Archive, CheckSquare, MessageCircle, Plus, RotateCcw, Search, Send, Settings2, SortAsc, SortDesc, SquarePen, Trash2, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { Input } from '@/components/ui/input';
@@ -90,7 +90,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const { toast } = useToast();
   const {
     viewMode, setViewMode, chats, contacts, activeChat, setActiveChat, searchQuery, setSearchQuery,
-    setShowAddContactModal, favorites, deleteContact, updateContact, addContacts, addMessage,
+    setShowAddContactModal, favorites, deleteContact, updateContact, addContacts, addMessage, setContacts, setChats,
   } = useAppStore();
 
   const [chatFilter, setChatFilter] = useState<ChatFilter>('all');
@@ -107,6 +107,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const [showLabelManager, setShowLabelManager] = useState(false);
 
   const [contactSelectionMode, setContactSelectionMode] = useState(false);
+  const [chatSelectionMode, setChatSelectionMode] = useState(false);
   const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
 
   const [showBulkDialog, setShowBulkDialog] = useState(false);
@@ -219,6 +220,10 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
     });
 
   const toggleContactSelection = (id: string) => {
+    setSelectedContactIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  };
+
+  const toggleChatSelection = (id: string) => {
     setSelectedContactIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
   };
 
