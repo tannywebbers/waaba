@@ -51,25 +51,25 @@ export function FileUploadButton({ onFileSelect, uploading }: FileUploadButtonPr
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-[45px] w-[45px] shrink-0 text-[hsl(var(--chat-control-icon))]">
+          <Button variant="ghost" size="icon" className="h-[45px] w-[45px] shrink-0 text-primary hover:text-primary hover:bg-primary/10">
             <Paperclip className="h-[29px] w-[29px]" strokeWidth={2.75} />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-48">
           <DropdownMenuItem onClick={() => imageInputRef.current?.click()}>
-            <Image className="h-4 w-4 mr-2 text-muted-foreground" />
+            <Image className="h-4 w-4 mr-2 text-primary" />
             Photos & Videos
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => documentInputRef.current?.click()}>
-            <FileText className="h-4 w-4 mr-2 text-muted-foreground" />
+            <FileText className="h-4 w-4 mr-2 text-lotus-blue" />
             Document
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => audioInputRef.current?.click()}>
-            <Music className="h-4 w-4 mr-2 text-muted-foreground" />
+            <Music className="h-4 w-4 mr-2 text-status-typing" />
             Audio File
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => cameraInputRef.current?.click()}>
-            <Camera className="h-4 w-4 mr-2 text-muted-foreground" />
+            <Camera className="h-4 w-4 mr-2 text-lotus-green" />
             Camera
           </DropdownMenuItem>
         </DropdownMenuContent>
