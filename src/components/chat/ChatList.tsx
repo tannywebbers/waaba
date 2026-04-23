@@ -699,7 +699,12 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
                 selectionMode={contactSelectionMode}
                 selected={selectedContactIds.includes(contact.id)}
                 onToggleSelect={toggleContactSelection}
+                onEnterSelectionMode={() => setContactSelectionMode(true)}
+                isTrash={showTrash}
+                onRestore={(id) => handleRestoreContacts([id])}
+                onPermanentDelete={(id) => handlePermanentDeleteContacts([id])}
                 onClick={() => {
+                  if (showTrash) return;
                   const chat = chats.find((c) => c.contact.id === contact.id);
                   if (chat) {
                     setActiveChat(chat);
