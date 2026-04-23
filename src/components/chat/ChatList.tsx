@@ -672,6 +672,13 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
             </Tabs>
           </div>
           <div className="shrink-0 pt-2 border-t border-border">
+            <Textarea
+              value={bulkNumbers}
+              onChange={(e) => setBulkNumbers(e.target.value)}
+              placeholder="Add phone numbers separated by commas or new lines"
+              rows={3}
+              className="mb-2"
+            />
             <Input
               type="datetime-local"
               value={bulkScheduleAt}
@@ -679,8 +686,8 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
               min={toDateTimeLocalValue()}
               className="mb-2"
             />
-            <Button className="w-full" onClick={handleBulkTemplateSend} disabled={sendingBulk || !selectedTemplateId || selectedContactIds.length === 0}>
-              {sendingBulk ? 'Sending...' : bulkScheduleAt ? `Schedule for ${selectedContactIds.length} contact(s)` : `Send to ${selectedContactIds.length} contact(s)`}
+            <Button className="w-full" onClick={handleBulkTemplateSend} disabled={sendingBulk || !selectedTemplateId || (selectedContactIds.length === 0 && parsePhoneNumbers(bulkNumbers).length === 0)}>
+              {sendingBulk ? 'Sending...' : bulkScheduleAt ? `Schedule for ${selectedContactIds.length + parsePhoneNumbers(bulkNumbers).length} contact(s)` : `Send to ${selectedContactIds.length + parsePhoneNumbers(bulkNumbers).length} contact(s)`}
             </Button>
           </div>
         </DialogContent>
