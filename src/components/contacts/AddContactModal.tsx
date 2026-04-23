@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { normalizePhoneNumber } from '@/lib/utils/phone';
 
 interface AccountDetail {
   bank: string;
@@ -21,10 +22,7 @@ interface AccountDetail {
 }
 
 function autoFormatPhone(phone: string): string {
-  const cleaned = phone.replace(/\s+/g, '');
-  if (/^0[789]\d{9}$/.test(cleaned)) return '+234' + cleaned.substring(1);
-  if (cleaned.startsWith('+')) return cleaned;
-  return cleaned;
+  return normalizePhoneNumber(phone);
 }
 
 const APP_TYPE_OPTIONS = ['tloan', 'quickash', 'others'];
@@ -110,22 +108,37 @@ export function AddContactModal() {
       const contactOwnerId = user.id;
       const assignedUserId = isSharedUser ? user.id : null;
 
-      const { data: contactData, error: contactError } = await supabase
+      const { data: existingContact } = await supabase
         .from('contacts')
-        .insert({
-          user_id: contactOwnerId,
-          assigned_user_id: assignedUserId,
-          loan_id: singleForm.loanId,
-          name: singleForm.name,
-          phone: formattedPhone,
-          amount: singleForm.amount ? parseFloat(singleForm.amount) : null,
-          app_type: resolvedAppType,
-          day_type: isNaN(parseInt(singleForm.dayType)) ? 0 : parseInt(singleForm.dayType),
-        })
+        .select('*')
+        .eq('user_id', contactOwnerId)
+        .eq('phone', formattedPhone)
+        .maybeSingle();
+
+      const contactPayload = {
+        user_id: contactOwnerId,
+        assigned_user_id: assignedUserId,
+        loan_id: singleForm.loanId || existingContact?.loan_id || '',
+        name: singleForm.name,
+        phone: formattedPhone,
+        amount: singleForm.amount ? parseFloat(singleForm.amount) : existingContact?.amount ?? null,
+        app_type: resolvedAppType,
+        day_type: isNaN(parseInt(singleForm.dayType)) ? 0 : parseInt(singleForm.dayType),
+        is_deleted: false,
+        deleted_at: null,
+        created_at: new Date().toISOString(),
+      };
+
+      const { data: contactData, error: contactError } = existingContact
+        ? await supabase.from('contacts').update(contactPayload).eq('id', existingContact.id).select().maybeSingle()
+        : await supabase
+        .from('contacts')
+        .insert(contactPayload)
         .select()
-        .single();
+        .maybeSingle();
 
       if (contactError) throw contactError;
+      if (!contactData) throw new Error('Contact could not be saved.');
 
       const validAccounts = accountDetails.filter(ad => ad.bank.trim() && ad.accountNumber.trim());
       if (validAccounts.length > 0) {
@@ -142,8 +155,11 @@ export function AddContactModal() {
 
       // Assign labels
       if (selectedLabelIds.length > 0) {
-        await supabase.from('chat_labels').insert(
-          selectedLabelIds.map(labelId => ({
+        const { data: existingLabels } = await supabase.from('chat_labels').select('label_id').eq('chat_id', contactData.id).eq('user_id', user.id);
+        const existingLabelIds = new Set(((existingLabels || []) as any[]).map((l) => l.label_id));
+        const labelsToAdd = selectedLabelIds.filter((labelId) => !existingLabelIds.has(labelId));
+        if (labelsToAdd.length > 0) await supabase.from('chat_labels').insert(
+          labelsToAdd.map(labelId => ({
             chat_id: contactData.id,
             label_id: labelId,
             user_id: user.id,
