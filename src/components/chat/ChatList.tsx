@@ -288,7 +288,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
 
       if (bulkSource === 'app' && appTemplate) {
         for (const contact of selectedContacts) {
-          const normalizedPhone = contact.phone.replace(/[^\d+]/g, '').replace(/^\+/, '');
+          const normalizedPhone = normalizePhoneNumber(contact.phone);
           const content = resolveTemplate(appTemplate.body, contact);
           try {
             if (scheduledAtIso) {
@@ -312,7 +312,11 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
             const failReason = data?.error || error?.message || '';
 
             if (success) sentCount++;
-            else { failedCount++; if (failReason) failReasons.push(`${contact.name}: ${failReason}`); }
+            else {
+              failedCount++;
+              console.error('Bulk app template send failed', { contactId: contact.id, phone: normalizedPhone, error: failReason, response: data });
+              if (failReason) failReasons.push(`${contact.name}: ${failReason}`);
+            }
 
             const { data: msgData } = await supabase.from('messages').insert({
               user_id: user.id, contact_id: contact.id, content, type: 'text',
@@ -327,6 +331,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
             }
           } catch (err: any) {
             failedCount++;
+            console.error('Bulk app template send exception', { contactId: contact.id, phone: normalizedPhone, error: err });
             failReasons.push(`${contact.name}: ${err.message}`);
           }
         }
@@ -358,7 +363,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
         }
 
         for (const contact of selectedContacts) {
-          const normalizedPhone = contact.phone.replace(/[^\d+]/g, '').replace(/^\+/, '');
+          const normalizedPhone = normalizePhoneNumber(contact.phone);
 
           const templateParams: Record<string, string> = {};
           let hasEmptyParam = false;
@@ -405,7 +410,11 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
             const failReason = data?.error || error?.message || '';
 
             if (success) sentCount++;
-            else { failedCount++; if (failReason) failReasons.push(`${contact.name}: ${failReason}`); }
+            else {
+              failedCount++;
+              console.error('Bulk meta template send failed', { contactId: contact.id, phone: normalizedPhone, template: metaTemplate.name, error: failReason, response: data });
+              if (failReason) failReasons.push(`${contact.name}: ${failReason}`);
+            }
 
             // Resolve template text with actual values
             let resolvedText = previewText;
@@ -429,6 +438,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
             }
           } catch (err: any) {
             failedCount++;
+            console.error('Bulk meta template send exception', { contactId: contact.id, phone: normalizedPhone, template: metaTemplate.name, error: err });
             failReasons.push(`${contact.name}: ${err.message}`);
           }
         }
@@ -447,6 +457,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
       }
 
       setSelectedContactIds([]);
+      setBulkNumbers('');
       setContactSelectionMode(false);
       setShowBulkDialog(false);
       setBulkScheduleAt('');
