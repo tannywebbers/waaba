@@ -505,6 +505,20 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
     }
   };
 
+  const handleBulkRecipientsNext = async () => {
+    if (bulkRecipientCount === 0) return;
+    setSendingBulk(true);
+    try {
+      await createOrUpdateBulkContacts();
+      setBulkStep('templates');
+      toast({ title: `Prepared ${bulkRecipientCount} contact(s)` });
+    } catch (error: any) {
+      toast({ title: 'Failed to prepare contacts', description: error.message, variant: 'destructive' });
+    } finally {
+      setSendingBulk(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-panel border-r border-panel-border">
       <div className="flex items-center justify-between px-4 pt-3 pb-1 bg-panel shrink-0">
