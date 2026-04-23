@@ -299,9 +299,9 @@ export function AddContactModal() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="loanId" className="flex items-center gap-1.5">
-                    <CreditCard className="h-3.5 w-3.5" /> Loan ID <span className="text-destructive">*</span>
+                    <CreditCard className="h-3.5 w-3.5" /> Loan ID
                   </Label>
-                  <Input id="loanId" value={singleForm.loanId} onChange={(e) => setSingleForm({ ...singleForm, loanId: e.target.value })} placeholder="LN-001" />
+                  <Input id="loanId" value={singleForm.loanId} onChange={(e) => setSingleForm({ ...singleForm, loanId: e.target.value })} placeholder="Optional" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="amount" className="flex items-center gap-1.5"><Banknote className="h-3.5 w-3.5" /> Amount</Label>
@@ -420,8 +420,8 @@ export function AddContactModal() {
             <form onSubmit={handleBulkSubmit} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label className="flex items-center gap-1.5"><CreditCard className="h-3.5 w-3.5" /> Contact IDs (one per line)</Label>
-                  <Textarea value={bulkForm.contactIds} onChange={(e) => setBulkForm({ ...bulkForm, contactIds: e.target.value })} placeholder={`ID001\nID002`} rows={8} className="font-mono text-sm" />
+                  <Label className="flex items-center gap-1.5"><CreditCard className="h-3.5 w-3.5" /> Loan IDs (optional)</Label>
+                  <Textarea value={bulkForm.contactIds} onChange={(e) => setBulkForm({ ...bulkForm, contactIds: e.target.value })} placeholder={`Optional\nLN-002`} rows={8} className="font-mono text-sm" />
                 </div>
                 <div className="space-y-2">
                   <Label className="flex items-center gap-1.5"><User className="h-3.5 w-3.5" /> Customer Names (one per line)</Label>
