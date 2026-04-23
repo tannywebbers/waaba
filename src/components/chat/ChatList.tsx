@@ -4,6 +4,7 @@ import { Archive, CheckSquare, MessageCircle, Plus, Search, Send, Settings2, Sor
 import { Button } from '@/components/ui/button';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { ChatListItem } from '@/components/chat/ChatListItem';
 import { ContactListItem } from '@/components/contacts/ContactListItem';
 import { LabelManagerPanel } from '@/components/chat/LabelManagerPanel';
@@ -17,6 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { normalizePhoneNumber, parsePhoneNumbers } from '@/lib/utils/phone';
 
 type ChatFilter = 'all' | 'unread' | 'archived';
 type SortBy = 'recent' | 'name' | 'amount';
@@ -63,12 +65,24 @@ const toDateTimeLocalValue = (date = new Date()) => {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 };
 
+const toContactModel = (c: any) => ({
+  id: c.id, name: c.name, phone: c.phone, loanId: c.loan_id || '',
+  amount: c.amount ? Number(c.amount) : undefined,
+  appType: c.app_type || 'tloan', dayType: c.day_type ?? 0,
+  isDeleted: c.is_deleted || false,
+  deletedAt: c.deleted_at ? new Date(c.deleted_at) : undefined,
+  createdAt: new Date(c.created_at), updatedAt: new Date(c.updated_at),
+  accountDetails: (c.account_details || []).map((ad: any) => ({
+    id: ad.id, bank: ad.bank, accountNumber: ad.account_number, accountName: ad.account_name,
+  })),
+});
+
 export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const {
     viewMode, setViewMode, chats, contacts, activeChat, setActiveChat, searchQuery, setSearchQuery,
-    setShowAddContactModal, favorites, deleteContact, updateContact, addMessage,
+    setShowAddContactModal, favorites, deleteContact, updateContact, addContacts, addMessage,
   } = useAppStore();
 
   const [chatFilter, setChatFilter] = useState<ChatFilter>('all');
@@ -98,6 +112,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const [bulkAppSearch, setBulkAppSearch] = useState('');
   const [showTrash, setShowTrash] = useState(false);
   const [bulkScheduleAt, setBulkScheduleAt] = useState('');
+  const [bulkNumbers, setBulkNumbers] = useState('');
 
   const listContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -206,8 +221,51 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
     toast({ title: 'Selected contacts moved to trash' });
   };
 
+  const createOrUpdateBulkContacts = async () => {
+    if (!user) return [];
+    const manualNumbers = parsePhoneNumbers(bulkNumbers);
+    const selectedContacts = contacts.filter((contact) => selectedContactIds.includes(contact.id));
+    const selectedNumbers = selectedContacts.map((contact) => normalizePhoneNumber(contact.phone));
+    const allNumbers = Array.from(new Set([...selectedNumbers, ...manualNumbers])).filter(Boolean);
+
+    const savedContacts: any[] = [];
+    for (const phone of allNumbers) {
+      const selected = selectedContacts.find((contact) => normalizePhoneNumber(contact.phone) === phone);
+      const { data: existingContact, error: findError } = await supabase
+        .from('contacts')
+        .select('*, account_details(*)')
+        .eq('user_id', user.id)
+        .eq('phone', phone)
+        .maybeSingle();
+      if (findError) throw findError;
+
+      const payload = {
+        user_id: user.id,
+        phone,
+        name: selected?.name || existingContact?.name || phone,
+        loan_id: selected?.loanId || existingContact?.loan_id || '',
+        amount: selected?.amount ?? existingContact?.amount ?? null,
+        app_type: selected?.appType || existingContact?.app_type || 'tloan',
+        day_type: selected?.dayType ?? existingContact?.day_type ?? 0,
+        is_deleted: false,
+        deleted_at: null,
+        created_at: new Date().toISOString(),
+      };
+
+      const { data: savedContact, error: saveError } = existingContact
+        ? await supabase.from('contacts').update(payload).eq('id', existingContact.id).select('*, account_details(*)').maybeSingle()
+        : await supabase.from('contacts').insert(payload).select('*, account_details(*)').maybeSingle();
+      if (saveError) throw saveError;
+      if (savedContact) savedContacts.push(savedContact);
+    }
+
+    const contactModels = savedContacts.map(toContactModel);
+    if (contactModels.length > 0) addContacts(contactModels);
+    return contactModels;
+  };
+
   const handleBulkTemplateSend = async () => {
-    if (!user || !selectedTemplateId || selectedContactIds.length === 0) return;
+    if (!user || !selectedTemplateId || (selectedContactIds.length === 0 && parsePhoneNumbers(bulkNumbers).length === 0)) return;
     setSendingBulk(true);
     let sentCount = 0;
     let failedCount = 0;
@@ -219,22 +277,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
         return;
       }
 
-      // Fetch contacts with account_details for full field resolution
-      const { data: contactsWithDetails } = await supabase
-        .from('contacts')
-        .select('*, account_details(*)')
-        .eq('user_id', user.id)
-        .in('id', selectedContactIds as any);
-      
-      const enrichedContacts = (contactsWithDetails || []).map((c: any) => ({
-        id: c.id, name: c.name, phone: c.phone, loanId: c.loan_id,
-        amount: c.amount ? Number(c.amount) : undefined,
-        appType: c.app_type || 'tloan', dayType: c.day_type ?? 0,
-        accountDetails: (c.account_details || []).map((ad: any) => ({
-          id: ad.id, bank: ad.bank, accountNumber: ad.account_number, accountName: ad.account_name,
-        })),
-      }));
-      const selectedContacts = enrichedContacts.filter((c: any) => selectedContactIds.includes(c.id));
+      const selectedContacts = await createOrUpdateBulkContacts();
       const appTemplate = appTemplates.find((t) => t.id === selectedTemplateId);
       const metaTemplate = metaTemplates.find((t) => t.id === selectedTemplateId);
       const scheduledAtIso = bulkScheduleAt ? toUtcIsoFromLocalInput(bulkScheduleAt) : null;
