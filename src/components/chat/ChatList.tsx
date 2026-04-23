@@ -606,7 +606,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
                 {selectedContactIds.length === filteredContacts.length ? 'Deselect All' : 'Select All'}
               </Button>
               <Button size="sm" variant="destructive" onClick={handleDeleteSelectedContacts} disabled={selectedContactIds.length === 0}><Trash2 className="h-4 w-4 mr-1" />Delete ({selectedContactIds.length})</Button>
-              <Button size="sm" onClick={() => setShowBulkDialog(true)} disabled={selectedContactIds.length === 0}><Send className="h-4 w-4 mr-1" />Message ({selectedContactIds.length})</Button>
+              <Button size="sm" onClick={() => openBulkDialog('recipients')} disabled={selectedContactIds.length === 0}><Send className="h-4 w-4 mr-1" />Message ({selectedContactIds.length})</Button>
             </div>
           )}
         </div>
@@ -669,9 +669,43 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
 
       <LabelManagerPanel open={showLabelManager} onOpenChange={setShowLabelManager} onLabelsChanged={fetchLabels} />
 
-      <Dialog open={showBulkDialog} onOpenChange={setShowBulkDialog}>
+      <Dialog open={showBulkDialog} onOpenChange={(open) => { setShowBulkDialog(open); if (!open) setBulkStep('recipients'); }}>
         <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
-          <DialogHeader><DialogTitle>Templates</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{bulkStep === 'recipients' ? 'Bulk message recipients' : 'Bulk message templates'}</DialogTitle></DialogHeader>
+          {bulkStep === 'recipients' ? (
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1">
+              <Textarea
+                value={bulkNumbers}
+                onChange={(e) => setBulkNumbers(e.target.value)}
+                placeholder="Paste numbers separated by commas or new lines, e.g. 09012345678, 2349012345678"
+                rows={8}
+              />
+              <div className="text-sm text-muted-foreground">{bulkParsedNumbers.length} pasted number(s) parsed. Local 090 numbers will be saved as 23490 international format.</div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">App</label>
+                <select value={bulkAppType} onChange={(e) => setBulkAppType(e.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                  {appChoices.map((app) => <option key={app} value={app}>{app.toUpperCase()}</option>)}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Labels</label>
+                <div className="flex flex-wrap gap-2">
+                  {labels.length === 0 ? <span className="text-sm text-muted-foreground">No labels available</span> : labels.map((label) => {
+                    const active = bulkSelectedLabelIds.includes(label.id);
+                    return (
+                      <button key={label.id} type="button" onClick={() => setBulkSelectedLabelIds((prev) => active ? prev.filter((id) => id !== label.id) : [...prev, label.id])}
+                        className={cn('rounded-full border px-3 py-1 text-sm transition-colors', active ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-secondary hover:bg-accent')}>
+                        {label.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <Button className="w-full" onClick={handleBulkRecipientsNext} disabled={sendingBulk || bulkRecipientCount === 0}>
+                {sendingBulk ? 'Creating contacts...' : `Next: create ${bulkRecipientCount} contact(s)`}
+              </Button>
+            </div>
+          ) : (
           <div className="flex-1 min-h-0 overflow-y-auto">
             <Tabs value={bulkSource} onValueChange={(v) => { setBulkSource(v as 'app' | 'meta'); setSelectedTemplateId(''); }}>
               <TabsList className="grid w-full grid-cols-2">
@@ -723,14 +757,9 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
               </TabsContent>
             </Tabs>
           </div>
+          )}
+          {bulkStep === 'templates' && (
           <div className="shrink-0 pt-2 border-t border-border">
-            <Textarea
-              value={bulkNumbers}
-              onChange={(e) => setBulkNumbers(e.target.value)}
-              placeholder="Add phone numbers separated by commas or new lines"
-              rows={3}
-              className="mb-2"
-            />
             <Input
               type="datetime-local"
               value={bulkScheduleAt}
@@ -738,10 +767,14 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
               min={toDateTimeLocalValue()}
               className="mb-2"
             />
-            <Button className="w-full" onClick={handleBulkTemplateSend} disabled={sendingBulk || !selectedTemplateId || (selectedContactIds.length === 0 && parsePhoneNumbers(bulkNumbers).length === 0)}>
-              {sendingBulk ? 'Sending...' : bulkScheduleAt ? `Schedule for ${selectedContactIds.length + parsePhoneNumbers(bulkNumbers).length} contact(s)` : `Send to ${selectedContactIds.length + parsePhoneNumbers(bulkNumbers).length} contact(s)`}
-            </Button>
+            <div className="grid grid-cols-[auto_1fr] gap-2">
+              <Button variant="outline" onClick={() => setBulkStep('recipients')}>Back</Button>
+              <Button onClick={handleBulkTemplateSend} disabled={sendingBulk || !selectedTemplateId || bulkRecipientCount === 0}>
+                {sendingBulk ? 'Sending...' : bulkScheduleAt ? `Schedule for ${bulkRecipientCount} contact(s)` : `Send to ${bulkRecipientCount} contact(s)`}
+              </Button>
+            </div>
           </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
