@@ -244,12 +244,13 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
 
   const createOrUpdateBulkContacts = async () => {
     if (!user) return [];
-    const manualNumbers = parsePhoneNumbers(bulkNumbers);
+    const manualNumbers = bulkParsedNumbers;
     const selectedContacts = contacts.filter((contact) => selectedContactIds.includes(contact.id));
     const selectedNumbers = selectedContacts.map((contact) => normalizePhoneNumber(contact.phone));
     const allNumbers = Array.from(new Set([...selectedNumbers, ...manualNumbers])).filter(Boolean);
 
     const savedContacts: any[] = [];
+    const labelInserts: any[] = [];
     for (const phone of allNumbers) {
       const selected = selectedContacts.find((contact) => normalizePhoneNumber(contact.phone) === phone);
       const { data: existingContact, error: findError } = await supabase
@@ -266,22 +267,36 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
         name: selected?.name || existingContact?.name || phone,
         loan_id: selected?.loanId || existingContact?.loan_id || '',
         amount: selected?.amount ?? existingContact?.amount ?? null,
-        app_type: selected?.appType || existingContact?.app_type || 'tloan',
+        app_type: bulkAppType || selected?.appType || existingContact?.app_type || 'tloan',
         day_type: selected?.dayType ?? existingContact?.day_type ?? 0,
         is_deleted: false,
         deleted_at: null,
-        created_at: new Date().toISOString(),
       };
 
       const { data: savedContact, error: saveError } = existingContact
         ? await supabase.from('contacts').update(payload).eq('id', existingContact.id).select('*, account_details(*)').maybeSingle()
         : await supabase.from('contacts').insert(payload).select('*, account_details(*)').maybeSingle();
       if (saveError) throw saveError;
-      if (savedContact) savedContacts.push(savedContact);
+      if (savedContact) {
+        savedContacts.push(savedContact);
+        bulkSelectedLabelIds.forEach((labelId) => labelInserts.push({ user_id: user.id, chat_id: savedContact.id, label_id: labelId }));
+      }
+    }
+
+    if (labelInserts.length > 0) {
+      const { data: existingLabels } = await supabase
+        .from('chat_labels' as any)
+        .select('chat_id,label_id')
+        .eq('user_id', user.id)
+        .in('chat_id', savedContacts.map((contact) => contact.id) as any);
+      const existingLabelKeys = new Set(((existingLabels || []) as any[]).map((label) => `${label.chat_id}:${label.label_id}`));
+      const labelsToInsert = labelInserts.filter((label) => !existingLabelKeys.has(`${label.chat_id}:${label.label_id}`));
+      if (labelsToInsert.length > 0) await supabase.from('chat_labels' as any).insert(labelsToInsert);
     }
 
     const contactModels = savedContacts.map(toContactModel);
     if (contactModels.length > 0) addContacts(contactModels);
+    await fetchLabels();
     return contactModels;
   };
 
