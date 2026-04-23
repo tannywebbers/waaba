@@ -102,12 +102,15 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
 
   const [showBulkDialog, setShowBulkDialog] = useState(false);
+  const [bulkStep, setBulkStep] = useState<'recipients' | 'templates'>('recipients');
   const [bulkSource, setBulkSource] = useState<'app' | 'meta'>('app');
   const [appTemplates, setAppTemplates] = useState<AppTemplate[]>([]);
   const [metaTemplates, setMetaTemplates] = useState<MetaTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [sendingBulk, setSendingBulk] = useState(false);
   const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
+  const [bulkAppType, setBulkAppType] = useState('tloan');
+  const [bulkSelectedLabelIds, setBulkSelectedLabelIds] = useState<string[]>([]);
   const [bulkMetaSearch, setBulkMetaSearch] = useState('');
   const [bulkAppSearch, setBulkAppSearch] = useState('');
   const [showTrash, setShowTrash] = useState(false);
@@ -118,6 +121,10 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
 
   const bulkFilteredMeta = metaTemplates.filter(t => t.name.toLowerCase().includes(bulkMetaSearch.toLowerCase()));
   const bulkFilteredApp = appTemplates.filter(t => t.name.toLowerCase().includes(bulkAppSearch.toLowerCase()));
+  const bulkParsedNumbers = parsePhoneNumbers(bulkNumbers);
+  const bulkRecipientCount = Array.from(new Set([...selectedContactIds, ...bulkParsedNumbers])).length;
+  const appChoices = useMemo(() => Array.from(new Set(['tloan', 'quickash', ...contacts.map((c) => (c.appType || '').toLowerCase()).filter(Boolean)])), [contacts]);
+  const appTemplatesMap = useMemo(() => Object.fromEntries(appTemplates.map((template) => [template.name, template.body])), [appTemplates]);
 
   const fetchLabels = useCallback(async () => {
     if (!user) return;
