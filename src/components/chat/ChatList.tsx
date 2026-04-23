@@ -55,6 +55,14 @@ const VARIABLE_MAP: Record<string, (c: any) => string> = {
 const resolveTemplate = (body: string, contact: any): string =>
   body.replace(/\{\{(\w+)\}\}/g, (match, variableName) => VARIABLE_MAP[variableName]?.(contact) || match);
 
+const resolveMappedField = (field: string, contact: any, appTemplatesMap: Record<string, string>) => {
+  if (field.startsWith('app_template:')) {
+    const templateName = field.replace('app_template:', '');
+    return appTemplatesMap[templateName] || '';
+  }
+  return VARIABLE_MAP[field]?.(contact) || '';
+};
+
 const toUtcIsoFromLocalInput = (value: string) => {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
@@ -212,6 +220,12 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
 
   const toggleContactSelection = (id: string) => {
     setSelectedContactIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  };
+
+  const openBulkDialog = (step: 'recipients' | 'templates' = 'recipients') => {
+    setBulkStep(step);
+    setSelectedTemplateId('');
+    setShowBulkDialog(true);
   };
 
   const handleDeleteSelectedContacts = async () => {
