@@ -276,6 +276,23 @@ export function ChatListItem({ chat, isActive, onClick, chatLabels = [], allLabe
             <span className="sr-only">Open chat options</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
+            {isTrash ? (
+              <>
+                <DropdownMenuItem onClick={() => { onRestore?.(chat.id); setShowOptions(false); }}>
+                  <RotateCcw className="h-4 w-4 mr-2" />Restore
+                </DropdownMenuItem>
+                {onToggleSelect && (
+                  <DropdownMenuItem onClick={() => { onEnterSelectionMode?.(); onToggleSelect(chat.id); setShowOptions(false); }}>
+                    <CheckSquare className="h-4 w-4 mr-2" />Select
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => { onPermanentDelete?.(chat.id); setShowOptions(false); }}>
+                  <Trash2 className="h-4 w-4 mr-2" />Delete permanently
+                </DropdownMenuItem>
+              </>
+            ) : (
+              <>
             <DropdownMenuItem onClick={() => toggleFavorite(chat.id)}>
               <Star className={cn('h-4 w-4 mr-2', isFav && 'fill-amber-500 text-amber-500')} />
               {isFav ? 'Remove from favorites' : 'Add to favorites'}
@@ -313,6 +330,8 @@ export function ChatListItem({ chat, isActive, onClick, chatLabels = [], allLabe
             >
               <MessageSquareOff className="h-4 w-4 mr-2" />Delete chat
             </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
