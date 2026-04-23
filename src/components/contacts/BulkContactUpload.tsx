@@ -6,6 +6,7 @@ import { useAppStore } from '@/stores/appStore';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { normalizePhoneNumber } from '@/lib/utils/phone';
 
 interface ContactJSON {
   loanId: string;
@@ -159,17 +160,29 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
       const { data: contactsData, error: contactsError } = await supabase
         .from('contacts')
         .insert(
-          preview.map(c => ({
-            user_id: user.id,
-            loan_id: c.loanId,
-            name: c.name,
-            phone: c.phone,
-            amount: c.amount,
-            app_type: c.appType,
-            day_type: c.dayType,
+          await Promise.all(preview.map(async (c) => {
+            const phone = normalizePhoneNumber(c.phone);
+            const { data: existing } = await supabase.from('contacts').select('id,loan_id').eq('user_id', user.id).eq('phone', phone).maybeSingle();
+            const payload = {
+              user_id: user.id,
+              loan_id: c.loanId || existing?.loan_id || '',
+              name: c.name,
+              phone,
+              amount: c.amount,
+              app_type: c.appType,
+              day_type: c.dayType,
+              is_deleted: false,
+              deleted_at: null,
+              created_at: new Date().toISOString(),
+            };
+            const { data, error } = existing
+              ? await supabase.from('contacts').update(payload).eq('id', existing.id).select().maybeSingle()
+              : await supabase.from('contacts').insert(payload).select().maybeSingle();
+            if (error) throw error;
+            return data;
           }))
         )
-        .select();
+        .then((data) => ({ data, error: null }));
 
       if (contactsError) throw contactsError;
 
