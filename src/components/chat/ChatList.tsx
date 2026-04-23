@@ -301,7 +301,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   };
 
   const handleBulkTemplateSend = async () => {
-    if (!user || !selectedTemplateId || (selectedContactIds.length === 0 && parsePhoneNumbers(bulkNumbers).length === 0)) return;
+    if (!user || !selectedTemplateId || bulkRecipientCount === 0) return;
     setSendingBulk(true);
     let sentCount = 0;
     let failedCount = 0;
@@ -406,8 +406,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
 
           for (const m of (mappings || [])) {
             const fieldKey = (m as any).mapped_field;
-            const resolver = VARIABLE_MAP[fieldKey];
-            const value = resolver ? resolver(contact) : '';
+            const value = resolveMappedField(fieldKey, contact, appTemplatesMap);
             if (!value) {
               failedCount++;
               failReasons.push(`${contact.name}: Missing field "${fieldKey}"`);
@@ -494,8 +493,10 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
 
       setSelectedContactIds([]);
       setBulkNumbers('');
+      setBulkSelectedLabelIds([]);
       setContactSelectionMode(false);
       setShowBulkDialog(false);
+      setBulkStep('recipients');
       setBulkScheduleAt('');
     } catch (error: any) {
       toast({ title: 'Bulk send failed', description: error.message, variant: 'destructive' });
