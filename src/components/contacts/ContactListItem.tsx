@@ -3,7 +3,7 @@ import { useState, useRef } from 'react';
 import { Contact } from '@/types';
 import { ContactAvatar } from '@/components/shared/ContactAvatar';
 import { formatCurrency } from '@/lib/utils/format';
-import { Edit2, Trash2, CheckSquare } from 'lucide-react';
+import { Edit2, Trash2, CheckSquare, RotateCcw } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,6 +30,9 @@ interface ContactListItemProps {
   selectionMode?: boolean;
   labels?: LabelBadge[];
   onEnterSelectionMode?: () => void;
+  isTrash?: boolean;
+  onRestore?: (id: string) => void;
+  onPermanentDelete?: (id: string) => void;
 }
 
 export function ContactListItem({
@@ -40,6 +43,9 @@ export function ContactListItem({
   selectionMode,
   labels = [],
   onEnterSelectionMode,
+  isTrash = false,
+  onRestore,
+  onPermanentDelete,
 }: ContactListItemProps) {
   const { setEditContactId, deleteContact } = useAppStore();
   const { toast } = useToast();
@@ -122,7 +128,13 @@ export function ContactListItem({
   // =========================
 
   const handleDelete = async () => {
-    if (!window.confirm(`Delete ${contact.name}?`)) return;
+    if (!window.confirm(isTrash ? `Permanently delete ${contact.name}?` : `Delete ${contact.name}?`)) return;
+
+    if (isTrash) {
+      onPermanentDelete?.(contact.id);
+      setShowOptions(false);
+      return;
+    }
 
     try {
       const { error } = await supabase
@@ -232,15 +244,24 @@ export function ContactListItem({
         </DropdownMenuTrigger>
 
         <DropdownMenuContent align="end" className="w-48">
-          <DropdownMenuItem
-            onClick={() => {
-              setEditContactId(contact.id);
-              setShowOptions(false);
-            }}
-          >
-            <Edit2 className="h-4 w-4 mr-2" />
-            Edit
-          </DropdownMenuItem>
+          {!isTrash && (
+            <DropdownMenuItem
+              onClick={() => {
+                setEditContactId(contact.id);
+                setShowOptions(false);
+              }}
+            >
+              <Edit2 className="h-4 w-4 mr-2" />
+              Edit
+            </DropdownMenuItem>
+          )}
+
+          {isTrash && (
+            <DropdownMenuItem onClick={() => { onRestore?.(contact.id); setShowOptions(false); }}>
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Restore
+            </DropdownMenuItem>
+          )}
 
           {onToggleSelect && (
             <DropdownMenuItem
@@ -262,7 +283,7 @@ export function ContactListItem({
             className="text-destructive"
           >
             <Trash2 className="h-4 w-4 mr-2" />
-            Delete
+            {isTrash ? 'Delete permanently' : 'Delete'}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
