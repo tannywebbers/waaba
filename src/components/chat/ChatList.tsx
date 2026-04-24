@@ -625,7 +625,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
       )}
 
       {viewMode === 'chats' && showTrash && (
-        <div className="px-4 pb-2 shrink-0 flex items-center gap-2">
+        <div className="px-4 pb-2 shrink-0 flex items-center gap-2 flex-wrap">
           <Button size="sm" variant={chatSelectionMode ? 'default' : 'outline'} onClick={() => { setChatSelectionMode((v) => !v); setSelectedContactIds([]); }}>
             <CheckSquare className="h-4 w-4 mr-1" />Select
           </Button>
@@ -633,9 +633,24 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
             <>
               <Button size="sm" variant="outline" onClick={() => setSelectedContactIds(selectedContactIds.length === filteredChats.length ? [] : filteredChats.map((chat) => chat.id))}>{selectedContactIds.length === filteredChats.length ? 'Deselect All' : 'Select All'}</Button>
               <Button size="sm" variant="outline" onClick={() => handleRestoreContacts(selectedContactIds)} disabled={selectedContactIds.length === 0}><RotateCcw className="h-4 w-4 mr-1" />Restore ({selectedContactIds.length})</Button>
-              <Button size="sm" variant="destructive" onClick={() => handlePermanentDeleteContacts(selectedContactIds)} disabled={selectedContactIds.length === 0}><Trash2 className="h-4 w-4 mr-1" />Delete ({selectedContactIds.length})</Button>
+              <Button size="sm" variant="destructive" onClick={() => setConfirmPermDelete({ ids: selectedContactIds })} disabled={selectedContactIds.length === 0}><Trash2 className="h-4 w-4 mr-1" />Delete ({selectedContactIds.length})</Button>
             </>
           )}
+        </div>
+      )}
+
+      {viewMode === 'chats' && !showTrash && chatSelectionMode && (
+        <div className="px-4 pb-2 shrink-0 flex items-center gap-2 flex-wrap">
+          <Button size="sm" variant="outline" onClick={() => setSelectedContactIds(selectedContactIds.length === filteredChats.length ? [] : filteredChats.map((chat) => chat.id))}>
+            <CheckSquare className="h-4 w-4 mr-1" />{selectedContactIds.length === filteredChats.length ? 'Deselect All' : 'Select All'}
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => handleBulkArchive(true)} disabled={selectedContactIds.length === 0}>
+            <Archive className="h-4 w-4 mr-1" />Archive ({selectedContactIds.length})
+          </Button>
+          <Button size="sm" variant="destructive" onClick={() => setConfirmBulkDelete({ ids: selectedContactIds })} disabled={selectedContactIds.length === 0}>
+            <Trash2 className="h-4 w-4 mr-1" />Delete ({selectedContactIds.length})
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => { setChatSelectionMode(false); setSelectedContactIds([]); }}>Cancel</Button>
         </div>
       )}
 
