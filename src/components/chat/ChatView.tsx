@@ -344,6 +344,10 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
 
     setInputValue('');
     setDraft(activeChat.id, '');
+    // Reset textarea height immediately after clearing
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+    }
     setSending(true);
 
     try {
@@ -788,7 +792,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
                     scrollbarWidth: 'thin',
                     scrollbarColor: 'rgba(155, 155, 155, 0.5) transparent'
                   }}
-                  disabled={sending || uploading}
+                  /* Allow typing while a message is sending — input is never disabled */
                 />
 
                 {/* File upload button */}
