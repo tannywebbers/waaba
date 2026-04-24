@@ -258,8 +258,11 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
     toast({ title: ids.length > 1 ? 'Chats restored' : 'Chat restored' });
   };
 
+  const [confirmPermDelete, setConfirmPermDelete] = useState<{ ids: string[] } | null>(null);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState<{ ids: string[] } | null>(null);
+
   const handlePermanentDeleteContacts = async (ids: string[]) => {
-    if (!user || ids.length === 0 || !window.confirm('Permanently delete selected chat(s)? This cannot be undone.')) return;
+    if (!user || ids.length === 0) return;
     await supabase.from('messages').delete().eq('user_id', user.id).in('contact_id', ids as any);
     await supabase.from('chat_labels' as any).delete().eq('user_id', user.id).in('chat_id', ids as any);
     await supabase.from('account_details').delete().in('contact_id', ids as any);
@@ -271,6 +274,26 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
     setChatSelectionMode(false);
     setContactSelectionMode(false);
     toast({ title: ids.length > 1 ? 'Chats permanently deleted' : 'Chat permanently deleted' });
+  };
+
+  const handleBulkArchive = async (archive: boolean) => {
+    if (!user || selectedContactIds.length === 0) return;
+    const { error } = await supabase.from('contacts').update({ is_archived: archive } as any).eq('user_id', user.id).in('id', selectedContactIds as any);
+    if (error) return toast({ title: 'Failed to update', description: error.message, variant: 'destructive' });
+    selectedContactIds.forEach((id) => updateContact(id, { isArchived: archive } as any));
+    setSelectedContactIds([]);
+    setChatSelectionMode(false);
+    toast({ title: archive ? `Archived ${selectedContactIds.length} chat(s)` : `Unarchived ${selectedContactIds.length} chat(s)` });
+  };
+
+  const handleBulkSoftDeleteChats = async (ids: string[]) => {
+    if (!user || ids.length === 0) return;
+    const { error } = await supabase.from('contacts').update({ is_deleted: true, deleted_at: new Date().toISOString() } as any).eq('user_id', user.id).in('id', ids as any);
+    if (error) return toast({ title: 'Failed to delete', description: error.message, variant: 'destructive' });
+    ids.forEach((id) => deleteContact(id));
+    setSelectedContactIds([]);
+    setChatSelectionMode(false);
+    toast({ title: `Moved ${ids.length} chat(s) to trash` });
   };
 
   const createOrUpdateBulkContacts = async () => {
