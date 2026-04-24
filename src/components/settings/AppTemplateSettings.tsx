@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useState, useEffect } from 'react';
-import { Plus, Pencil, Trash2, Save, X, Eye } from 'lucide-react';
+import { Plus, Pencil, Trash2, Save, X, Eye, Download, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -144,18 +144,69 @@ export function AppTemplateSettings() {
     return matches ? [...new Set(matches)] : [];
   };
 
+  const handleExport = () => {
+    if (templates.length === 0) {
+      toast({ title: 'Nothing to export', description: 'Create at least one template first.' });
+      return;
+    }
+    const exportData = templates.map(({ name, body }) => ({ name, body }));
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `app-templates-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast({ title: `Exported ${templates.length} template(s)` });
+  };
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !user) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      if (!Array.isArray(parsed)) throw new Error('JSON must be an array of {name, body}');
+      const valid = parsed.filter((t: any) => t && typeof t.name === 'string' && typeof t.body === 'string' && t.name.trim() && t.body.trim());
+      if (valid.length === 0) throw new Error('No valid templates found in file');
+
+      await ensureTemplateTableReady();
+      const rows = valid.map((t: any) => ({ user_id: user.id, name: t.name.trim(), body: t.body.trim() }));
+      const { error } = await supabase.from('app_templates' as any).insert(rows as any);
+      if (error) throw error;
+      toast({ title: `Imported ${valid.length} template(s)` });
+      fetchTemplates();
+    } catch (err: any) {
+      toast({ title: 'Import failed', description: err.message, variant: 'destructive' });
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <div>
           <h3 className="text-lg font-semibold">App Templates</h3>
           <p className="text-sm text-muted-foreground">Create reusable message templates with dynamic variables</p>
         </div>
-        {!creating && (
-          <Button onClick={() => setCreating(true)} size="sm">
-            <Plus className="h-4 w-4 mr-1" /> New Template
+        <div className="flex items-center gap-2">
+          <Button onClick={handleExport} size="sm" variant="outline">
+            <Download className="h-4 w-4 mr-1" /> Export
           </Button>
-        )}
+          <label>
+            <input type="file" accept="application/json,.json" className="hidden" onChange={handleImport} />
+            <Button size="sm" variant="outline" asChild>
+              <span className="cursor-pointer"><Upload className="h-4 w-4 mr-1" /> Import</span>
+            </Button>
+          </label>
+          {!creating && (
+            <Button onClick={() => setCreating(true)} size="sm">
+              <Plus className="h-4 w-4 mr-1" /> New Template
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Create / Edit Form */}
