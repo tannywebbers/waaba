@@ -45,8 +45,12 @@ self.addEventListener('notificationclick', (event) => {
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // Try to focus an already-open window and tell it to open the right chat
       for (const client of clientList) {
-        if ('focus' in client) return client.focus();
+        if ('focus' in client) {
+          client.postMessage({ type: 'OPEN_CHAT', contactId: conversationId, url });
+          return client.focus();
+        }
       }
       if (self.clients.openWindow) return self.clients.openWindow(url);
     })

@@ -15,6 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
@@ -258,8 +259,11 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
     toast({ title: ids.length > 1 ? 'Chats restored' : 'Chat restored' });
   };
 
+  const [confirmPermDelete, setConfirmPermDelete] = useState<{ ids: string[] } | null>(null);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState<{ ids: string[] } | null>(null);
+
   const handlePermanentDeleteContacts = async (ids: string[]) => {
-    if (!user || ids.length === 0 || !window.confirm('Permanently delete selected chat(s)? This cannot be undone.')) return;
+    if (!user || ids.length === 0) return;
     await supabase.from('messages').delete().eq('user_id', user.id).in('contact_id', ids as any);
     await supabase.from('chat_labels' as any).delete().eq('user_id', user.id).in('chat_id', ids as any);
     await supabase.from('account_details').delete().in('contact_id', ids as any);
@@ -271,6 +275,26 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
     setChatSelectionMode(false);
     setContactSelectionMode(false);
     toast({ title: ids.length > 1 ? 'Chats permanently deleted' : 'Chat permanently deleted' });
+  };
+
+  const handleBulkArchive = async (archive: boolean) => {
+    if (!user || selectedContactIds.length === 0) return;
+    const { error } = await supabase.from('contacts').update({ is_archived: archive } as any).eq('user_id', user.id).in('id', selectedContactIds as any);
+    if (error) return toast({ title: 'Failed to update', description: error.message, variant: 'destructive' });
+    selectedContactIds.forEach((id) => updateContact(id, { isArchived: archive } as any));
+    setSelectedContactIds([]);
+    setChatSelectionMode(false);
+    toast({ title: archive ? `Archived ${selectedContactIds.length} chat(s)` : `Unarchived ${selectedContactIds.length} chat(s)` });
+  };
+
+  const handleBulkSoftDeleteChats = async (ids: string[]) => {
+    if (!user || ids.length === 0) return;
+    const { error } = await supabase.from('contacts').update({ is_deleted: true, deleted_at: new Date().toISOString() } as any).eq('user_id', user.id).in('id', ids as any);
+    if (error) return toast({ title: 'Failed to delete', description: error.message, variant: 'destructive' });
+    ids.forEach((id) => deleteContact(id));
+    setSelectedContactIds([]);
+    setChatSelectionMode(false);
+    toast({ title: `Moved ${ids.length} chat(s) to trash` });
   };
 
   const createOrUpdateBulkContacts = async () => {
@@ -558,6 +582,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
           {viewMode === 'chats' && (
             <>
               <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => openBulkDialog('recipients')}><Send className="h-5 w-5 stroke-[2.8px]" /></Button>
+              <Button variant={chatSelectionMode && !showTrash ? 'default' : 'ghost'} size="icon" className="h-10 w-10" onClick={() => { if (showTrash) return; setChatSelectionMode((v) => !v); setSelectedContactIds([]); }} title="Select chats"><CheckSquare className="h-5 w-5 stroke-[2.8px]" /></Button>
               <Button variant={showTrash ? 'default' : 'ghost'} size="icon" className="h-10 w-10" onClick={() => setShowTrash((v) => !v)}><Trash2 className="h-5 w-5 stroke-[2.8px]" /></Button>
               <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setShowLabelManager(true)}><Settings2 className="h-5 w-5 stroke-[2.8px]" /></Button>
               <Button variant="ghost" size="icon" className="h-10 w-10" onClick={onNewChat}><SquarePen className="h-5 w-5 stroke-[2.8px]" /></Button>
@@ -601,7 +626,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
       )}
 
       {viewMode === 'chats' && showTrash && (
-        <div className="px-4 pb-2 shrink-0 flex items-center gap-2">
+        <div className="px-4 pb-2 shrink-0 flex items-center gap-2 flex-wrap">
           <Button size="sm" variant={chatSelectionMode ? 'default' : 'outline'} onClick={() => { setChatSelectionMode((v) => !v); setSelectedContactIds([]); }}>
             <CheckSquare className="h-4 w-4 mr-1" />Select
           </Button>
@@ -609,9 +634,24 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
             <>
               <Button size="sm" variant="outline" onClick={() => setSelectedContactIds(selectedContactIds.length === filteredChats.length ? [] : filteredChats.map((chat) => chat.id))}>{selectedContactIds.length === filteredChats.length ? 'Deselect All' : 'Select All'}</Button>
               <Button size="sm" variant="outline" onClick={() => handleRestoreContacts(selectedContactIds)} disabled={selectedContactIds.length === 0}><RotateCcw className="h-4 w-4 mr-1" />Restore ({selectedContactIds.length})</Button>
-              <Button size="sm" variant="destructive" onClick={() => handlePermanentDeleteContacts(selectedContactIds)} disabled={selectedContactIds.length === 0}><Trash2 className="h-4 w-4 mr-1" />Delete ({selectedContactIds.length})</Button>
+              <Button size="sm" variant="destructive" onClick={() => setConfirmPermDelete({ ids: selectedContactIds })} disabled={selectedContactIds.length === 0}><Trash2 className="h-4 w-4 mr-1" />Delete ({selectedContactIds.length})</Button>
             </>
           )}
+        </div>
+      )}
+
+      {viewMode === 'chats' && !showTrash && chatSelectionMode && (
+        <div className="px-4 pb-2 shrink-0 flex items-center gap-2 flex-wrap">
+          <Button size="sm" variant="outline" onClick={() => setSelectedContactIds(selectedContactIds.length === filteredChats.length ? [] : filteredChats.map((chat) => chat.id))}>
+            <CheckSquare className="h-4 w-4 mr-1" />{selectedContactIds.length === filteredChats.length ? 'Deselect All' : 'Select All'}
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => handleBulkArchive(true)} disabled={selectedContactIds.length === 0}>
+            <Archive className="h-4 w-4 mr-1" />Archive ({selectedContactIds.length})
+          </Button>
+          <Button size="sm" variant="destructive" onClick={() => setConfirmBulkDelete({ ids: selectedContactIds })} disabled={selectedContactIds.length === 0}>
+            <Trash2 className="h-4 w-4 mr-1" />Delete ({selectedContactIds.length})
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => { setChatSelectionMode(false); setSelectedContactIds([]); }}>Cancel</Button>
         </div>
       )}
 
@@ -680,7 +720,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
                 onToggleSelect={toggleChatSelection}
                 onEnterSelectionMode={() => setChatSelectionMode(true)}
                 onRestore={(id) => handleRestoreContacts([id])}
-                onPermanentDelete={(id) => handlePermanentDeleteContacts([id])}
+                onPermanentDelete={(id) => setConfirmPermDelete({ ids: [id] })}
               />
             ))
         )}
@@ -705,7 +745,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
                 onEnterSelectionMode={() => setContactSelectionMode(true)}
                 isTrash={showTrash}
                 onRestore={(id) => handleRestoreContacts([id])}
-                onPermanentDelete={(id) => handlePermanentDeleteContacts([id])}
+                onPermanentDelete={(id) => setConfirmPermDelete({ ids: [id] })}
                 onClick={() => {
                   if (showTrash) return;
                   const chat = chats.find((c) => c.contact.id === contact.id);
@@ -831,6 +871,46 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
           )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!confirmPermDelete} onOpenChange={(o) => { if (!o) setConfirmPermDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Permanently delete?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes {confirmPermDelete?.ids.length ?? 0} chat(s) and all their messages. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => { const ids = confirmPermDelete?.ids ?? []; setConfirmPermDelete(null); await handlePermanentDeleteContacts(ids); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete permanently
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!confirmBulkDelete} onOpenChange={(o) => { if (!o) setConfirmBulkDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Move chats to trash?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmBulkDelete?.ids.length ?? 0} chat(s) will be moved to trash. You can restore them later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => { const ids = confirmBulkDelete?.ids ?? []; setConfirmBulkDelete(null); await handleBulkSoftDeleteChats(ids); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Move to trash
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

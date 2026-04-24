@@ -82,7 +82,19 @@ function AppRoutes() {
       }
     };
     window.addEventListener('openChat', handler);
-    return () => window.removeEventListener('openChat', handler);
+
+    // 🔔 Listen for OPEN_CHAT messages from the service worker (notification click)
+    const swHandler = (event: MessageEvent) => {
+      if (event.data?.type === 'OPEN_CHAT' && event.data.contactId) {
+        window.dispatchEvent(new CustomEvent('openChat', { detail: { contactId: event.data.contactId } }));
+      }
+    };
+    navigator.serviceWorker?.addEventListener?.('message', swHandler);
+
+    return () => {
+      window.removeEventListener('openChat', handler);
+      navigator.serviceWorker?.removeEventListener?.('message', swHandler);
+    };
   }, []);
 
   // 🔔 Desktop/Local Notifications
