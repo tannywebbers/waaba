@@ -130,12 +130,23 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
     return () => { supabase.removeChannel(channel); };
   }, [user, activeChat, addMessage, updateMessageStatus]);
 
-  const scrollToBottom = useCallback(() => {
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'auto') => {
     if (!messagesContainerRef.current) return;
-    messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    messagesContainerRef.current.scrollTo({ top: messagesContainerRef.current.scrollHeight, behavior });
   }, []);
 
-  useEffect(() => { scrollToBottom(); }, [chatMessages.length, scrollToBottom]);
+  // Scroll to last message when chat opens
+  useEffect(() => {
+    if (!activeChat) return;
+    // Run twice: once now, once after layout settles, to handle async message render
+    scrollToBottom('auto');
+    const id = requestAnimationFrame(() => scrollToBottom('auto'));
+    const t = setTimeout(() => scrollToBottom('auto'), 80);
+    return () => { cancelAnimationFrame(id); clearTimeout(t); };
+  }, [activeChat?.id, scrollToBottom]);
+
+  // Scroll to bottom when message count grows (new send/receive while open)
+  useEffect(() => { scrollToBottom('smooth'); }, [chatMessages.length, scrollToBottom]);
 
   // Mobile keyboard: use visualViewport to keep header + input visible, only messages scroll
   useEffect(() => {
