@@ -719,7 +719,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
                 onToggleSelect={toggleChatSelection}
                 onEnterSelectionMode={() => setChatSelectionMode(true)}
                 onRestore={(id) => handleRestoreContacts([id])}
-                onPermanentDelete={(id) => handlePermanentDeleteContacts([id])}
+                onPermanentDelete={(id) => setConfirmPermDelete({ ids: [id] })}
               />
             ))
         )}
@@ -744,7 +744,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
                 onEnterSelectionMode={() => setContactSelectionMode(true)}
                 isTrash={showTrash}
                 onRestore={(id) => handleRestoreContacts([id])}
-                onPermanentDelete={(id) => handlePermanentDeleteContacts([id])}
+                onPermanentDelete={(id) => setConfirmPermDelete({ ids: [id] })}
                 onClick={() => {
                   if (showTrash) return;
                   const chat = chats.find((c) => c.contact.id === contact.id);
@@ -870,6 +870,46 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
           )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!confirmPermDelete} onOpenChange={(o) => { if (!o) setConfirmPermDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Permanently delete?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes {confirmPermDelete?.ids.length ?? 0} chat(s) and all their messages. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => { const ids = confirmPermDelete?.ids ?? []; setConfirmPermDelete(null); await handlePermanentDeleteContacts(ids); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete permanently
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!confirmBulkDelete} onOpenChange={(o) => { if (!o) setConfirmBulkDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Move chats to trash?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmBulkDelete?.ids.length ?? 0} chat(s) will be moved to trash. You can restore them later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => { const ids = confirmBulkDelete?.ids ?? []; setConfirmBulkDelete(null); await handleBulkSoftDeleteChats(ids); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Move to trash
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
