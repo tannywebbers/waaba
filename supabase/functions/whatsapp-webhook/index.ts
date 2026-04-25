@@ -23,6 +23,36 @@ const logWebhookEvent = async (supabase: any, payload: Record<string, any>) => {
   }
 };
 
+const updateWebhookDiagnostics = async (supabase: any, userId: string | null | undefined, values: Record<string, any>) => {
+  if (!userId) return;
+  const { error } = await supabase
+    .from('whatsapp_settings')
+    .update(values)
+    .eq('user_id', userId);
+
+  if (error) {
+    console.error('❌ Failed to update webhook diagnostics:', error.message, values);
+  }
+};
+
+const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : String(error);
+
+const logPayloadDebug = (body: any) => {
+  const entry = body.entry?.[0];
+  const changes = entry?.changes?.[0];
+  const value = changes?.value;
+
+  console.log('FULL WEBHOOK BODY:', JSON.stringify(body, null, 2));
+  console.log('Entry:', JSON.stringify(body.entry, null, 2));
+  console.log('Changes:', JSON.stringify(entry?.changes, null, 2));
+  console.log('Value:', JSON.stringify(value, null, 2));
+  console.log('Metadata:', JSON.stringify(value?.metadata, null, 2));
+  console.log('Phone Number ID:', value?.metadata?.phone_number_id);
+  console.log('Contacts:', JSON.stringify(value?.contacts, null, 2));
+  console.log('Messages:', JSON.stringify(value?.messages, null, 2));
+  console.log('Statuses:', JSON.stringify(value?.statuses, null, 2));
+};
+
 const sendBlockedReply = async (settings: any, to: string) => {
   const response = await fetch(`${WHATSAPP_API_URL}/${settings.phone_number_id}/messages`, {
     method: 'POST',
