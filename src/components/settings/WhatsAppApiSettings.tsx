@@ -668,6 +668,19 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
     }
   };
 
+  const formatDiagnosticTime = (value?: string) => {
+    if (!value) return 'Never';
+    return new Date(value).toLocaleString();
+  };
+
+  const configWarnings = [
+    !settings.isConnected ? 'Connection test has not passed yet.' : null,
+    !settings.phoneNumberId ? 'Phone Number ID is missing.' : null,
+    !settings.apiToken ? 'Permanent access token is missing.' : null,
+    settings.webhookConfigWarning || null,
+    settings.lastMappingFailureReason ? `Last mapping failure: ${settings.lastMappingFailureReason}` : null,
+  ].filter(Boolean);
+
   if (loading || sharedLoading) {
     return (
       <div className="flex items-center justify-center p-8">
