@@ -871,6 +871,44 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
 
       <Card>
         <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-[17px]">
+            <Activity className="h-5 w-5 text-primary" />
+            Live Delivery Check
+          </CardTitle>
+          <CardDescription className="text-[13px]">
+            Real webhook delivery health for normal customer messages.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 gap-3 text-[13px]">
+            <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">Last webhook hit</span><span className="text-right font-medium">{formatDiagnosticTime(settings.lastWebhookHitAt)}</span></div>
+            <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">Last real incoming message</span><span className="text-right font-medium">{formatDiagnosticTime(settings.lastRealMessageAt)}</span></div>
+            <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">Last matched Phone Number ID</span><span className="text-right font-mono text-[12px]">{settings.lastMatchedPhoneNumberId || 'None yet'}</span></div>
+            <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">Webhook subscription health</span><Badge variant={settings.webhookSubscriptionHealth === 'healthy' || settings.webhookSubscriptionHealth === 'verified' ? 'default' : 'secondary'}>{settings.webhookSubscriptionHealth || 'unknown'}</Badge></div>
+          </div>
+
+          {configWarnings.length > 0 && (
+            <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-4">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+                <div className="space-y-2">
+                  <p className="text-[13px] font-semibold text-foreground">Meta setup warnings</p>
+                  <ul className="list-disc list-inside space-y-1 text-[12px] text-muted-foreground">
+                    {configWarnings.map((warning, index) => <li key={index}>{warning}</li>)}
+                    <li>Meta app must be Live, not Development.</li>
+                    <li>Webhook fields must include messages, message_template_status_update, message_deliveries, message_reads, and message_reactions.</li>
+                    <li>The correct WABA and business phone number must be linked to this Phone Number ID.</li>
+                    <li>The token must be a permanent system-user token with whatsapp_business_management, whatsapp_business_messaging, and business_management permissions.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="flex items-center gap-2 text-[17px]">
