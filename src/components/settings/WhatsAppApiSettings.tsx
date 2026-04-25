@@ -395,7 +395,12 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
 
       if (data?.success) {
         const warningText = data.diagnostics?.warnings?.join('\n') || null;
-        const newSettings = { ...settings, isConnected: true };
+        const newSettings = {
+          ...settings,
+          isConnected: true,
+          webhookSubscriptionHealth: warningText ? 'needs_attention' : 'verified',
+          webhookConfigWarning: warningText || '',
+        };
         setSettings(newSettings);
         onConnectionChange?.(true);
         
