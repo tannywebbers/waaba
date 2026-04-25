@@ -227,7 +227,7 @@ const findOrCreateContact = async (
         .update({ last_seen: new Date().toISOString(), is_online: true, is_deleted: false, deleted_at: null })
         .eq('id', contactId);
       
-      return { contactId, targetUserId };
+      return { contactId: contactId!, targetUserId };
     }
   }
 
@@ -260,7 +260,7 @@ const findOrCreateContact = async (
         .update({ last_seen: new Date().toISOString(), is_online: true, is_deleted: false, deleted_at: null })
         .eq('id', contactId);
       
-      return { contactId, targetUserId };
+      return { contactId: contactId!, targetUserId };
     }
   }
 
@@ -279,7 +279,6 @@ const findOrCreateContact = async (
         user_id: superUserId,
         name: profileName || from,
         phone: from,
-        loan_id: `WA-${Date.now()}-${attempt}`,  // Include attempt in case of race condition
         last_seen: new Date().toISOString(),
         is_online: true,
         is_deleted: false,
@@ -291,7 +290,7 @@ const findOrCreateContact = async (
       contactId = newContact.id;
       targetUserId = superUserId;
       console.log(`✅ Contact created successfully:`, contactId);
-      return { contactId, targetUserId };
+      return { contactId: contactId!, targetUserId };
     }
 
     lastError = createError;
@@ -310,7 +309,7 @@ const findOrCreateContact = async (
       contactId = retryContacts[0].id;
       targetUserId = retryContacts[0].assigned_user_id || superUserId;
       console.log(`✅ Contact found on retry:`, contactId);
-      return { contactId, targetUserId };
+      return { contactId: contactId!, targetUserId };
     }
 
     // Wait before retry (exponential backoff)
