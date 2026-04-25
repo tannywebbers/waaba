@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useState, useEffect, useRef } from 'react';
-import { Key, Smartphone, Building, Link, TestTube, Copy, RefreshCw, Loader2, CheckCircle2, AlertCircle, Shield, Trash2 } from 'lucide-react';
+import { Key, Smartphone, Building, Link, TestTube, Copy, RefreshCw, Loader2, CheckCircle2, AlertCircle, Shield, Trash2, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -48,6 +48,12 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
     webhookUrl: '',
     verifyToken: '',
     isConnected: false,
+    lastWebhookHitAt: '',
+    lastRealMessageAt: '',
+    lastMatchedPhoneNumberId: '',
+    lastMappingFailureReason: '',
+    webhookSubscriptionHealth: 'unknown',
+    webhookConfigWarning: '',
   };
 
   const [settings, setSettings] = useState(defaultSettings);
