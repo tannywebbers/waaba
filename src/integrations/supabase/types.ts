@@ -487,10 +487,16 @@ export type Database = {
           created_at: string
           id: string
           is_connected: boolean | null
+          last_mapping_failure_reason: string | null
+          last_matched_phone_number_id: string | null
+          last_real_message_at: string | null
+          last_webhook_hit_at: string | null
           phone_number_id: string | null
           updated_at: string
           user_id: string
           verify_token: string | null
+          webhook_config_warning: string | null
+          webhook_subscription_health: string | null
           webhook_url: string | null
         }
         Insert: {
@@ -500,10 +506,16 @@ export type Database = {
           created_at?: string
           id?: string
           is_connected?: boolean | null
+          last_mapping_failure_reason?: string | null
+          last_matched_phone_number_id?: string | null
+          last_real_message_at?: string | null
+          last_webhook_hit_at?: string | null
           phone_number_id?: string | null
           updated_at?: string
           user_id: string
           verify_token?: string | null
+          webhook_config_warning?: string | null
+          webhook_subscription_health?: string | null
           webhook_url?: string | null
         }
         Update: {
@@ -513,10 +525,16 @@ export type Database = {
           created_at?: string
           id?: string
           is_connected?: boolean | null
+          last_mapping_failure_reason?: string | null
+          last_matched_phone_number_id?: string | null
+          last_real_message_at?: string | null
+          last_webhook_hit_at?: string | null
           phone_number_id?: string | null
           updated_at?: string
           user_id?: string
           verify_token?: string | null
+          webhook_config_warning?: string | null
+          webhook_subscription_health?: string | null
           webhook_url?: string | null
         }
         Relationships: []
