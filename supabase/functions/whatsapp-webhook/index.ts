@@ -434,8 +434,9 @@ const processIncomingMessages = async (
       contactId = result.contactId;
       targetUserId = result.targetUserId;
     } catch (error) {
+      const errorMessage = getErrorMessage(error);
       // 🔥 CRITICAL: Log failure but DON'T skip the message
-      console.error('🚨 CRITICAL: Contact creation failed, logging to webhook_logs:', error);
+      console.error('🚨 CRITICAL: Contact creation failed, logging to webhook_logs:', errorMessage);
       
       await logWebhookEvent(supabase, {
         user_id: superUserId,
@@ -443,11 +444,11 @@ const processIncomingMessages = async (
         direction: 'incoming',
         phone_number: from,
         message_type: type,
-        error: `Contact creation failed: ${error.message}`,
-        payload: { messageId, content: content.substring(0, 100), profileName },
+        error: `Contact creation failed: ${errorMessage}`,
+        payload: { sender: from, messageId, messageType: type, content, profileName, rawMessage: message },
       });
       
-      // Skip this message but continue processing others
+      // Message is recoverable from webhook_logs even if a contact row cannot be created.
       continue;
     }
 
