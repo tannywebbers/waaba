@@ -405,11 +405,24 @@ const processIncomingMessages = async (
 
     const profileName = value.contacts?.[0]?.profile?.name;
 
-    const { data: duplicate } = await supabase
+    const { data: duplicate, error: duplicateError } = await supabase
       .from('messages')
       .select('id')
       .eq('whatsapp_message_id', messageId)
       .maybeSingle();
+
+    if (duplicateError) {
+      console.error('❌ Duplicate Check - Error querying messages:', { messageId, error: duplicateError.message });
+      await logWebhookEvent(supabase, {
+        user_id: settingsUserId,
+        event_type: 'duplicate_check_error',
+        direction: 'incoming',
+        phone_number: from,
+        message_type: type,
+        error: duplicateError.message,
+        payload: { sender: from, messageId, rawMessage: message },
+      });
+    }
 
     if (duplicate) {
       console.log('⚠️ Duplicate incoming message skipped:', messageId);
@@ -473,6 +486,15 @@ const processIncomingMessages = async (
       continue;
     }
 
+    console.log('Message Insert - Pre-save:', {
+      senderPhone: from,
+      messageId,
+      messageType: type,
+      content,
+      contactFoundOrCreate: contactId,
+      targetUserId,
+    });
+
     // Insert message
     const { error: msgError } = await supabase.from('messages').insert({
       user_id: targetUserId,
@@ -486,7 +508,12 @@ const processIncomingMessages = async (
     });
 
     if (msgError) {
-      console.error('❌ Insert message error:', msgError.message);
+      console.error('Message Insert - Failure:', {
+        sender: from,
+        messageId,
+        error: msgError.message,
+        details: msgError.details,
+      });
       await logWebhookEvent(supabase, {
         user_id: targetUserId,
         event_type: 'error',
@@ -494,12 +521,20 @@ const processIncomingMessages = async (
         phone_number: from,
         message_type: type,
         error: msgError.message,
-        payload: { messageId, content: content.substring(0, 100) },
+        payload: { sender: from, messageId, messageType: type, content, contactId, targetUserId, rawMessage: message, insertDetails: msgError.details },
       });
       continue;
     }
 
-    console.log(`✅ Message inserted for contact ${contactId}`);
+    console.log('Message Insert - Success:', { sender: from, messageId, contactId, targetUserId });
+
+    await updateWebhookDiagnostics(supabase, targetUserId, {
+      last_real_message_at: new Date().toISOString(),
+      last_matched_phone_number_id: value.metadata?.phone_number_id || settings.phone_number_id || null,
+      last_mapping_failure_reason: null,
+      webhook_subscription_health: 'healthy',
+      webhook_config_warning: null,
+    });
 
     await logWebhookEvent(supabase, {
       user_id: targetUserId,
