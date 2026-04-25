@@ -603,9 +603,19 @@ const processStatuses = async (supabase: any, value: any, settingsUserId: string
     }
 
     if (!updated?.length) {
-      console.log('⚠️ No message found for status update:', waMessageId);
+      console.log('⚠️ No message found for status update:', { waMessageId, status: newStatus, recipient: status.recipient_id });
+      await logWebhookEvent(supabase, {
+        user_id: settingsUserId,
+        event_type: 'status_update_unmatched',
+        direction: 'incoming',
+        phone_number: status.recipient_id,
+        status: newStatus,
+        payload: { waMessageId, timestamp: statusTimestamp, rawStatus: status },
+      });
       continue;
     }
+
+    console.log('✅ Status update applied:', { waMessageId, newStatus, updatedRows: updated.length, contactId: updated[0]?.contact_id });
 
     await logWebhookEvent(supabase, {
       user_id: settingsUserId,
