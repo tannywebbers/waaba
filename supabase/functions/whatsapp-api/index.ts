@@ -38,6 +38,16 @@ async function testWebhookConnection(token: string) {
   return res.ok;
 }
 
+async function fetchGraphJson(path: string, token: string) {
+  const res = await fetch(`${WHATSAPP_API_URL}${path}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const text = await res.text();
+  let json: any = null;
+  try { json = text ? JSON.parse(text) : null; } catch { json = { raw: text }; }
+  return { ok: res.ok, status: res.status, json };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
