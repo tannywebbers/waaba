@@ -218,6 +218,12 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
           webhookUrl:   data.webhook_url   || '',
           verifyToken:  data.verify_token  || '',
           isConnected:  data.is_connected  || false,
+          lastWebhookHitAt: data.last_webhook_hit_at || '',
+          lastRealMessageAt: data.last_real_message_at || '',
+          lastMatchedPhoneNumberId: data.last_matched_phone_number_id || '',
+          lastMappingFailureReason: data.last_mapping_failure_reason || '',
+          webhookSubscriptionHealth: data.webhook_subscription_health || 'unknown',
+          webhookConfigWarning: data.webhook_config_warning || '',
         }));
         setWebhookGenerated(!!data.webhook_url);
         onConnectionChange?.(data.is_connected || false);
@@ -388,6 +394,7 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
       if (error) throw error;
 
       if (data?.success) {
+        const warningText = data.diagnostics?.warnings?.join('\n') || null;
         const newSettings = { ...settings, isConnected: true };
         setSettings(newSettings);
         onConnectionChange?.(true);
@@ -395,10 +402,14 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
         // Persist connected state
         const { data: existing } = await supabase.from('whatsapp_settings').select('id').eq('user_id', user!.id).maybeSingle();
         if (existing) {
-          await supabase.from('whatsapp_settings').update({ is_connected: true }).eq('user_id', user!.id);
+          await supabase.from('whatsapp_settings').update({
+            is_connected: true,
+            webhook_subscription_health: warningText ? 'needs_attention' : 'verified',
+            webhook_config_warning: warningText,
+          }).eq('user_id', user!.id);
         }
 
-        toast({ title: 'Connection successful!', description: `Connected to ${data.phoneNumber || 'WhatsApp'}` });
+        toast({ title: warningText ? 'Connection works, check webhook warnings' : 'Connection successful!', description: warningText || `Connected to ${data.phoneNumber || 'WhatsApp'}` });
       } else {
         throw new Error(data?.error || 'Connection failed');
       }
