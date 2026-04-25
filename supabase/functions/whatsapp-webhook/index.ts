@@ -23,6 +23,36 @@ const logWebhookEvent = async (supabase: any, payload: Record<string, any>) => {
   }
 };
 
+const updateWebhookDiagnostics = async (supabase: any, userId: string | null | undefined, values: Record<string, any>) => {
+  if (!userId) return;
+  const { error } = await supabase
+    .from('whatsapp_settings')
+    .update(values)
+    .eq('user_id', userId);
+
+  if (error) {
+    console.error('❌ Failed to update webhook diagnostics:', error.message, values);
+  }
+};
+
+const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : String(error);
+
+const logPayloadDebug = (body: any) => {
+  const entry = body.entry?.[0];
+  const changes = entry?.changes?.[0];
+  const value = changes?.value;
+
+  console.log('FULL WEBHOOK BODY:', JSON.stringify(body, null, 2));
+  console.log('Entry:', JSON.stringify(body.entry, null, 2));
+  console.log('Changes:', JSON.stringify(entry?.changes, null, 2));
+  console.log('Value:', JSON.stringify(value, null, 2));
+  console.log('Metadata:', JSON.stringify(value?.metadata, null, 2));
+  console.log('Phone Number ID:', value?.metadata?.phone_number_id);
+  console.log('Contacts:', JSON.stringify(value?.contacts, null, 2));
+  console.log('Messages:', JSON.stringify(value?.messages, null, 2));
+  console.log('Statuses:', JSON.stringify(value?.statuses, null, 2));
+};
+
 const sendBlockedReply = async (settings: any, to: string) => {
   const response = await fetch(`${WHATSAPP_API_URL}/${settings.phone_number_id}/messages`, {
     method: 'POST',
@@ -197,7 +227,7 @@ const findOrCreateContact = async (
         .update({ last_seen: new Date().toISOString(), is_online: true, is_deleted: false, deleted_at: null })
         .eq('id', contactId);
       
-      return { contactId, targetUserId };
+      return { contactId: contactId!, targetUserId };
     }
   }
 
@@ -230,7 +260,7 @@ const findOrCreateContact = async (
         .update({ last_seen: new Date().toISOString(), is_online: true, is_deleted: false, deleted_at: null })
         .eq('id', contactId);
       
-      return { contactId, targetUserId };
+      return { contactId: contactId!, targetUserId };
     }
   }
 
@@ -249,7 +279,6 @@ const findOrCreateContact = async (
         user_id: superUserId,
         name: profileName || from,
         phone: from,
-        loan_id: `WA-${Date.now()}-${attempt}`,  // Include attempt in case of race condition
         last_seen: new Date().toISOString(),
         is_online: true,
         is_deleted: false,
@@ -261,7 +290,7 @@ const findOrCreateContact = async (
       contactId = newContact.id;
       targetUserId = superUserId;
       console.log(`✅ Contact created successfully:`, contactId);
-      return { contactId, targetUserId };
+      return { contactId: contactId!, targetUserId };
     }
 
     lastError = createError;
@@ -280,7 +309,7 @@ const findOrCreateContact = async (
       contactId = retryContacts[0].id;
       targetUserId = retryContacts[0].assigned_user_id || superUserId;
       console.log(`✅ Contact found on retry:`, contactId);
-      return { contactId, targetUserId };
+      return { contactId: contactId!, targetUserId };
     }
 
     // Wait before retry (exponential backoff)
@@ -376,11 +405,24 @@ const processIncomingMessages = async (
 
     const profileName = value.contacts?.[0]?.profile?.name;
 
-    const { data: duplicate } = await supabase
+    const { data: duplicate, error: duplicateError } = await supabase
       .from('messages')
       .select('id')
       .eq('whatsapp_message_id', messageId)
       .maybeSingle();
+
+    if (duplicateError) {
+      console.error('❌ Duplicate Check - Error querying messages:', { messageId, error: duplicateError.message });
+      await logWebhookEvent(supabase, {
+        user_id: settingsUserId,
+        event_type: 'duplicate_check_error',
+        direction: 'incoming',
+        phone_number: from,
+        message_type: type,
+        error: duplicateError.message,
+        payload: { sender: from, messageId, rawMessage: message },
+      });
+    }
 
     if (duplicate) {
       console.log('⚠️ Duplicate incoming message skipped:', messageId);
@@ -405,8 +447,9 @@ const processIncomingMessages = async (
       contactId = result.contactId;
       targetUserId = result.targetUserId;
     } catch (error) {
+      const errorMessage = getErrorMessage(error);
       // 🔥 CRITICAL: Log failure but DON'T skip the message
-      console.error('🚨 CRITICAL: Contact creation failed, logging to webhook_logs:', error);
+      console.error('🚨 CRITICAL: Contact creation failed, logging to webhook_logs:', errorMessage);
       
       await logWebhookEvent(supabase, {
         user_id: superUserId,
@@ -414,11 +457,11 @@ const processIncomingMessages = async (
         direction: 'incoming',
         phone_number: from,
         message_type: type,
-        error: `Contact creation failed: ${error.message}`,
-        payload: { messageId, content: content.substring(0, 100), profileName },
+        error: `Contact creation failed: ${errorMessage}`,
+        payload: { sender: from, messageId, messageType: type, content, profileName, rawMessage: message },
       });
       
-      // Skip this message but continue processing others
+      // Message is recoverable from webhook_logs even if a contact row cannot be created.
       continue;
     }
 
@@ -443,6 +486,15 @@ const processIncomingMessages = async (
       continue;
     }
 
+    console.log('Message Insert - Pre-save:', {
+      senderPhone: from,
+      messageId,
+      messageType: type,
+      content,
+      contactFoundOrCreate: contactId,
+      targetUserId,
+    });
+
     // Insert message
     const { error: msgError } = await supabase.from('messages').insert({
       user_id: targetUserId,
@@ -456,7 +508,12 @@ const processIncomingMessages = async (
     });
 
     if (msgError) {
-      console.error('❌ Insert message error:', msgError.message);
+      console.error('Message Insert - Failure:', {
+        sender: from,
+        messageId,
+        error: msgError.message,
+        details: msgError.details,
+      });
       await logWebhookEvent(supabase, {
         user_id: targetUserId,
         event_type: 'error',
@@ -464,12 +521,20 @@ const processIncomingMessages = async (
         phone_number: from,
         message_type: type,
         error: msgError.message,
-        payload: { messageId, content: content.substring(0, 100) },
+        payload: { sender: from, messageId, messageType: type, content, contactId, targetUserId, rawMessage: message, insertDetails: msgError.details },
       });
       continue;
     }
 
-    console.log(`✅ Message inserted for contact ${contactId}`);
+    console.log('Message Insert - Success:', { sender: from, messageId, contactId, targetUserId });
+
+    await updateWebhookDiagnostics(supabase, targetUserId, {
+      last_real_message_at: new Date().toISOString(),
+      last_matched_phone_number_id: value.metadata?.phone_number_id || settings.phone_number_id || null,
+      last_mapping_failure_reason: null,
+      webhook_subscription_health: 'healthy',
+      webhook_config_warning: null,
+    });
 
     await logWebhookEvent(supabase, {
       user_id: targetUserId,
@@ -538,9 +603,19 @@ const processStatuses = async (supabase: any, value: any, settingsUserId: string
     }
 
     if (!updated?.length) {
-      console.log('⚠️ No message found for status update:', waMessageId);
+      console.log('⚠️ No message found for status update:', { waMessageId, status: newStatus, recipient: status.recipient_id });
+      await logWebhookEvent(supabase, {
+        user_id: settingsUserId,
+        event_type: 'status_update_unmatched',
+        direction: 'incoming',
+        phone_number: status.recipient_id,
+        status: newStatus,
+        payload: { waMessageId, timestamp: statusTimestamp, rawStatus: status },
+      });
       continue;
     }
+
+    console.log('✅ Status update applied:', { waMessageId, newStatus, updatedRows: updated.length, contactId: updated[0]?.contact_id });
 
     await logWebhookEvent(supabase, {
       user_id: settingsUserId,
@@ -580,7 +655,12 @@ const processWebhookPayload = async (
   }
 
   if (!settings?.api_token || !settings?.user_id) {
-    console.log('⚠️ Strict mapping failed, webhook acknowledged without processing');
+    console.log('⚠️ Processing blocked after mapping:', {
+      explicitUserId,
+      resolvedPhoneNumberId: value.metadata?.phone_number_id || null,
+      matchedSettingsUserId: settings?.user_id || null,
+      apiTokenExists: Boolean(settings?.api_token),
+    });
     return;
   }
 
@@ -588,10 +668,12 @@ const processWebhookPayload = async (
   const superUserId = explicitUserId || settingsUserId;
 
   if (value.messages?.length) {
+    console.log('📩 Real incoming messages detected:', value.messages.length);
     await processIncomingMessages(supabase, value, settings.api_token, settingsUserId, superUserId, settings);
   }
 
   if (value.statuses?.length) {
+    console.log('📬 Status updates detected:', value.statuses.length);
     await processStatuses(supabase, value, settingsUserId);
   }
 };
@@ -636,41 +718,83 @@ serve(async (req) => {
   if (req.method === 'POST') {
     try {
       const body = await req.json();
-      const phoneNumberId = body.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id || null;
+      logPayloadDebug(body);
 
-      let settings = null;
+      const entry = body.entry?.[0];
+      const changes = entry?.changes?.[0];
+      const value = changes?.value;
+      const phoneNumberId = value?.metadata?.phone_number_id || null;
+      const hasMessages = Boolean(value?.messages?.length);
+      const hasStatuses = Boolean(value?.statuses?.length);
+
+      let settingsByExplicitUser = null;
+      let settingsByPhoneNumber = null;
       if (explicitUserId) {
-        settings = await getSettingsByUserId(supabase, explicitUserId);
+        settingsByExplicitUser = await getSettingsByUserId(supabase, explicitUserId);
       }
 
-      if (!settings && phoneNumberId) {
-        settings = await getSettingsByPhoneNumberId(supabase, phoneNumberId);
+      if (phoneNumberId) {
+        settingsByPhoneNumber = await getSettingsByPhoneNumberId(supabase, phoneNumberId);
       }
 
-      const mappingIsValid = Boolean(
-        settings?.user_id && (
-          (phoneNumberId && settings.phone_number_id === phoneNumberId) ||
-          (explicitUserId && settings.user_id === explicitUserId)
-        )
-      );
+      const settings = explicitUserId ? settingsByExplicitUser : settingsByPhoneNumber;
+      const matchedSettingsUserId = settings?.user_id || settingsByPhoneNumber?.user_id || null;
+      const apiTokenExists = Boolean(settings?.api_token);
 
-      const resolvedUserId = mappingIsValid ? settings.user_id : (explicitUserId || null);
+      let mappingFailureReason: string | null = null;
+      if (!phoneNumberId) {
+        mappingFailureReason = 'missing_phone_number_id';
+      } else if (!settings) {
+        mappingFailureReason = explicitUserId
+          ? 'no_settings_for_explicit_user_id'
+          : `no_db_match_for_phone_number_id:${phoneNumberId}`;
+      } else if (explicitUserId && settings.user_id !== explicitUserId) {
+        mappingFailureReason = `wrong_user_id:explicit=${explicitUserId},matched=${settings.user_id}`;
+      } else if (settings.phone_number_id !== phoneNumberId) {
+        mappingFailureReason = `phone_number_id_mismatch:payload=${phoneNumberId},db=${settings.phone_number_id || 'empty'}`;
+      } else if (!settings.api_token) {
+        mappingFailureReason = `missing_api_token:user_id=${settings.user_id}`;
+      }
+
+      console.log('Mapping Debug:', {
+        explicitUserId,
+        resolvedPhoneNumberId: phoneNumberId,
+        matchedSettingsUserId,
+        apiTokenExists,
+        mappingFailureReason,
+      });
+
+      const mappingIsValid = !mappingFailureReason;
+      const resolvedUserId = mappingIsValid ? settings.user_id : (matchedSettingsUserId || explicitUserId || null);
+      const webhookHitAt = new Date().toISOString();
+
+      await updateWebhookDiagnostics(supabase, resolvedUserId, {
+        last_webhook_hit_at: webhookHitAt,
+        last_matched_phone_number_id: phoneNumberId,
+        last_mapping_failure_reason: mappingFailureReason,
+        webhook_subscription_health: mappingFailureReason ? 'mapping_failed' : (hasMessages || hasStatuses ? 'receiving_events' : 'test_or_empty_event'),
+        webhook_config_warning: mappingFailureReason
+          ? `Webhook mapping failed: ${mappingFailureReason}`
+          : (!hasMessages && !hasStatuses ? 'Webhook hit contained no real messages/statuses. Confirm Meta app is Live and subscribed to messages, message_template_status_update, message_deliveries, message_reads, and message_reactions.' : null),
+      });
 
       await logWebhookEvent(supabase, {
         user_id: resolvedUserId,
         event_type: 'raw_webhook',
         direction: 'incoming',
-        payload: body,
+        status: mappingIsValid ? 'mapped' : 'mapping_failed',
+        payload: { body, explicitUserId, phoneNumberId, matchedSettingsUserId, apiTokenExists, mappingFailureReason, hasMessages, hasStatuses },
       });
 
       if (!mappingIsValid) {
-        console.log('⚠️ Webhook strict mapping failed; acknowledged without processing', { explicitUserId, phoneNumberId });
+        console.error('⚠️ Webhook strict mapping failed; acknowledged without processing', { explicitUserId, phoneNumberId, matchedSettingsUserId, mappingFailureReason });
         await logWebhookEvent(supabase, {
           user_id: resolvedUserId,
           event_type: 'strict_mapping_skipped',
           direction: 'incoming',
           status: 'skipped',
-          payload: { explicitUserId, phoneNumberId },
+          error: mappingFailureReason,
+          payload: { explicitUserId, phoneNumberId, matchedSettingsUserId, apiTokenExists, body },
         });
         return okResponse();
       }

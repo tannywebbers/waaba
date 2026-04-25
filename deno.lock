@@ -22,6 +22,7 @@
       "dependencies": [
         "npm:@eslint/js@^9.32.0",
         "npm:@hookform/resolvers@^3.10.0",
+        "npm:@playwright/test@^1.58.2",
         "npm:@radix-ui/react-accordion@^1.2.11",
         "npm:@radix-ui/react-alert-dialog@^1.1.14",
         "npm:@radix-ui/react-aspect-ratio@^1.1.7",
@@ -62,6 +63,7 @@
         "npm:cmdk@^1.1.1",
         "npm:date-fns@^3.6.0",
         "npm:embla-carousel-react@^8.6.0",
+        "npm:emoji-picker-react@^4.18.0",
         "npm:eslint-plugin-react-hooks@^5.2.0",
         "npm:eslint-plugin-react-refresh@~0.4.20",
         "npm:eslint@^9.32.0",
@@ -88,7 +90,7 @@
         "npm:vaul@~0.9.9",
         "npm:vite-plugin-pwa@^1.2.0",
         "npm:vite@^5.4.19",
-        "npm:vmsg@0.3.0",
+        "npm:vmsg@0.4",
         "npm:zod@^3.25.76",
         "npm:zustand@^5.0.9"
       ]

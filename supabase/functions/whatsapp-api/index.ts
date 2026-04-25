@@ -38,6 +38,16 @@ async function testWebhookConnection(token: string) {
   return res.ok;
 }
 
+async function fetchGraphJson(path: string, token: string) {
+  const res = await fetch(`${WHATSAPP_API_URL}${path}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const text = await res.text();
+  let json: any = null;
+  try { json = text ? JSON.parse(text) : null; } catch { json = { raw: text }; }
+  return { ok: res.ok, status: res.status, json };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -254,7 +264,45 @@ serve(async (req) => {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         }
-        return new Response(JSON.stringify({ success: true, phoneNumber: data?.display_phone_number || data?.verified_name || phoneNumberId }), {
+        const diagnostics: any = {
+          phoneNumberId,
+          phoneNumberMatches: String(data?.id || phoneNumberId) === String(phoneNumberId),
+          permissions: [],
+          missingPermissions: [],
+          webhookSubscriptions: [],
+          missingWebhookFields: [],
+          appMode: 'unknown',
+          warnings: [],
+        };
+
+        const permissions = await fetchGraphJson('/me/permissions', token);
+        if (permissions.ok && Array.isArray(permissions.json?.data)) {
+          diagnostics.permissions = permissions.json.data.filter((p: any) => p.status === 'granted').map((p: any) => p.permission);
+          diagnostics.missingPermissions = ['whatsapp_business_management', 'whatsapp_business_messaging', 'business_management']
+            .filter((permission) => !diagnostics.permissions.includes(permission));
+        } else {
+          diagnostics.warnings.push(`Could not verify permissions: ${permissions.json?.error?.message || permissions.status}`);
+        }
+
+        const subscribedApps = await fetchGraphJson(`/${phoneNumberId}/subscribed_apps`, token);
+        if (subscribedApps.ok) {
+          const subscribedFields = (subscribedApps.json?.data || []).flatMap((app: any) => app.subscribed_fields || []);
+          diagnostics.webhookSubscriptions = [...new Set(subscribedFields)];
+          diagnostics.missingWebhookFields = ['messages', 'message_template_status_update', 'message_deliveries', 'message_reads', 'message_reactions']
+            .filter((field) => !diagnostics.webhookSubscriptions.includes(field));
+        } else {
+          diagnostics.warnings.push(`Could not verify webhook subscriptions: ${subscribedApps.json?.error?.message || subscribedApps.status}`);
+        }
+
+        if (diagnostics.missingPermissions.length) {
+          diagnostics.warnings.push(`Missing token permissions: ${diagnostics.missingPermissions.join(', ')}`);
+        }
+        if (diagnostics.missingWebhookFields.length) {
+          diagnostics.warnings.push(`Missing webhook fields: ${diagnostics.missingWebhookFields.join(', ')}`);
+        }
+        diagnostics.warnings.push('Confirm the Meta app is Live, the correct WABA is subscribed, and this phone number belongs to the same WABA. These cannot always be verified by API token alone.');
+
+        return new Response(JSON.stringify({ success: true, phoneNumber: data?.display_phone_number || data?.verified_name || phoneNumberId, diagnostics }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }

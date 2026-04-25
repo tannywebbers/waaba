@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useState, useEffect, useRef } from 'react';
-import { Key, Smartphone, Building, Link, TestTube, Copy, RefreshCw, Loader2, CheckCircle2, AlertCircle, Shield, Trash2 } from 'lucide-react';
+import { Key, Smartphone, Building, Link, TestTube, Copy, RefreshCw, Loader2, CheckCircle2, AlertCircle, Shield, Trash2, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -48,6 +48,12 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
     webhookUrl: '',
     verifyToken: '',
     isConnected: false,
+    lastWebhookHitAt: '',
+    lastRealMessageAt: '',
+    lastMatchedPhoneNumberId: '',
+    lastMappingFailureReason: '',
+    webhookSubscriptionHealth: 'unknown',
+    webhookConfigWarning: '',
   };
 
   const [settings, setSettings] = useState(defaultSettings);
@@ -212,6 +218,12 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
           webhookUrl:   data.webhook_url   || '',
           verifyToken:  data.verify_token  || '',
           isConnected:  data.is_connected  || false,
+          lastWebhookHitAt: data.last_webhook_hit_at || '',
+          lastRealMessageAt: data.last_real_message_at || '',
+          lastMatchedPhoneNumberId: data.last_matched_phone_number_id || '',
+          lastMappingFailureReason: data.last_mapping_failure_reason || '',
+          webhookSubscriptionHealth: data.webhook_subscription_health || 'unknown',
+          webhookConfigWarning: data.webhook_config_warning || '',
         }));
         setWebhookGenerated(!!data.webhook_url);
         onConnectionChange?.(data.is_connected || false);
@@ -382,17 +394,27 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
       if (error) throw error;
 
       if (data?.success) {
-        const newSettings = { ...settings, isConnected: true };
+        const warningText = data.diagnostics?.warnings?.join('\n') || null;
+        const newSettings = {
+          ...settings,
+          isConnected: true,
+          webhookSubscriptionHealth: warningText ? 'needs_attention' : 'verified',
+          webhookConfigWarning: warningText || '',
+        };
         setSettings(newSettings);
         onConnectionChange?.(true);
         
         // Persist connected state
         const { data: existing } = await supabase.from('whatsapp_settings').select('id').eq('user_id', user!.id).maybeSingle();
         if (existing) {
-          await supabase.from('whatsapp_settings').update({ is_connected: true }).eq('user_id', user!.id);
+          await supabase.from('whatsapp_settings').update({
+            is_connected: true,
+            webhook_subscription_health: warningText ? 'needs_attention' : 'verified',
+            webhook_config_warning: warningText,
+          }).eq('user_id', user!.id);
         }
 
-        toast({ title: 'Connection successful!', description: `Connected to ${data.phoneNumber || 'WhatsApp'}` });
+        toast({ title: warningText ? 'Connection works, check webhook warnings' : 'Connection successful!', description: warningText || `Connected to ${data.phoneNumber || 'WhatsApp'}` });
       } else {
         throw new Error(data?.error || 'Connection failed');
       }
@@ -651,6 +673,19 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
     }
   };
 
+  const formatDiagnosticTime = (value?: string) => {
+    if (!value) return 'Never';
+    return new Date(value).toLocaleString();
+  };
+
+  const configWarnings = [
+    !settings.isConnected ? 'Connection test has not passed yet.' : null,
+    !settings.phoneNumberId ? 'Phone Number ID is missing.' : null,
+    !settings.apiToken ? 'Permanent access token is missing.' : null,
+    settings.webhookConfigWarning || null,
+    settings.lastMappingFailureReason ? `Last mapping failure: ${settings.lastMappingFailureReason}` : null,
+  ].filter(Boolean);
+
   if (loading || sharedLoading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -838,6 +873,44 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
           </div>
         </div>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-[17px]">
+            <Activity className="h-5 w-5 text-primary" />
+            Live Delivery Check
+          </CardTitle>
+          <CardDescription className="text-[13px]">
+            Real webhook delivery health for normal customer messages.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 gap-3 text-[13px]">
+            <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">Last webhook hit</span><span className="text-right font-medium">{formatDiagnosticTime(settings.lastWebhookHitAt)}</span></div>
+            <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">Last real incoming message</span><span className="text-right font-medium">{formatDiagnosticTime(settings.lastRealMessageAt)}</span></div>
+            <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">Last matched Phone Number ID</span><span className="text-right font-mono text-[12px]">{settings.lastMatchedPhoneNumberId || 'None yet'}</span></div>
+            <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">Webhook subscription health</span><Badge variant={settings.webhookSubscriptionHealth === 'healthy' || settings.webhookSubscriptionHealth === 'verified' ? 'default' : 'secondary'}>{settings.webhookSubscriptionHealth || 'unknown'}</Badge></div>
+          </div>
+
+          {configWarnings.length > 0 && (
+            <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-4">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+                <div className="space-y-2">
+                  <p className="text-[13px] font-semibold text-foreground">Meta setup warnings</p>
+                  <ul className="list-disc list-inside space-y-1 text-[12px] text-muted-foreground">
+                    {configWarnings.map((warning, index) => <li key={index}>{warning}</li>)}
+                    <li>Meta app must be Live, not Development.</li>
+                    <li>Webhook fields must include messages, message_template_status_update, message_deliveries, message_reads, and message_reactions.</li>
+                    <li>The correct WABA and business phone number must be linked to this Phone Number ID.</li>
+                    <li>The token must be a permanent system-user token with whatsapp_business_management, whatsapp_business_messaging, and business_management permissions.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
