@@ -718,41 +718,83 @@ serve(async (req) => {
   if (req.method === 'POST') {
     try {
       const body = await req.json();
-      const phoneNumberId = body.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id || null;
+      logPayloadDebug(body);
 
-      let settings = null;
+      const entry = body.entry?.[0];
+      const changes = entry?.changes?.[0];
+      const value = changes?.value;
+      const phoneNumberId = value?.metadata?.phone_number_id || null;
+      const hasMessages = Boolean(value?.messages?.length);
+      const hasStatuses = Boolean(value?.statuses?.length);
+
+      let settingsByExplicitUser = null;
+      let settingsByPhoneNumber = null;
       if (explicitUserId) {
-        settings = await getSettingsByUserId(supabase, explicitUserId);
+        settingsByExplicitUser = await getSettingsByUserId(supabase, explicitUserId);
       }
 
-      if (!settings && phoneNumberId) {
-        settings = await getSettingsByPhoneNumberId(supabase, phoneNumberId);
+      if (phoneNumberId) {
+        settingsByPhoneNumber = await getSettingsByPhoneNumberId(supabase, phoneNumberId);
       }
 
-      const mappingIsValid = Boolean(
-        settings?.user_id && (
-          (phoneNumberId && settings.phone_number_id === phoneNumberId) ||
-          (explicitUserId && settings.user_id === explicitUserId)
-        )
-      );
+      const settings = explicitUserId ? settingsByExplicitUser : settingsByPhoneNumber;
+      const matchedSettingsUserId = settings?.user_id || settingsByPhoneNumber?.user_id || null;
+      const apiTokenExists = Boolean(settings?.api_token);
 
-      const resolvedUserId = mappingIsValid ? settings.user_id : (explicitUserId || null);
+      let mappingFailureReason: string | null = null;
+      if (!phoneNumberId) {
+        mappingFailureReason = 'missing_phone_number_id';
+      } else if (!settings) {
+        mappingFailureReason = explicitUserId
+          ? 'no_settings_for_explicit_user_id'
+          : `no_db_match_for_phone_number_id:${phoneNumberId}`;
+      } else if (explicitUserId && settings.user_id !== explicitUserId) {
+        mappingFailureReason = `wrong_user_id:explicit=${explicitUserId},matched=${settings.user_id}`;
+      } else if (settings.phone_number_id !== phoneNumberId) {
+        mappingFailureReason = `phone_number_id_mismatch:payload=${phoneNumberId},db=${settings.phone_number_id || 'empty'}`;
+      } else if (!settings.api_token) {
+        mappingFailureReason = `missing_api_token:user_id=${settings.user_id}`;
+      }
+
+      console.log('Mapping Debug:', {
+        explicitUserId,
+        resolvedPhoneNumberId: phoneNumberId,
+        matchedSettingsUserId,
+        apiTokenExists,
+        mappingFailureReason,
+      });
+
+      const mappingIsValid = !mappingFailureReason;
+      const resolvedUserId = mappingIsValid ? settings.user_id : (matchedSettingsUserId || explicitUserId || null);
+      const webhookHitAt = new Date().toISOString();
+
+      await updateWebhookDiagnostics(supabase, resolvedUserId, {
+        last_webhook_hit_at: webhookHitAt,
+        last_matched_phone_number_id: phoneNumberId,
+        last_mapping_failure_reason: mappingFailureReason,
+        webhook_subscription_health: mappingFailureReason ? 'mapping_failed' : (hasMessages || hasStatuses ? 'receiving_events' : 'test_or_empty_event'),
+        webhook_config_warning: mappingFailureReason
+          ? `Webhook mapping failed: ${mappingFailureReason}`
+          : (!hasMessages && !hasStatuses ? 'Webhook hit contained no real messages/statuses. Confirm Meta app is Live and subscribed to messages, message_template_status_update, message_deliveries, message_reads, and message_reactions.' : null),
+      });
 
       await logWebhookEvent(supabase, {
         user_id: resolvedUserId,
         event_type: 'raw_webhook',
         direction: 'incoming',
-        payload: body,
+        status: mappingIsValid ? 'mapped' : 'mapping_failed',
+        payload: { body, explicitUserId, phoneNumberId, matchedSettingsUserId, apiTokenExists, mappingFailureReason, hasMessages, hasStatuses },
       });
 
       if (!mappingIsValid) {
-        console.log('⚠️ Webhook strict mapping failed; acknowledged without processing', { explicitUserId, phoneNumberId });
+        console.error('⚠️ Webhook strict mapping failed; acknowledged without processing', { explicitUserId, phoneNumberId, matchedSettingsUserId, mappingFailureReason });
         await logWebhookEvent(supabase, {
           user_id: resolvedUserId,
           event_type: 'strict_mapping_skipped',
           direction: 'incoming',
           status: 'skipped',
-          payload: { explicitUserId, phoneNumberId },
+          error: mappingFailureReason,
+          payload: { explicitUserId, phoneNumberId, matchedSettingsUserId, apiTokenExists, body },
         });
         return okResponse();
       }
