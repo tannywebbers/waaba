@@ -655,7 +655,12 @@ const processWebhookPayload = async (
   }
 
   if (!settings?.api_token || !settings?.user_id) {
-    console.log('⚠️ Strict mapping failed, webhook acknowledged without processing');
+    console.log('⚠️ Processing blocked after mapping:', {
+      explicitUserId,
+      resolvedPhoneNumberId: value.metadata?.phone_number_id || null,
+      matchedSettingsUserId: settings?.user_id || null,
+      apiTokenExists: Boolean(settings?.api_token),
+    });
     return;
   }
 
@@ -663,10 +668,12 @@ const processWebhookPayload = async (
   const superUserId = explicitUserId || settingsUserId;
 
   if (value.messages?.length) {
+    console.log('📩 Real incoming messages detected:', value.messages.length);
     await processIncomingMessages(supabase, value, settings.api_token, settingsUserId, superUserId, settings);
   }
 
   if (value.statuses?.length) {
+    console.log('📬 Status updates detected:', value.statuses.length);
     await processStatuses(supabase, value, settingsUserId);
   }
 };
