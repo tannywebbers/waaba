@@ -37,20 +37,35 @@ const updateWebhookDiagnostics = async (supabase: any, userId: string | null | u
 
 const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : String(error);
 
+const getWebhookItems = (body: any) =>
+  (body.entry || []).flatMap((entry: any, entryIndex: number) =>
+    (entry.changes || []).map((change: any, changeIndex: number) => ({
+      entry,
+      change,
+      value: change?.value,
+      entryIndex,
+      changeIndex,
+    }))
+  ).filter((item: any) => item.value);
+
 const logPayloadDebug = (body: any) => {
-  const entry = body.entry?.[0];
-  const changes = entry?.changes?.[0];
-  const value = changes?.value;
+  const webhookItems = getWebhookItems(body);
 
   console.log('FULL WEBHOOK BODY:', JSON.stringify(body, null, 2));
+  console.log('Webhook Item Count:', webhookItems.length);
   console.log('Entry:', JSON.stringify(body.entry, null, 2));
-  console.log('Changes:', JSON.stringify(entry?.changes, null, 2));
-  console.log('Value:', JSON.stringify(value, null, 2));
-  console.log('Metadata:', JSON.stringify(value?.metadata, null, 2));
-  console.log('Phone Number ID:', value?.metadata?.phone_number_id);
-  console.log('Contacts:', JSON.stringify(value?.contacts, null, 2));
-  console.log('Messages:', JSON.stringify(value?.messages, null, 2));
-  console.log('Statuses:', JSON.stringify(value?.statuses, null, 2));
+
+  webhookItems.forEach((item: any) => {
+    const value = item.value;
+    console.log(`Change[${item.entryIndex}:${item.changeIndex}] Field:`, item.change?.field);
+    console.log(`Changes[${item.entryIndex}:${item.changeIndex}]:`, JSON.stringify(item.change, null, 2));
+    console.log(`Value[${item.entryIndex}:${item.changeIndex}]:`, JSON.stringify(value, null, 2));
+    console.log(`Metadata[${item.entryIndex}:${item.changeIndex}]:`, JSON.stringify(value?.metadata, null, 2));
+    console.log(`Phone Number ID[${item.entryIndex}:${item.changeIndex}]:`, value?.metadata?.phone_number_id);
+    console.log(`Contacts[${item.entryIndex}:${item.changeIndex}]:`, JSON.stringify(value?.contacts, null, 2));
+    console.log(`Messages[${item.entryIndex}:${item.changeIndex}]:`, JSON.stringify(value?.messages, null, 2));
+    console.log(`Statuses[${item.entryIndex}:${item.changeIndex}]:`, JSON.stringify(value?.statuses, null, 2));
+  });
 };
 
 const sendBlockedReply = async (settings: any, to: string) => {
