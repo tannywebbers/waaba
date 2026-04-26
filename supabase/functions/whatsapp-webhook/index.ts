@@ -698,36 +698,37 @@ const processWebhookPayload = async (
   explicitUserId: string | null,
   settings: any,
 ) => {
-  const entry = body.entry?.[0];
-  const changes = entry?.changes?.[0];
-  const value = changes?.value;
+  const webhookItems = getWebhookItems(body);
 
-  if (!value) {
+  if (!webhookItems.length) {
     console.log('⚠️ No value in payload, skipping processing');
     return;
   }
 
-  if (!settings?.api_token || !settings?.user_id) {
-    console.log('⚠️ Processing blocked after mapping:', {
-      explicitUserId,
-      resolvedPhoneNumberId: value.metadata?.phone_number_id || null,
-      matchedSettingsUserId: settings?.user_id || null,
-      apiTokenExists: Boolean(settings?.api_token),
-    });
-    return;
-  }
+  for (const item of webhookItems) {
+    const value = item.value;
+    if (!settings?.api_token || !settings?.user_id) {
+      console.log('⚠️ Processing blocked after mapping:', {
+        explicitUserId,
+        resolvedPhoneNumberId: value.metadata?.phone_number_id || null,
+        matchedSettingsUserId: settings?.user_id || null,
+        apiTokenExists: Boolean(settings?.api_token),
+      });
+      continue;
+    }
 
-  const settingsUserId = settings.user_id;
-  const superUserId = explicitUserId || settingsUserId;
+    const settingsUserId = settings.user_id;
+    const superUserId = explicitUserId || settingsUserId;
 
-  if (value.messages?.length) {
-    console.log('📩 Real incoming messages detected:', value.messages.length);
-    await processIncomingMessages(supabase, value, settings.api_token, settingsUserId, superUserId, settings);
-  }
+    if (value.messages?.length) {
+      console.log('📩 Real incoming messages detected:', value.messages.length);
+      await processIncomingMessages(supabase, value, settings.api_token, settingsUserId, superUserId, settings);
+    }
 
-  if (value.statuses?.length) {
-    console.log('📬 Status updates detected:', value.statuses.length);
-    await processStatuses(supabase, value, settingsUserId);
+    if (value.statuses?.length) {
+      console.log('📬 Status updates detected:', value.statuses.length);
+      await processStatuses(supabase, value, settingsUserId);
+    }
   }
 };
 
