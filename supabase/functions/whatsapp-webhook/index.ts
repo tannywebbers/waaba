@@ -108,6 +108,44 @@ const getSettingsByPhoneNumberId = async (supabase: any, phoneNumberId: string) 
   return data;
 };
 
+const resolveSettingsForWebhookItem = async (
+  supabase: any,
+  explicitUserId: string | null,
+  phoneNumberId: string | null,
+) => {
+  let settingsByExplicitUser = null;
+  let settingsByPhoneNumber = null;
+
+  if (explicitUserId) {
+    settingsByExplicitUser = await getSettingsByUserId(supabase, explicitUserId);
+  }
+
+  if (phoneNumberId) {
+    settingsByPhoneNumber = await getSettingsByPhoneNumberId(supabase, phoneNumberId);
+  }
+
+  const settings = phoneNumberId && settingsByPhoneNumber ? settingsByPhoneNumber : settingsByExplicitUser;
+  const matchedSettingsUserId = settings?.user_id || settingsByPhoneNumber?.user_id || settingsByExplicitUser?.user_id || null;
+  const apiTokenExists = Boolean(settings?.api_token);
+
+  let mappingFailureReason: string | null = null;
+  if (!phoneNumberId) {
+    mappingFailureReason = 'missing_phone_number_id';
+  } else if (!settings) {
+    mappingFailureReason = explicitUserId
+      ? `no_db_match_for_phone_number_id:${phoneNumberId};explicit_user_has_no_usable_settings:${explicitUserId}`
+      : `no_db_match_for_phone_number_id:${phoneNumberId}`;
+  } else if (explicitUserId && settingsByPhoneNumber && settingsByPhoneNumber.user_id !== explicitUserId) {
+    mappingFailureReason = `wrong_user_id:explicit=${explicitUserId},matched_by_phone=${settingsByPhoneNumber.user_id}`;
+  } else if (settings.phone_number_id !== phoneNumberId) {
+    mappingFailureReason = `phone_number_id_mismatch:payload=${phoneNumberId},db=${settings.phone_number_id || 'empty'}`;
+  } else if (!settings.api_token) {
+    mappingFailureReason = `missing_api_token:user_id=${settings.user_id}`;
+  }
+
+  return { settings, matchedSettingsUserId, apiTokenExists, mappingFailureReason };
+};
+
 const buildPhoneVariants = (phone: string): string[] => {
   const raw = phone.replace(/^\+/, '');
   const variants = new Set([phone, `+${raw}`, raw]);
