@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -22,12 +21,8 @@ interface UnifiedTemplateSelectorProps {
   onInsertAppTemplate: (text: string) => void;
 }
 
-// Resolve a mapped field name to actual contact data
-// Supports: CRM fields, current_date, and app_template:template_name
 function calculateDueDate(dayType: number | undefined): string {
   if (dayType === undefined || dayType === null) return '';
-  // due_date = today - dayType days
-  // dayType 0 = due today, dayType -2 = due in 2 days (future), dayType 3 = overdue by 3 days
   const today = new Date();
   const dueDate = new Date(today);
   dueDate.setDate(today.getDate() - dayType);
@@ -35,7 +30,6 @@ function calculateDueDate(dayType: number | undefined): string {
 }
 
 function resolveField(field: string, contact: Contact, appTemplatesMap: Record<string, string>): string {
-  // Handle app_template:xxx — inject template CONTENT, not name
   if (field.startsWith('app_template:')) {
     const templateName = field.replace('app_template:', '');
     const content = appTemplatesMap[templateName];
@@ -116,8 +110,6 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
   const [appTemplates, setAppTemplates] = useState<any[]>([]);
   const [appSearch, setAppSearch] = useState('');
   const [appLoading, setAppLoading] = useState(false);
-
-  // App templates map for resolving at send time: { template_name: template_body }
   const [appTemplatesMap, setAppTemplatesMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -150,10 +142,13 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
     if (!user) return;
     setAppLoading(true);
     try {
-      const { data } = await supabase.from('app_templates' as any).select('*').eq('user_id', user.id).order('name');
+      const { data } = await supabase
+        .from('app_templates' as any)
+        .select('*')
+        .eq('user_id', user.id)
+        .order('name');
       const templates = (data as any[]) || [];
       setAppTemplates(templates);
-      // Build lookup map
       const map: Record<string, string> = {};
       templates.forEach(t => { map[t.name] = t.body; });
       setAppTemplatesMap(map);
@@ -165,7 +160,10 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
     setSelectedMeta(template);
     if (!user) return;
     const { data: mappingData } = await supabase
-      .from('template_mappings' as any).select('*').eq('user_id', user.id).eq('template_name', template.name);
+      .from('template_mappings' as any)
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('template_name', template.name);
     const dbMappings: Record<number, string> = {};
     ((mappingData as any[]) || []).forEach((m: any) => { dbMappings[m.variable_number] = m.mapped_field; });
     setMappings(dbMappings);
@@ -211,17 +209,9 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
 
   const handleMetaConfirm = () => {
     if (!selectedMeta) return;
-
-    // Validate: check for unresolved app_template references
-    for (const [key, value] of Object.entries(metaParams)) {
-      if (value.startsWith('[Missing template:')) {
-        return; // Block send — the toast/UI already shows the issue
-      }
-      if (!value.trim()) {
-        // Allow empty if user explicitly cleared it
-      }
+    for (const [, value] of Object.entries(metaParams)) {
+      if (value.startsWith('[Missing template:')) return;
     }
-
     onSelectMetaTemplate(selectedMeta, metaParams);
     setOpen(false);
     setSelectedMeta(null);
@@ -241,20 +231,27 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
     return text;
   };
 
-  const filteredMeta = metaTemplates.filter(t => 
+  const filteredMeta = metaTemplates.filter(t =>
     t.name.toLowerCase().includes(metaSearch.toLowerCase())
   );
-  const filteredApp = appTemplates.filter(t => 
+  const filteredApp = appTemplates.filter(t =>
     t.name.toLowerCase().includes(appSearch.toLowerCase())
   );
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-[45px] w-[45px] shrink-0 text-lotus-blue hover:text-lotus-blue hover:bg-lotus-blue/10" title="Templates">
+        {/* FIXED: Deep grey for the template button */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-[45px] w-[45px] shrink-0 text-zinc-500 hover:text-zinc-600 hover:bg-zinc-500/10"
+          title="Templates"
+        >
           <FileText className="h-[29px] w-[29px]" strokeWidth={2.75} />
         </Button>
       </DialogTrigger>
+
       <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
         <DialogHeader className="px-6 pt-6 pb-4 shrink-0">
           <DialogTitle>Templates</DialogTitle>
@@ -285,15 +282,15 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
                     {Object.entries(metaParams).map(([key, value]) => (
                       <div key={key} className="flex items-center gap-2">
                         <span className="text-sm text-muted-foreground w-16 shrink-0">{key}</span>
-                        <Input 
-                          value={value} 
-                          onChange={(e) => setMetaParams({ ...metaParams, [key]: e.target.value })} 
+                        <Input
+                          value={value}
+                          onChange={(e) => setMetaParams({ ...metaParams, [key]: e.target.value })}
                           placeholder={`Value for ${key}`}
                         />
                       </div>
                     ))}
                   </div>
-                  
+
                   {unmappedVars.length > 0 && Object.keys(mappings).length > 0 && (
                     <div className="flex items-center gap-2 text-destructive text-sm mt-3">
                       <AlertCircle className="h-4 w-4 shrink-0" />
@@ -323,7 +320,7 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input value={metaSearch} onChange={(e) => setMetaSearch(e.target.value)} placeholder="Search meta templates..." className="pl-9" />
                 </div>
-                
+
                 <div className="flex-1 min-h-0 overflow-y-auto" style={{ maxHeight: 'calc(85vh - 200px)' }}>
                   {metaLoading ? (
                     <div className="text-center py-8 text-muted-foreground">Loading...</div>
@@ -335,9 +332,9 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
                   ) : (
                     <div className="space-y-2 pb-4">
                       {filteredMeta.map(t => (
-                        <button 
-                          key={t.id} 
-                          onClick={() => handleSelectMeta(t)} 
+                        <button
+                          key={t.id}
+                          onClick={() => handleSelectMeta(t)}
                           className="w-full text-left p-4 rounded-lg border border-border hover:bg-accent/50 transition-colors"
                         >
                           <div className="flex items-center justify-between mb-2">
@@ -359,7 +356,7 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input value={appSearch} onChange={(e) => setAppSearch(e.target.value)} placeholder="Search app templates..." className="pl-9" />
                 </div>
-                
+
                 <div className="flex-1 min-h-0 overflow-y-auto" style={{ maxHeight: 'calc(85vh - 200px)' }}>
                   {appLoading ? (
                     <div className="text-center py-8 text-muted-foreground">Loading...</div>
@@ -371,9 +368,9 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
                   ) : (
                     <div className="space-y-2 pb-4">
                       {filteredApp.map(t => (
-                        <button 
-                          key={t.id} 
-                          onClick={() => handleAppSelect(t)} 
+                        <button
+                          key={t.id}
+                          onClick={() => handleAppSelect(t)}
                           className="w-full text-left p-4 rounded-lg border border-border hover:bg-accent/50 transition-colors"
                         >
                           <div className="font-medium mb-1">{t.name}</div>
