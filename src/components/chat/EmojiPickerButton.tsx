@@ -35,10 +35,11 @@ export function EmojiPickerButton({ onEmojiSelect, onDeleteChar, onToggle }: Emo
 
   return (
     <div ref={ref} className="relative">
+      {/* FIXED: Deep grey color for emoji button */}
       <button
         type="button"
         onClick={togglePicker}
-        className="p-1.5 text-status-typing hover:text-status-typing hover:bg-status-typing/10 rounded-full transition-colors"
+        className="p-1.5 text-zinc-500 hover:text-zinc-600 hover:bg-zinc-500/10 rounded-full transition-colors"
       >
         {open
           ? <Keyboard className="h-6 w-6" strokeWidth={2.25} />
