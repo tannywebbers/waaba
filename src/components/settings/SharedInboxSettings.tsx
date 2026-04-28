@@ -36,33 +36,82 @@ export function SharedInboxSettings() {
 
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
 
+  // ─── FIXED: Robust user search — exact match first, then wildcard fallback ──
   const handleSearchUser = async () => {
-    if (!searchEmail.trim() || !user) return;
+    const emailQuery = searchEmail.trim().toLowerCase();
+    if (!emailQuery || !user) return;
+
     setSearching(true);
     setFoundUser(null);
+
     try {
-      const { data, error } = await supabase
+      // Step 1: try exact match (case-insensitive)
+      let { data, error } = await supabase
         .from('profiles')
         .select('user_id, name, email')
-        .ilike('email', searchEmail.trim())
+        .ilike('email', emailQuery)
         .limit(1);
-      if (error) throw error;
 
-      const result = data?.[0];
-      if (!result) {
-        toast({ title: 'User not found', description: 'No account found with that email.', variant: 'destructive' });
+      if (error) {
+        console.error('Profile search error (exact):', error);
+        throw new Error(`Search failed: ${error.message}. Make sure the profiles table has email and user_id columns.`);
+      }
+
+      // Step 2: if nothing found, try wildcard contains
+      if (!data || data.length === 0) {
+        const { data: wildcardData, error: wildcardError } = await supabase
+          .from('profiles')
+          .select('user_id, name, email')
+          .ilike('email', `%${emailQuery}%`)
+          .limit(5);
+
+        if (!wildcardError && wildcardData && wildcardData.length > 0) {
+          data = wildcardData;
+        }
+      }
+
+      if (!data || data.length === 0) {
+        toast({
+          title: 'User not found',
+          description: `No account found with email matching "${emailQuery}". Make sure they have already signed up.`,
+          variant: 'destructive',
+        });
         return;
       }
-      if (result.user_id === user.id) {
+
+      // If multiple results from wildcard, pick the closest match
+      const result = data.find(u =>
+        (u.email || '').toLowerCase() === emailQuery
+      ) || data[0];
+
+      const userId = result.user_id || (result as any).id;
+
+      if (!userId) {
+        toast({
+          title: 'User data error',
+          description: 'Found user but could not read their ID. Check the profiles table schema.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (userId === user.id) {
         toast({ title: 'Cannot add yourself', variant: 'destructive' });
         return;
       }
-      if (sharedUsers.some(u => u.sharedUserId === result.user_id)) {
+
+      if (sharedUsers.some(u => u.sharedUserId === userId)) {
         toast({ title: 'User already in shared inbox', variant: 'destructive' });
         return;
       }
-      setFoundUser({ user_id: result.user_id, name: result.name || 'Unknown', email: result.email || '' });
+
+      setFoundUser({
+        user_id: userId,
+        name: result.name || result.email || 'Unknown',
+        email: result.email || emailQuery,
+      });
     } catch (err: any) {
+      console.error('Search error:', err);
       toast({ title: 'Search failed', description: err.message, variant: 'destructive' });
     } finally {
       setSearching(false);
@@ -72,21 +121,31 @@ export function SharedInboxSettings() {
   const handleAddUser = async () => {
     if (!foundUser || !user) return;
     try {
+      // Insert the shared inbox membership
       const { error } = await supabase.from('shared_inbox_users' as any).insert({
         super_user_id: user.id,
         shared_user_id: foundUser.user_id,
         balance: 0,
         status: 'active',
       } as any);
-      if (error) throw error;
 
+      if (error) {
+        // Handle duplicate key gracefully
+        if (error.code === '23505') {
+          toast({ title: 'User already added', description: 'This user is already in your shared inbox.', variant: 'destructive' });
+          return;
+        }
+        throw error;
+      }
+
+      // Copy super user credentials to the new shared user
       const { error: copyErr } = await supabase.rpc('copy_super_user_credentials' as any, {
         _super_user_id: user.id,
         _shared_user_id: foundUser.user_id,
       });
       if (copyErr) console.error('Failed to copy credentials:', copyErr);
 
-      toast({ title: '✅ User added to shared inbox' });
+      toast({ title: `✅ ${foundUser.name} added to shared inbox` });
       setFoundUser(null);
       setSearchEmail('');
       refresh();
@@ -277,15 +336,22 @@ export function SharedInboxSettings() {
           {/* Search & Add */}
           <div className="flex gap-2">
             <Input
-              placeholder="Search by email..."
+              placeholder="Search by email address..."
               value={searchEmail}
               onChange={(e) => { setSearchEmail(e.target.value); setFoundUser(null); }}
               onKeyDown={(e) => e.key === 'Enter' && handleSearchUser()}
             />
             <Button onClick={handleSearchUser} disabled={searching || !searchEmail.trim()}>
-              <Search className="h-4 w-4 mr-1" /> Search
+              {searching
+                ? <span className="flex items-center gap-1"><span className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full inline-block" /> Searching</span>
+                : <><Search className="h-4 w-4 mr-1" /> Search</>
+              }
             </Button>
           </div>
+
+          <p className="text-[12px] text-muted-foreground">
+            The user must already have an account. Enter their exact email address or part of it.
+          </p>
 
           {/* Found user preview */}
           {foundUser && (
@@ -295,7 +361,7 @@ export function SharedInboxSettings() {
                 <p className="text-sm text-muted-foreground">{foundUser.email}</p>
               </div>
               <Button size="sm" onClick={handleAddUser}>
-                <Plus className="h-4 w-4 mr-1" /> Add
+                <Plus className="h-4 w-4 mr-1" /> Add to Inbox
               </Button>
             </div>
           )}
@@ -365,8 +431,8 @@ export function SharedInboxSettings() {
           ) : (
             <div className="text-center py-8 text-muted-foreground">
               <Users className="h-10 w-10 mx-auto mb-2 opacity-40" />
-              <p>No shared users yet</p>
-              <p className="text-sm">Search by email to add users</p>
+              <p className="font-medium">No shared users yet</p>
+              <p className="text-sm">Search by email to add team members</p>
             </div>
           )}
         </CardContent>
