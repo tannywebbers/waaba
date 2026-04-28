@@ -20,6 +20,7 @@ export function FileUploadButton({ onFileSelect, uploading }: FileUploadButtonPr
   const documentInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
+
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [pendingType, setPendingType] = useState<'image' | 'document' | 'audio'>('image');
   const [showPreview, setShowPreview] = useState(false);
@@ -44,32 +45,70 @@ export function FileUploadButton({ onFileSelect, uploading }: FileUploadButtonPr
 
   return (
     <>
-      <input ref={imageInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={(e) => handleFileChange(e, 'image')} />
-      <input ref={documentInputRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv" className="hidden" onChange={(e) => handleFileChange(e, 'document')} />
-      <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handleFileChange(e, 'image')} />
-      <input ref={audioInputRef} type="file" accept="audio/*" className="hidden" onChange={(e) => handleFileChange(e, 'audio')} />
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*,video/*"
+        className="hidden"
+        onChange={(e) => handleFileChange(e, 'image')}
+      />
+      <input
+        ref={documentInputRef}
+        type="file"
+        accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
+        className="hidden"
+        onChange={(e) => handleFileChange(e, 'document')}
+      />
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => handleFileChange(e, 'image')}
+      />
+      <input
+        ref={audioInputRef}
+        type="file"
+        accept="audio/*"
+        className="hidden"
+        onChange={(e) => handleFileChange(e, 'audio')}
+      />
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-[45px] w-[45px] shrink-0 text-primary hover:text-primary hover:bg-primary/10">
+          {/* FIXED: Deep grey for the paperclip/attachment button */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-[45px] w-[45px] shrink-0 text-zinc-500 hover:text-zinc-600 hover:bg-zinc-500/10"
+          >
             <Paperclip className="h-[29px] w-[29px]" strokeWidth={2.75} />
           </Button>
         </DropdownMenuTrigger>
+
         <DropdownMenuContent align="start" className="w-48">
+          {/* Photos & Videos → BLUE */}
           <DropdownMenuItem onClick={() => imageInputRef.current?.click()}>
-            <Image className="h-4 w-4 mr-2 text-primary" />
+            <Image className="h-4 w-4 mr-2 text-blue-500" />
             Photos & Videos
           </DropdownMenuItem>
+
+          {/* Document → PURPLE */}
           <DropdownMenuItem onClick={() => documentInputRef.current?.click()}>
-            <FileText className="h-4 w-4 mr-2 text-lotus-blue" />
+            <FileText className="h-4 w-4 mr-2 text-purple-500" />
             Document
           </DropdownMenuItem>
+
+          {/* Audio → ORANGE */}
           <DropdownMenuItem onClick={() => audioInputRef.current?.click()}>
-            <Music className="h-4 w-4 mr-2 text-status-typing" />
+            <Music className="h-4 w-4 mr-2 text-orange-500" />
             Audio File
           </DropdownMenuItem>
+
+          {/* Camera → RED */}
           <DropdownMenuItem onClick={() => cameraInputRef.current?.click()}>
-            <Camera className="h-4 w-4 mr-2 text-lotus-green" />
+            <Camera className="h-4 w-4 mr-2 text-red-500" />
             Camera
           </DropdownMenuItem>
         </DropdownMenuContent>
