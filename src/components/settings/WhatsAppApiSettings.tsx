@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useState, useEffect, useRef } from 'react';
-import { Key, Smartphone, Building, Link, TestTube, Copy, RefreshCw, Loader2, CheckCircle2, AlertCircle, Shield, Trash2, Activity } from 'lucide-react';
+import { Key, Smartphone, Building, Link, TestTube, Copy, RefreshCw, Loader2, CheckCircle2, AlertCircle, Shield, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -35,10 +35,8 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
   const [revoking, setRevoking] = useState(false);
   const [resetting, setResetting] = useState(false);
 
-  // ✅ FIX: Track whether the user has unsaved edits in the credential inputs.
-  // If true, loadSettings() will NOT overwrite those fields — only non-editable
-  // fields (isConnected, webhookUrl, verifyToken) are refreshed from DB.
-  // This prevents tab-switch / focus-return from wiping half-typed credentials.
+  // Track whether the user has unsaved edits in the credential inputs.
+  // Prevents tab-switch / focus-return from wiping half-typed credentials.
   const hasDraft = useRef(false);
 
   const defaultSettings = {
@@ -48,12 +46,6 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
     webhookUrl: '',
     verifyToken: '',
     isConnected: false,
-    lastWebhookHitAt: '',
-    lastRealMessageAt: '',
-    lastMatchedPhoneNumberId: '',
-    lastMappingFailureReason: '',
-    webhookSubscriptionHealth: 'unknown',
-    webhookConfigWarning: '',
   };
 
   const [settings, setSettings] = useState(defaultSettings);
@@ -73,7 +65,6 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
     setWebhookGenerated(Boolean(nextSettings.webhookUrl && nextSettings.verifyToken));
   };
 
-  // Helper to clear all settings (only called on explicit reset/revoke)
   const clearSettings = () => {
     applySettingsState();
   };
@@ -163,10 +154,9 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
   // Auto-provision credentials for shared users if missing
   useEffect(() => {
     if (!user || sharedLoading || !isSharedUser) return;
-    if (settings.isConnected) return; // Already has credentials
-    
+    if (settings.isConnected) return;
+
     const autoProvision = async () => {
-      // Check if shared user already has settings
       const { data: existing } = await supabase
         .from('whatsapp_settings')
         .select('id')
@@ -174,7 +164,6 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
         .maybeSingle();
 
       if (!existing) {
-        // Find super user and copy credentials
         const { data: membership } = await supabase
           .from('shared_inbox_users' as any)
           .select('super_user_id')
@@ -208,27 +197,16 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
 
       if (data) {
         setSettings(prev => ({
-          // ✅ FIX: Only restore credential fields from DB if the user hasn't
-          // started typing yet. This is what prevents tab-switching from
-          // clearing half-entered tokens/IDs.
           apiToken:           hasDraft.current ? prev.apiToken           : (data.api_token || ''),
           phoneNumberId:      hasDraft.current ? prev.phoneNumberId      : (data.phone_number_id || ''),
           businessAccountId:  hasDraft.current ? prev.businessAccountId  : (data.business_account_id || ''),
-          // Non-editable fields always sync from DB
           webhookUrl:   data.webhook_url   || '',
           verifyToken:  data.verify_token  || '',
           isConnected:  data.is_connected  || false,
-          lastWebhookHitAt: data.last_webhook_hit_at || '',
-          lastRealMessageAt: data.last_real_message_at || '',
-          lastMatchedPhoneNumberId: data.last_matched_phone_number_id || '',
-          lastMappingFailureReason: data.last_mapping_failure_reason || '',
-          webhookSubscriptionHealth: data.webhook_subscription_health || 'unknown',
-          webhookConfigWarning: data.webhook_config_warning || '',
         }));
         setWebhookGenerated(!!data.webhook_url);
         onConnectionChange?.(data.is_connected || false);
       } else {
-        // No settings found — only clear if no draft in progress
         if (!hasDraft.current) {
           clearSettings();
         }
@@ -241,6 +219,7 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
     }
   };
 
+  // ─── FIXED: Reliable upsert for credential saving ─────────────────────────
   const handleSave = async () => {
     if (!user) return;
     if (!settings.apiToken || !settings.phoneNumberId) {
@@ -250,46 +229,28 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
 
     setSaving(true);
     try {
-      // Check if record exists
-      const { data: existing } = await supabase
-        .from('whatsapp_settings')
-        .select('id')
-        .eq('user_id', user.id)
-        .maybeSingle();
+      const payload = {
+        user_id: user.id,
+        api_token: settings.apiToken.trim(),
+        phone_number_id: settings.phoneNumberId.trim(),
+        business_account_id: settings.businessAccountId.trim() || null,
+        webhook_url: settings.webhookUrl || null,
+        verify_token: settings.verifyToken || null,
+        is_connected: settings.isConnected,
+      };
 
-      let error;
-      if (existing) {
-        // Update
-        ({ error } = await supabase
-          .from('whatsapp_settings')
-          .update({
-            api_token: settings.apiToken,
-            phone_number_id: settings.phoneNumberId,
-            business_account_id: settings.businessAccountId,
-            webhook_url: settings.webhookUrl,
-            verify_token: settings.verifyToken,
-            is_connected: settings.isConnected,
-          })
-          .eq('user_id', user.id));
-      } else {
-        // Insert
-        ({ error } = await supabase
-          .from('whatsapp_settings')
-          .insert({
-            user_id: user.id,
-            api_token: settings.apiToken,
-            phone_number_id: settings.phoneNumberId,
-            business_account_id: settings.businessAccountId,
-            webhook_url: settings.webhookUrl,
-            verify_token: settings.verifyToken,
-            is_connected: settings.isConnected,
-          }));
-      }
+      // Use upsert so it works whether or not a row exists
+      const { error } = await supabase
+        .from('whatsapp_settings')
+        .upsert(payload, { onConflict: 'user_id' });
 
       if (error) throw error;
-      // ✅ FIX: Draft is now persisted — clear the dirty flag
+
       hasDraft.current = false;
-      toast({ title: 'Settings saved successfully' });
+      toast({ title: '✅ Credentials saved successfully' });
+
+      // Reload to confirm persisted values
+      await loadSettings();
     } catch (error: any) {
       console.error('Error saving settings:', error);
       toast({ title: 'Error saving settings', description: error.message, variant: 'destructive' });
@@ -307,40 +268,29 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
 
     const verifyToken = createVerifyToken();
     const webhookUrl = buildWebhookUrl(user.id, verifyToken);
-    
+
     const newSettings = { ...settings, webhookUrl, verifyToken, isConnected: false };
     setSettings(newSettings);
     setWebhookGenerated(true);
     onConnectionChange?.(false);
 
-    // Save immediately
     try {
-      const { data: existing } = await supabase.from('whatsapp_settings').select('id').eq('user_id', user.id).maybeSingle();
-      
-      if (existing) {
-        await supabase.from('whatsapp_settings').update({
-          api_token: newSettings.apiToken,
-          phone_number_id: newSettings.phoneNumberId,
-          business_account_id: newSettings.businessAccountId,
-          webhook_url: webhookUrl,
-          verify_token: verifyToken,
-          is_connected: false,
-        }).eq('user_id', user.id);
-      } else {
-        await supabase.from('whatsapp_settings').insert({
+      const { error } = await supabase
+        .from('whatsapp_settings')
+        .upsert({
           user_id: user.id,
-          api_token: newSettings.apiToken,
-          phone_number_id: newSettings.phoneNumberId,
-          business_account_id: newSettings.businessAccountId,
+          api_token: newSettings.apiToken.trim(),
+          phone_number_id: newSettings.phoneNumberId.trim(),
+          business_account_id: newSettings.businessAccountId.trim() || null,
           webhook_url: webhookUrl,
           verify_token: verifyToken,
           is_connected: false,
-        });
-      }
+        }, { onConflict: 'user_id' });
 
-      // ✅ FIX: Saved to DB — clear dirty flag
+      if (error) throw error;
+
       hasDraft.current = false;
-      toast({ title: 'Webhook generated!', description: 'Copy the URL and verify token to Meta.' });
+      toast({ title: '✅ Webhook generated!', description: 'Copy the URL and verify token to Meta.' });
     } catch (error) {
       console.error('Error saving webhook:', error);
       toast({ title: 'Error saving webhook', variant: 'destructive' });
@@ -356,6 +306,9 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
       const { newVerifyToken, webhookUrl } = await persistFreshWebhookCredentials();
 
       applySettingsState({
+        apiToken: settings.apiToken,
+        phoneNumberId: settings.phoneNumberId,
+        businessAccountId: settings.businessAccountId,
         webhookUrl,
         verifyToken: newVerifyToken,
         isConnected: false,
@@ -365,7 +318,7 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
 
       toast({
         title: 'Webhook regenerated',
-        description: 'After regenerating webhook, you must reconnect it in Meta using new credentials or messages will stop.',
+        description: 'Reconnect it in Meta using the new credentials below.',
       });
     } catch (error: any) {
       console.error('Error regenerating webhook:', error);
@@ -394,27 +347,17 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
       if (error) throw error;
 
       if (data?.success) {
-        const warningText = data.diagnostics?.warnings?.join('\n') || null;
-        const newSettings = {
-          ...settings,
-          isConnected: true,
-          webhookSubscriptionHealth: warningText ? 'needs_attention' : 'verified',
-          webhookConfigWarning: warningText || '',
-        };
+        const newSettings = { ...settings, isConnected: true };
         setSettings(newSettings);
         onConnectionChange?.(true);
-        
-        // Persist connected state
-        const { data: existing } = await supabase.from('whatsapp_settings').select('id').eq('user_id', user!.id).maybeSingle();
-        if (existing) {
-          await supabase.from('whatsapp_settings').update({
-            is_connected: true,
-            webhook_subscription_health: warningText ? 'needs_attention' : 'verified',
-            webhook_config_warning: warningText,
-          }).eq('user_id', user!.id);
-        }
 
-        toast({ title: warningText ? 'Connection works, check webhook warnings' : 'Connection successful!', description: warningText || `Connected to ${data.phoneNumber || 'WhatsApp'}` });
+        // Persist connected state
+        await supabase
+          .from('whatsapp_settings')
+          .update({ is_connected: true })
+          .eq('user_id', user!.id);
+
+        toast({ title: '✅ Connection successful!', description: `Connected to ${data.phoneNumber || 'WhatsApp'}` });
       } else {
         throw new Error(data?.error || 'Connection failed');
       }
@@ -430,26 +373,25 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
     }
   };
 
+  // ─── FIXED: Template sync — works with or without isConnected ────────────
   const handleSyncTemplates = async () => {
     if (!user) return;
 
     setSyncing(true);
     try {
-      // For shared users, fetch credentials from DB since they're hidden in UI
-      let token = settings.apiToken;
-      let businessAccountId = settings.businessAccountId;
-
-      // Always check DB for actual credentials
-      const { data: dbSettings } = await supabase
+      // Always pull fresh from DB to get actual stored credentials
+      const { data: dbSettings, error: dbErr } = await supabase
         .from('whatsapp_settings')
-        .select('api_token, business_account_id')
+        .select('api_token, business_account_id, phone_number_id')
         .eq('user_id', user.id)
         .maybeSingle();
 
-      if (dbSettings?.api_token) token = dbSettings.api_token;
-      if (dbSettings?.business_account_id) businessAccountId = dbSettings.business_account_id;
+      if (dbErr) throw dbErr;
 
-      // If shared user and still no credentials, try to copy them from super user first
+      let token = dbSettings?.api_token || settings.apiToken;
+      let businessAccountId = dbSettings?.business_account_id || settings.businessAccountId;
+
+      // If shared user and still no credentials, copy from super user first
       if (isSharedUser && (!token || !businessAccountId)) {
         const { data: membership } = await supabase
           .from('shared_inbox_users' as any)
@@ -465,7 +407,6 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
             _shared_user_id: user.id,
           });
 
-          // Re-fetch after copy
           const { data: refreshed } = await supabase
             .from('whatsapp_settings')
             .select('api_token, business_account_id')
@@ -477,8 +418,14 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
         }
       }
 
-      if (!token || !businessAccountId) {
-        toast({ title: 'Missing credentials', description: 'No API connection found. Please configure your API or join a shared inbox.', variant: 'destructive' });
+      if (!token) {
+        toast({ title: 'Missing API token', description: 'Please save your API token first.', variant: 'destructive' });
+        setSyncing(false);
+        return;
+      }
+
+      if (!businessAccountId) {
+        toast({ title: 'Missing Business Account ID', description: 'Please enter your WhatsApp Business Account ID to sync templates.', variant: 'destructive' });
         setSyncing(false);
         return;
       }
@@ -487,10 +434,15 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
         body: { action: 'sync_templates', token, businessAccountId, userId: user.id },
       });
       if (error) throw error;
-      toast({ title: 'Templates synced', description: `${data?.count || 0} templates imported` });
+
+      if (!data?.success) throw new Error(data?.error || 'Sync failed');
+
+      toast({ title: '✅ Templates synced', description: `${data?.count || 0} templates imported` });
     } catch (error: any) {
       toast({ title: 'Sync failed', description: error.message || 'Failed to sync templates', variant: 'destructive' });
-    } finally { setSyncing(false); }
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const copyToClipboard = (text: string, label: string) => {
@@ -502,9 +454,6 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
     if (!user) return;
     setRevoking(true);
     try {
-      console.log('[Shared User Leave] Starting disconnect process...');
-      
-      // Find membership
       const { data: membership } = await supabase
         .from('shared_inbox_users' as any)
         .select('super_user_id')
@@ -519,41 +468,30 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
           .eq('assigned_user_id', user.id);
       }
 
-      // Remove credentials from database
       await supabase.rpc('remove_shared_credentials', { _shared_user_id: user.id });
-      console.log('[Shared User Leave] ✅ Credentials removed from database');
 
-      // Delete the membership
       await supabase
         .from('shared_inbox_users' as any)
         .delete()
         .eq('shared_user_id', user.id);
-      console.log('[Shared User Leave] ✅ Membership deleted');
 
-      // CRITICAL: Delete user's whatsapp_settings to ensure clean slate
       await supabase
         .from('whatsapp_settings')
         .delete()
         .eq('user_id', user.id);
-      console.log('[Shared User Leave] ✅ WhatsApp settings deleted');
 
-      // CRITICAL FIX: Clear all input fields immediately
       clearSettings();
-      console.log('[Shared User Leave] ✅ UI cleared');
 
-      toast({ 
-        title: '✅ Left shared inbox', 
-        description: 'Connection reset. You can now connect your own WhatsApp API.' 
+      toast({
+        title: '✅ Left shared inbox',
+        description: 'Connection reset. You can now connect your own WhatsApp API.',
       });
-      
+
       setShowRevokeDialog(false);
       onConnectionChange?.(false);
       refreshShared();
-      
-      // Reload to confirm everything is clean
       await loadSettings();
     } catch (err: any) {
-      console.error('[Shared User Leave] ❌ Error:', err);
       toast({ title: 'Failed to revoke', description: err.message, variant: 'destructive' });
     } finally {
       setRevoking(false);
@@ -563,33 +501,14 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
   const handleManualReset = async () => {
     if (!user) return;
     setResetting(true);
-    
     try {
-      console.log('[Manual Reset] Starting reset process for user:', user.id);
-
       await resetStoredConnectionState();
-
-      console.log('[Manual Reset] ✅ Settings and webhook logs cleared from database');
-
-      // Clear local state
       clearSettings();
       onConnectionChange?.(false);
-      console.log('[Manual Reset] ✅ UI cleared');
-
-      toast({ 
-        title: '✅ Connection Reset', 
-        description: 'Your WhatsApp connection has been reset to a fresh state.' 
-      });
-
+      toast({ title: '✅ Connection Reset', description: 'Your WhatsApp connection has been reset.' });
       setShowResetDialog(false);
-      
     } catch (error: any) {
-      console.error('[Manual Reset] ❌ Error:', error);
-      toast({ 
-        title: 'Reset failed', 
-        description: error.message || 'Failed to reset connection', 
-        variant: 'destructive' 
-      });
+      toast({ title: 'Reset failed', description: error.message || 'Failed to reset connection', variant: 'destructive' });
     } finally {
       setResetting(false);
     }
@@ -598,93 +517,46 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
   const handleResetConnection = async () => {
     if (!user) return;
     setResetting(true);
-    
     try {
-      console.log('[Reset] Starting WhatsApp API reset for user:', user.id);
-
-      // Step 1: Check if user is a super user with shared connections
+      // Remove credentials from shared users
       const { data: sharedUsers } = await supabase
         .from('shared_inbox_users' as any)
-        .select('shared_user_id, shared_users!inner(email)')
+        .select('shared_user_id')
         .eq('super_user_id', user.id)
         .eq('status', 'active');
 
       const sharedCount = sharedUsers?.length || 0;
 
-      // Step 2: Remove all shared user credentials
       if (sharedCount > 0) {
-        console.log(`[Reset] Removing credentials from ${sharedCount} shared users`);
-        
         for (const sharedUser of sharedUsers || []) {
-          const sharedUserId = sharedUser.shared_user_id;
-          
-          // Remove their credentials
-          await supabase.rpc('remove_shared_credentials', { 
-            _shared_user_id: sharedUserId 
-          });
-          
-          // Unassign their contacts
+          await supabase.rpc('remove_shared_credentials', { _shared_user_id: sharedUser.shared_user_id });
           await (supabase.from('contacts') as any)
             .update({ assigned_user_id: null })
             .eq('user_id', user.id)
-            .eq('assigned_user_id', sharedUserId);
+            .eq('assigned_user_id', sharedUser.shared_user_id);
         }
-
-        // Delete all shared inbox memberships
-        await supabase
-          .from('shared_inbox_users' as any)
-          .delete()
-          .eq('super_user_id', user.id);
-          
-        console.log('[Reset] ✅ Removed all shared user connections');
+        await supabase.from('shared_inbox_users' as any).delete().eq('super_user_id', user.id);
       }
 
-      // Step 3: Fully clear webhook logs and stale WhatsApp settings
       await resetStoredConnectionState();
-
-      console.log('[Reset] ✅ Cleared WhatsApp settings and webhook logs');
-
-      // Step 4: Clear local state
       clearSettings();
       onConnectionChange?.(false);
 
-      // Step 5: Show success message
-      const message = sharedCount > 0 
-        ? `Connection reset successfully. ${sharedCount} shared user(s) disconnected.`
-        : 'Connection reset successfully.';
-
-      toast({ 
-        title: '✅ WhatsApp API Reset Complete', 
-        description: message 
+      toast({
+        title: '✅ WhatsApp API Reset Complete',
+        description: sharedCount > 0
+          ? `Connection reset. ${sharedCount} shared user(s) disconnected.`
+          : 'Connection reset successfully.',
       });
 
       setShowResetDialog(false);
       refreshShared();
-      
     } catch (error: any) {
-      console.error('[Reset] Error during reset:', error);
-      toast({ 
-        title: 'Reset failed', 
-        description: error.message || 'Failed to reset connection', 
-        variant: 'destructive' 
-      });
+      toast({ title: 'Reset failed', description: error.message || 'Failed to reset connection', variant: 'destructive' });
     } finally {
       setResetting(false);
     }
   };
-
-  const formatDiagnosticTime = (value?: string) => {
-    if (!value) return 'Never';
-    return new Date(value).toLocaleString();
-  };
-
-  const configWarnings = [
-    !settings.isConnected ? 'Connection test has not passed yet.' : null,
-    !settings.phoneNumberId ? 'Phone Number ID is missing.' : null,
-    !settings.apiToken ? 'Permanent access token is missing.' : null,
-    settings.webhookConfigWarning || null,
-    settings.lastMappingFailureReason ? `Last mapping failure: ${settings.lastMappingFailureReason}` : null,
-  ].filter(Boolean);
 
   if (loading || sharedLoading) {
     return (
@@ -694,7 +566,7 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
     );
   }
 
-  // Shared user view — hide credentials, show connected status & revoke button
+  // ── Shared user view ──────────────────────────────────────────────────────
   if (isSharedUser) {
     return (
       <div className="space-y-6">
@@ -715,7 +587,7 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
               Shared API Connection
             </CardTitle>
             <CardDescription className="text-[13px]">
-              Your API credentials are managed by {superUserName || 'the workspace owner'}. 
+              Your API credentials are managed by {superUserName || 'the workspace owner'}.
               You can send messages and sync templates through their connection.
             </CardDescription>
           </CardHeader>
@@ -740,13 +612,8 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">
                 To use your own WhatsApp API credentials, you must first leave the shared inbox.
-                This will disconnect you from the shared workspace.
               </p>
-              <Button 
-                variant="destructive" 
-                className="w-full" 
-                onClick={() => setShowRevokeDialog(true)}
-              >
+              <Button variant="destructive" className="w-full" onClick={() => setShowRevokeDialog(true)}>
                 Leave Shared Inbox & Use Own Credentials
               </Button>
             </div>
@@ -766,51 +633,18 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
           </CardContent>
         </Card>
 
-        {/* Manual Reset for Shared Users */}
-        <Card className="border-destructive/50">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-[17px] text-destructive">
-              <Trash2 className="h-5 w-5" />
-              Reset Connection
-            </CardTitle>
-            <CardDescription className="text-[13px]">
-              Start fresh with a clean slate (different from leaving shared inbox)
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="p-4 bg-muted rounded-xl">
-              <p className="text-[13px] text-muted-foreground">
-                This will clear your connection and reset the form to look brand new, 
-                as if you just created your account. Your shared inbox access will remain.
-              </p>
-            </div>
-            
-            <Button 
-              variant="outline" 
-              className="w-full"
-              onClick={() => setShowResetDialog(true)}
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Reset to Brand New
-            </Button>
-          </CardContent>
-        </Card>
-
         <AlertDialog open={showRevokeDialog} onOpenChange={setShowRevokeDialog}>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Leave shared inbox?</AlertDialogTitle>
               <AlertDialogDescription>
-                This will remove the shared API connection and all your assigned conversations will be returned to the workspace owner. 
-                You can then set up your own WhatsApp API credentials.
-                <br /><br />
-                <strong>Note:</strong> This also resets your connection to look brand new.
+                This will remove the shared API connection and all your assigned conversations will be returned to the workspace owner.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction 
-                onClick={handleRevokeSharedAccess} 
+              <AlertDialogAction
+                onClick={handleRevokeSharedAccess}
                 className="bg-destructive text-destructive-foreground"
                 disabled={revoking}
               >
@@ -820,47 +654,11 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-
-        {/* Reset Dialog for Shared Users */}
-        <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle className="flex items-center gap-2">
-                <Trash2 className="h-5 w-5 text-destructive" />
-                Reset Connection to Brand New?
-              </AlertDialogTitle>
-              <AlertDialogDescription>
-                This will clear your WhatsApp connection settings and reset the form to look brand new.
-                <br /><br />
-                <strong>You will remain in the shared inbox.</strong> This only clears your local connection state.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={resetting}>Cancel</AlertDialogCancel>
-              <AlertDialogAction 
-                onClick={handleManualReset}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                disabled={resetting}
-              >
-                {resetting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Resetting...
-                  </>
-                ) : (
-                  <>
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Reset to Brand New
-                  </>
-                )}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       </div>
     );
   }
 
+  // ── Super user / regular user view ───────────────────────────────────────
   return (
     <div className="space-y-6">
       {/* Connection Status Banner */}
@@ -874,44 +672,7 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
         </div>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-[17px]">
-            <Activity className="h-5 w-5 text-primary" />
-            Live Delivery Check
-          </CardTitle>
-          <CardDescription className="text-[13px]">
-            Real webhook delivery health for normal customer messages.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 gap-3 text-[13px]">
-            <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">Last webhook hit</span><span className="text-right font-medium">{formatDiagnosticTime(settings.lastWebhookHitAt)}</span></div>
-            <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">Last real incoming message</span><span className="text-right font-medium">{formatDiagnosticTime(settings.lastRealMessageAt)}</span></div>
-            <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">Last matched Phone Number ID</span><span className="text-right font-mono text-[12px]">{settings.lastMatchedPhoneNumberId || 'None yet'}</span></div>
-            <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">Webhook subscription health</span><Badge variant={settings.webhookSubscriptionHealth === 'healthy' || settings.webhookSubscriptionHealth === 'verified' ? 'default' : 'secondary'}>{settings.webhookSubscriptionHealth || 'unknown'}</Badge></div>
-          </div>
-
-          {configWarnings.length > 0 && (
-            <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-4">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-                <div className="space-y-2">
-                  <p className="text-[13px] font-semibold text-foreground">Meta setup warnings</p>
-                  <ul className="list-disc list-inside space-y-1 text-[12px] text-muted-foreground">
-                    {configWarnings.map((warning, index) => <li key={index}>{warning}</li>)}
-                    <li>Meta app must be Live, not Development.</li>
-                    <li>Webhook fields must include messages, message_template_status_update, message_deliveries, message_reads, and message_reactions.</li>
-                    <li>The correct WABA and business phone number must be linked to this Phone Number ID.</li>
-                    <li>The token must be a permanent system-user token with whatsapp_business_management, whatsapp_business_messaging, and business_management permissions.</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
+      {/* API Credentials */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -937,8 +698,8 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
               type="password"
               value={settings.apiToken}
               onChange={(e) => {
-                hasDraft.current = true; // ✅ FIX: mark as dirty
-                setSettings({ ...settings, apiToken: e.target.value });
+                hasDraft.current = true;
+                setSettings(prev => ({ ...prev, apiToken: e.target.value, isConnected: false }));
               }}
               placeholder="Enter your permanent access token"
               className="text-[15px]"
@@ -957,8 +718,8 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
                 id="phoneNumberId"
                 value={settings.phoneNumberId}
                 onChange={(e) => {
-                  hasDraft.current = true; // ✅ FIX: mark as dirty
-                  setSettings({ ...settings, phoneNumberId: e.target.value });
+                  hasDraft.current = true;
+                  setSettings(prev => ({ ...prev, phoneNumberId: e.target.value, isConnected: false }));
                 }}
                 placeholder="123456789012345"
                 className="text-[15px]"
@@ -972,8 +733,8 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
                 id="businessAccountId"
                 value={settings.businessAccountId}
                 onChange={(e) => {
-                  hasDraft.current = true; // ✅ FIX: mark as dirty
-                  setSettings({ ...settings, businessAccountId: e.target.value });
+                  hasDraft.current = true;
+                  setSettings(prev => ({ ...prev, businessAccountId: e.target.value }));
                 }}
                 placeholder="987654321098765"
                 className="text-[15px]"
@@ -987,8 +748,12 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
               {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
               Save Credentials
             </Button>
-            <Button variant="outline" onClick={handleTestConnection}
-              disabled={testing || !settings.apiToken || !settings.phoneNumberId} className="text-[15px]">
+            <Button
+              variant="outline"
+              onClick={handleTestConnection}
+              disabled={testing || !settings.apiToken || !settings.phoneNumberId}
+              className="text-[15px]"
+            >
               {testing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <TestTube className="h-4 w-4 mr-2" />}
               Test Connection
             </Button>
@@ -996,6 +761,7 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
         </CardContent>
       </Card>
 
+      {/* Webhook Configuration */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-[17px]">
@@ -1011,7 +777,11 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
               <p className="text-[14px] text-muted-foreground mb-4">
                 After saving your credentials, generate a webhook URL to receive incoming messages
               </p>
-              <Button onClick={handleGenerateWebhook} disabled={!settings.apiToken || !settings.phoneNumberId} className="text-[15px]">
+              <Button
+                onClick={handleGenerateWebhook}
+                disabled={!settings.apiToken || !settings.phoneNumberId}
+                className="text-[15px]"
+              >
                 <Link className="h-4 w-4 mr-2" /> Generate Webhook URL
               </Button>
             </div>
@@ -1048,24 +818,26 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
                 </ol>
               </div>
 
-              <Separator className="my-4" />
               {webhookGenerated && !settings.isConnected && (
-                <div className="flex gap-3 rounded-xl border border-destructive/20 bg-destructive/10 p-4">
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-                  <div className="space-y-1">
-                    <p className="text-[13px] font-medium text-foreground">Reconnect in Meta required</p>
-                    <p className="text-[12px] text-muted-foreground">
-                      After regenerating webhook, you must reconnect it in Meta using new credentials or messages will stop.
-                    </p>
+                <>
+                  <Separator className="my-4" />
+                  <div className="flex gap-3 rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-4">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-yellow-600" />
+                    <div className="space-y-1">
+                      <p className="text-[13px] font-medium">Connection not tested yet</p>
+                      <p className="text-[12px] text-muted-foreground">
+                        Use "Test Connection" above to verify your credentials work, then configure the webhook in Meta.
+                      </p>
+                    </div>
                   </div>
-                </div>
+                </>
               )}
 
               <Separator className="my-4" />
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-[14px] font-medium">Regenerate Credentials</p>
-                  <p className="text-[12px] text-muted-foreground">Wipe old webhook state, issue a fresh verify token, and force a clean Meta reconnect</p>
+                  <p className="text-[12px] text-muted-foreground">Issue a fresh verify token and force a clean Meta reconnect</p>
                 </div>
                 <Button variant="outline" size="sm" onClick={handleRegenerateWebhook} disabled={regenerating} className="text-[13px]">
                   {regenerating ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
@@ -1077,24 +849,32 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
         </CardContent>
       </Card>
 
+      {/* Message Templates */}
       <Card>
         <CardHeader>
           <CardTitle className="text-[17px]">Message Templates</CardTitle>
           <CardDescription className="text-[13px]">Sync your approved WhatsApp message templates</CardDescription>
         </CardHeader>
-        <CardContent>
-          <Button variant="outline" onClick={handleSyncTemplates}
-            disabled={syncing || !settings.apiToken || !settings.businessAccountId || !settings.isConnected} className="text-[15px]">
+        <CardContent className="space-y-2">
+          <Button
+            variant="outline"
+            onClick={handleSyncTemplates}
+            disabled={syncing || !settings.apiToken || !settings.businessAccountId}
+            className="text-[15px]"
+          >
             {syncing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
             Sync Templates
           </Button>
-          {!settings.isConnected && (
-            <p className="text-[12px] text-muted-foreground mt-2">Connect your API first to sync templates</p>
+          {!settings.businessAccountId && (
+            <p className="text-[12px] text-muted-foreground">Enter your Business Account ID above to enable template sync</p>
+          )}
+          {settings.businessAccountId && !settings.apiToken && (
+            <p className="text-[12px] text-muted-foreground">Enter your Access Token above to enable template sync</p>
           )}
         </CardContent>
       </Card>
 
-      {/* Reset Connection Card */}
+      {/* Danger Zone / Reset */}
       <Card className="border-destructive/50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-[17px] text-destructive">
@@ -1102,17 +882,16 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
             {settings.isConnected || settings.apiToken ? 'Danger Zone' : 'Reset Connection'}
           </CardTitle>
           <CardDescription className="text-[13px]">
-            {settings.isConnected || settings.apiToken 
-              ? 'Reset your WhatsApp API connection and disconnect all shared users' 
+            {settings.isConnected || settings.apiToken
+              ? 'Reset your WhatsApp API connection and disconnect all shared users'
               : 'Clear the form and start fresh'}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {(settings.isConnected || settings.apiToken) ? (
-            // Connected user - show full danger zone
             <>
               <div className="p-4 bg-destructive/10 rounded-xl border border-destructive/20">
-                <h4 className="font-semibold text-[14px] mb-2 text-destructive">⚠️ Warning: This action cannot be undone</h4>
+                <h4 className="font-semibold text-[14px] mb-2 text-destructive">⚠️ This action cannot be undone</h4>
                 <ul className="text-[13px] text-muted-foreground space-y-1.5 list-disc list-inside">
                   <li>All WhatsApp API credentials will be permanently deleted</li>
                   <li>Webhook URL and verify token will be cleared</li>
@@ -1120,30 +899,19 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
                   <li>You will need to reconfigure everything from scratch</li>
                 </ul>
               </div>
-              
-              <Button 
-                variant="destructive" 
-                className="w-full"
-                onClick={() => setShowResetDialog(true)}
-              >
+              <Button variant="destructive" className="w-full" onClick={() => setShowResetDialog(true)}>
                 <Trash2 className="h-4 w-4 mr-2" />
                 Reset WhatsApp API Connection
               </Button>
             </>
           ) : (
-            // No connection - simple reset to brand new
             <>
               <div className="p-4 bg-muted rounded-xl">
                 <p className="text-[13px] text-muted-foreground">
-                  Clear the form and reset to a brand new state, as if you just created your account.
+                  Clear the form and reset to a brand new state.
                 </p>
               </div>
-              
-              <Button 
-                variant="outline" 
-                className="w-full"
-                onClick={() => setShowResetDialog(true)}
-              >
+              <Button variant="outline" className="w-full" onClick={() => setShowResetDialog(true)}>
                 <Trash2 className="h-4 w-4 mr-2" />
                 Reset to Brand New
               </Button>
@@ -1152,7 +920,6 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
         </CardContent>
       </Card>
 
-      {/* Reset Confirmation Dialog */}
       <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1160,47 +927,25 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
               <AlertCircle className="h-5 w-5" />
               {settings.isConnected || settings.apiToken ? 'Reset WhatsApp API Connection?' : 'Reset to Brand New?'}
             </AlertDialogTitle>
-            <AlertDialogDescription className="space-y-3">
+            <AlertDialogDescription>
               {settings.isConnected || settings.apiToken ? (
-                // Full reset warning for connected users
-                <>
-                  <p className="font-semibold">This will permanently:</p>
-                  <ul className="list-disc list-inside space-y-1 text-sm">
-                    <li>Delete all API credentials (token, phone ID, business ID)</li>
-                    <li>Remove webhook configuration</li>
-                    <li>Disconnect ALL shared users from your API</li>
-                    <li>Clear connection status</li>
-                  </ul>
-                  <p className="text-destructive font-semibold">
-                    ⚠️ This action cannot be undone. You will need to set up everything again.
-                  </p>
-                </>
+                'This will permanently delete all credentials, disconnect all shared users, and clear your webhook. This cannot be undone.'
               ) : (
-                // Simple reset message for non-connected users
-                <p>
-                  This will clear the form and reset your connection to look brand new, 
-                  as if you just created your account.
-                </p>
+                'This will clear the form and reset your connection to a fresh state.'
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={resetting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={settings.isConnected || settings.apiToken ? handleResetConnection : handleManualReset}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={resetting}
             >
               {resetting ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Resetting...
-                </>
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Resetting...</>
               ) : (
-                <>
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  {settings.isConnected || settings.apiToken ? 'Yes, Reset Everything' : 'Reset to Brand New'}
-                </>
+                <><Trash2 className="h-4 w-4 mr-2" />{settings.isConnected || settings.apiToken ? 'Yes, Reset Everything' : 'Reset to Brand New'}</>
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
