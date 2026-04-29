@@ -279,7 +279,7 @@ const findOrCreateContact = async (
         .from('contacts')
         .update({ last_seen: new Date().toISOString(), is_online: true, is_deleted: false, deleted_at: null })
         .eq('id', contactId);
-      
+
       return { contactId: contactId!, targetUserId };
     }
   }
@@ -312,20 +312,20 @@ const findOrCreateContact = async (
         .from('contacts')
         .update({ last_seen: new Date().toISOString(), is_online: true, is_deleted: false, deleted_at: null })
         .eq('id', contactId);
-      
+
       return { contactId: contactId!, targetUserId };
     }
   }
 
   // Step 4: CREATE NEW CONTACT (with retry logic)
   console.log(`👤 Contact not found, creating new contact for:`, from);
-  
+
   const maxRetries = 3;
   let lastError: any = null;
-  
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     console.log(`🔄 Contact creation attempt ${attempt}/${maxRetries}`);
-    
+
     const { data: newContact, error: createError } = await supabase
       .from('contacts')
       .insert({
@@ -367,7 +367,7 @@ const findOrCreateContact = async (
 
     // Wait before retry (exponential backoff)
     if (attempt < maxRetries) {
-      const delay = 100 * Math.pow(2, attempt);  // 200ms, 400ms, 800ms
+      const delay = 100 * Math.pow(2, attempt); // 200ms, 400ms, 800ms
       console.log(`⏳ Waiting ${delay}ms before retry...`);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
@@ -376,8 +376,23 @@ const findOrCreateContact = async (
   // 🔥 CRITICAL: If all retries failed, throw error to prevent message loss
   console.error(`🚨 CRITICAL: Failed to create contact after ${maxRetries} attempts`);
   console.error(`🚨 Phone: ${from}, Profile: ${profileName}, Error:`, lastError);
-  
+
   throw new Error(`Failed to create contact for ${from} after ${maxRetries} attempts: ${lastError?.message || 'Unknown error'}`);
+};
+
+// ─── FIX: Human-readable push notification body ───────────────────────────────
+const getPushBody = (type: string, content: string): string => {
+  switch (type) {
+    case 'text': return content.substring(0, 200);
+    case 'image': return content ? `📷 ${content}` : '📷 Image';
+    case 'video': return content ? `🎬 ${content}` : '🎬 Video';
+    case 'audio': return '🎵 Voice message';
+    case 'document': return `📄 ${content || 'Document'}`;
+    case 'sticker': return '🎨 Sticker';
+    case 'location': return '📍 Location';
+    case 'contacts': return '👤 Contact shared';
+    default: return content || `[${type}]`;
+  }
 };
 
 const processIncomingMessages = async (
@@ -399,57 +414,102 @@ const processIncomingMessages = async (
       case 'text':
         content = message.text?.body || '[No text]';
         break;
+
       case 'image':
         type = 'image';
-        content = message.image?.caption || '[Image]';
+        // FIX: store caption (may be empty string, not '[Image]')
+        content = message.image?.caption || '';
         if (message.image?.id) {
           mediaUrl = await downloadAndUploadMedia(supabase, whatsappToken, superUserId, message.image.id, 'image');
         }
         break;
+
       case 'video':
         type = 'video';
-        content = message.video?.caption || '[Video]';
+        content = message.video?.caption || '';
         if (message.video?.id) {
           mediaUrl = await downloadAndUploadMedia(supabase, whatsappToken, superUserId, message.video.id, 'video');
         }
         break;
+
       case 'audio':
         type = 'audio';
-        content = '[Voice message]';
+        // FIX: empty content — MessageBubble shows the player, no text needed
+        content = '';
         if (message.audio?.id) {
           mediaUrl = await downloadAndUploadMedia(supabase, whatsappToken, superUserId, message.audio.id, 'audio');
         }
         break;
+
       case 'voice':
         type = 'audio';
-        content = '[Voice message]';
+        content = '';
         if (message.voice?.id) {
           mediaUrl = await downloadAndUploadMedia(supabase, whatsappToken, superUserId, message.voice.id, 'voice');
         }
         break;
+
       case 'document':
         type = 'document';
-        content = message.document?.filename || '[Document]';
+        content = message.document?.filename || 'Document';
         if (message.document?.id) {
           mediaUrl = await downloadAndUploadMedia(supabase, whatsappToken, superUserId, message.document.id, 'document');
         }
         break;
+
       case 'sticker':
         type = 'sticker';
-        content = '[Sticker]';
+        // FIX: empty content — sticker is shown via mediaUrl, no bracket text
+        content = '';
         if (message.sticker?.id) {
           mediaUrl = await downloadAndUploadMedia(supabase, whatsappToken, superUserId, message.sticker.id, 'sticker');
         }
         break;
+
+      // ─── FIX: Handle button / list replies from Meta templates ────────────
+      case 'interactive': {
+        type = 'text';
+        const interactive = message.interactive;
+        if (interactive?.type === 'button_reply') {
+          // User tapped a quick-reply button — store the button title as plain text
+          content = interactive.button_reply?.title || '[Button reply]';
+          console.log('📲 Button reply received:', content);
+        } else if (interactive?.type === 'list_reply') {
+          // User selected from a list message
+          const title = interactive.list_reply?.title || '';
+          const description = interactive.list_reply?.description || '';
+          content = description ? `${title}: ${description}` : title || '[List reply]';
+          console.log('📋 List reply received:', content);
+        } else if (interactive?.type === 'nfm_reply') {
+          // Flow / form completion
+          content = interactive.nfm_reply?.submitted_form_values
+            ? JSON.stringify(interactive.nfm_reply.submitted_form_values)
+            : '[Form submitted]';
+        } else {
+          content = `[Interactive: ${interactive?.type || 'unknown'}]`;
+        }
+        break;
+      }
+
+      // ─── FIX: Older quick-reply button tap format ─────────────────────────
+      case 'button':
+        type = 'text';
+        content = message.button?.text || '[Button]';
+        console.log('🔘 Quick-reply button tapped:', content);
+        break;
+
       case 'reaction':
         content = message.reaction?.emoji || '[Reaction]';
         break;
+
       case 'location':
         content = `[Location: ${message.location?.latitude}, ${message.location?.longitude}]`;
         break;
+
       case 'contacts':
         content = `[Contact: ${message.contacts?.[0]?.name?.formatted_name || 'Unknown'}]`;
         break;
+
       default:
         content = `[${message.type || 'unknown'}]`;
         console.log('⚠️ Unhandled message type:', message.type);
@@ -490,11 +550,11 @@ const processIncomingMessages = async (
       });
       continue;
     }
-    
+
     // 🔥 IMPROVED: Wrap in try-catch to handle contact creation failures
     let contactId: string;
     let targetUserId: string;
-    
+
     try {
       const result = await findOrCreateContact(supabase, superUserId, from, profileName);
       contactId = result.contactId;
@@ -503,7 +563,7 @@ const processIncomingMessages = async (
       const errorMessage = getErrorMessage(error);
       // 🔥 CRITICAL: Log failure but DON'T skip the message
       console.error('🚨 CRITICAL: Contact creation failed, logging to webhook_logs:', errorMessage);
-      
+
       await logWebhookEvent(supabase, {
         user_id: superUserId,
         event_type: 'critical_error',
@@ -513,7 +573,7 @@ const processIncomingMessages = async (
         error: `Contact creation failed: ${errorMessage}`,
         payload: { sender: from, messageId, messageType: type, content, profileName, rawMessage: message },
       });
-      
+
       // Message is recoverable from webhook_logs even if a contact row cannot be created.
       continue;
     }
@@ -608,7 +668,8 @@ const processIncomingMessages = async (
 
       if (pushTokens?.length) {
         const profileDisplayName = value.contacts?.[0]?.profile?.name || from;
-        const notifBody = type === 'text' ? content.substring(0, 200) : `[${type}]`;
+        // FIX: Use getPushBody for human-readable notification body
+        const notifBody = getPushBody(type, content);
 
         for (const pushToken of pushTokens) {
           try {
