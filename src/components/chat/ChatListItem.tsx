@@ -53,7 +53,20 @@ interface ChatListItemProps {
   onPermanentDelete?: (id: string) => void;
 }
 
-export function ChatListItem({ chat, isActive, onClick, chatLabels = [], allLabels: labelsProp = [], isTrash = false, selectionMode = false, selected = false, onToggleSelect, onEnterSelectionMode, onRestore, onPermanentDelete }: ChatListItemProps) {
+export function ChatListItem({
+  chat,
+  isActive,
+  onClick,
+  chatLabels = [],
+  allLabels: labelsProp = [],
+  isTrash = false,
+  selectionMode = false,
+  selected = false,
+  onToggleSelect,
+  onEnterSelectionMode,
+  onRestore,
+  onPermanentDelete,
+}: ChatListItemProps) {
   const { contact, lastMessage, unreadCount, isPinned, isMuted, isArchived } = chat;
   const { updateContact, setMessages, chats, setChats, favorites, toggleFavorite } = useAppStore();
   const { toast } = useToast();
@@ -107,12 +120,10 @@ export function ChatListItem({ chat, isActive, onClick, chatLabels = [], allLabe
 
   const loadLabelsForMenu = async () => {
     if (!user) return;
-
     const [labelsRes, assignedRes] = await Promise.all([
       supabase.from('labels' as any).select('*').eq('user_id', user.id).order('name', { ascending: true }),
       supabase.from('chat_labels' as any).select('label_id').eq('user_id', user.id).eq('chat_id', chat.id),
     ]);
-
     setAllLabels(((labelsRes.data as any[]) || []) as Label[]);
     setAssignedLabelIds((((assignedRes.data as any[]) || []).map((x: any) => x.label_id)));
   };
@@ -121,7 +132,9 @@ export function ChatListItem({ chat, isActive, onClick, chatLabels = [], allLabe
     if (!user) return;
 
     if (checked) {
-      const { error } = await supabase.from('chat_labels' as any).insert({ user_id: user.id, chat_id: chat.id, label_id: labelId } as any);
+      const { error } = await supabase
+        .from('chat_labels' as any)
+        .insert({ user_id: user.id, chat_id: chat.id, label_id: labelId } as any);
       if (error) {
         toast({ title: 'Failed to assign label', description: error.message, variant: 'destructive' });
         return;
@@ -146,13 +159,19 @@ export function ChatListItem({ chat, isActive, onClick, chatLabels = [], allLabe
   };
 
   const handleDeleteChat = async () => {
-    const { error } = await supabase.from('contacts').update({ is_deleted: true, deleted_at: new Date().toISOString() } as any).eq('id', chat.id);
+    const { error } = await supabase
+      .from('contacts')
+      .update({ is_deleted: true, deleted_at: new Date().toISOString() } as any)
+      .eq('id', chat.id);
+
     if (error) {
       toast({ title: 'Failed to move chat to trash', description: error.message, variant: 'destructive' });
       return;
     }
 
-    setChats(chats.map((c) => (c.id === chat.id ? { ...c, contact: { ...c.contact, isDeleted: true, deletedAt: new Date() } } : c)));
+    setChats(chats.map((c) =>
+      c.id === chat.id ? { ...c, contact: { ...c.contact, isDeleted: true, deletedAt: new Date() } } : c
+    ));
     setShowDeleteDialog(false);
     setShowOptions(false);
     toast({ title: 'Chat moved to trash' });
@@ -175,28 +194,37 @@ export function ChatListItem({ chat, isActive, onClick, chatLabels = [], allLabe
     setShowOptions(false);
   };
 
-  // ---- HELPER: render the last message preview text ----
+  // ─── Complete message type preview with emoji ─────────────────────────────
   const getPreviewText = () => {
     if (!lastMessage) return 'No messages yet';
-    if (lastMessage.type === 'template') {
-      // Show short preview of the actual template content
+
+    const t = lastMessage.type as string;
+
+    if (t === 'template') {
       const preview = lastMessage.content?.split('\n')[0]?.trim() || 'Template';
       return `📋 ${preview.length > 40 ? preview.slice(0, 40) + '…' : preview}`;
     }
-    if (lastMessage.type === 'image') return '📷 Image';
-    if (lastMessage.type === 'audio') return '🎵 Voice note';
-    if (lastMessage.type === 'video') return '🎬 Video';
-    if (lastMessage.type === 'document') return '📄 Document';
-    return lastMessage.content;
+    if (t === 'image') return '📷 Image';
+    if (t === 'video') return '🎬 Video';
+    if (t === 'audio') return '🎵 Voice note';
+    if (t === 'document') return `📄 ${lastMessage.content || 'Document'}`;
+    if (t === 'sticker') return '🎨 Sticker';
+    if (t === 'location') return '📍 Location';
+    if (t === 'contacts') return '👤 Contact shared';
+
+    // For text / button-reply / interactive — content is already resolved
+    return lastMessage.content || 'Message';
   };
 
   return (
     <>
-      <div className={cn(
-        'relative border-b border-panel-border/70',
-        isActive && 'bg-[hsl(var(--highlight-active))]',
-        hasUnread && 'chat-item-unread'
-      )}>
+      <div
+        className={cn(
+          'relative border-b border-panel-border/70',
+          isActive && 'bg-[hsl(var(--highlight-active))]',
+          hasUnread && 'chat-item-unread'
+        )}
+      >
         <button
           onClick={() => {
             if (selectionMode && onToggleSelect) onToggleSelect(chat.id);
@@ -209,17 +237,29 @@ export function ChatListItem({ chat, isActive, onClick, chatLabels = [], allLabe
             e.preventDefault();
             setShowOptions(true);
           }}
-          className={cn("w-full flex items-center gap-3 p-3 text-left hover:bg-accent/50", selected && 'bg-primary/10')}
+          className={cn('w-full flex items-center gap-3 p-3 text-left hover:bg-accent/50', selected && 'bg-primary/10')}
         >
           {selectionMode && (
-            <div className={cn('h-5 w-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors', selected ? 'bg-primary border-primary' : 'border-muted-foreground/40')}>
+            <div
+              className={cn(
+                'h-5 w-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors',
+                selected ? 'bg-primary border-primary' : 'border-muted-foreground/40'
+              )}
+            >
               {selected && <CheckSquare className="h-4 w-4 text-primary-foreground" />}
             </div>
           )}
+
           <ContactAvatar name={contact.name} avatar={contact.avatar} isOnline={contact.isOnline} size="md" />
+
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-2">
-              <span className={cn("text-[15px] sm:text-[14.5px] truncate chat-item-name", hasUnread ? "font-extrabold" : "font-semibold")}>
+              <span
+                className={cn(
+                  'text-[15px] sm:text-[14.5px] truncate chat-item-name',
+                  hasUnread ? 'font-extrabold' : 'font-semibold'
+                )}
+              >
                 {contact.name}
               </span>
               {lastMessage && (
@@ -231,7 +271,7 @@ export function ChatListItem({ chat, isActive, onClick, chatLabels = [], allLabe
 
             <div className="flex items-center justify-between mt-1 gap-2">
               <div className="flex items-center gap-1 min-w-0 overflow-hidden">
-                {/* Tick always shrink-0 so it never gets squeezed out */}
+                {/* Tick is always shrink-0 so it never gets squeezed out */}
                 {lastMessage?.isOutgoing && (
                   <MessageStatus
                     status={lastMessage.status}
@@ -239,10 +279,12 @@ export function ChatListItem({ chat, isActive, onClick, chatLabels = [], allLabe
                     strokeWidth={2.8}
                   />
                 )}
-                <span className={cn(
-                  "text-sm truncate min-w-0 flex-1 chat-item-preview",
-                  hasUnread ? "font-bold text-foreground" : "text-muted-foreground"
-                )}>
+                <span
+                  className={cn(
+                    'text-sm truncate min-w-0 flex-1 chat-item-preview',
+                    hasUnread ? 'font-bold text-foreground' : 'text-muted-foreground'
+                  )}
+                >
                   {getPreviewText()}
                 </span>
               </div>
@@ -271,7 +313,13 @@ export function ChatListItem({ chat, isActive, onClick, chatLabels = [], allLabe
           </div>
         </button>
 
-        <DropdownMenu open={showOptions} onOpenChange={(open) => { setShowOptions(open); if (open) loadLabelsForMenu(); }}>
+        <DropdownMenu
+          open={showOptions}
+          onOpenChange={(open) => {
+            setShowOptions(open);
+            if (open) loadLabelsForMenu();
+          }}
+        >
           <DropdownMenuTrigger asChild>
             <span className="sr-only">Open chat options</span>
           </DropdownMenuTrigger>
@@ -282,54 +330,71 @@ export function ChatListItem({ chat, isActive, onClick, chatLabels = [], allLabe
                   <RotateCcw className="h-4 w-4 mr-2" />Restore
                 </DropdownMenuItem>
                 {onToggleSelect && (
-                  <DropdownMenuItem onClick={() => { onEnterSelectionMode?.(); onToggleSelect(chat.id); setShowOptions(false); }}>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      onEnterSelectionMode?.();
+                      onToggleSelect(chat.id);
+                      setShowOptions(false);
+                    }}
+                  >
                     <CheckSquare className="h-4 w-4 mr-2" />Select
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => { onPermanentDelete?.(chat.id); setShowOptions(false); }}>
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={() => { onPermanentDelete?.(chat.id); setShowOptions(false); }}
+                >
                   <Trash2 className="h-4 w-4 mr-2" />Delete permanently
                 </DropdownMenuItem>
               </>
             ) : (
               <>
-            <DropdownMenuItem onClick={() => toggleFavorite(chat.id)}>
-              <Star className={cn('h-4 w-4 mr-2', isFav && 'fill-amber-500 text-amber-500')} />
-              {isFav ? 'Remove from favorites' : 'Add to favorites'}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleAction('pin')}>
-              <Pin className="h-4 w-4 mr-2" />{isPinned ? 'Unpin chat' : 'Pin chat'}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleAction('mute')}>
-              <BellOff className="h-4 w-4 mr-2" />{isMuted ? 'Unmute notifications' : 'Mute notifications'}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleAction('archive')}>
-              <Archive className="h-4 w-4 mr-2" />{(isArchived || contact.isArchived) ? 'Unarchive chat' : 'Archive chat'}
-            </DropdownMenuItem>
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger><Tag className="h-4 w-4 mr-2" />Labels</DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className="w-56">
-                {allLabels.length === 0 ? (
-                  <DropdownMenuItem disabled>No labels created</DropdownMenuItem>
-                ) : allLabels.map((label) => (
-                  <DropdownMenuCheckboxItem
-                    key={label.id}
-                    checked={assignedLabelIds.includes(label.id)}
-                    onCheckedChange={(checked) => toggleLabelAssignment(label.id, checked === true)}
-                  >
-                    <span className="mr-2 inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: label.color }} />
-                    {label.name}
-                  </DropdownMenuCheckboxItem>
-                ))}
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onClick={() => setShowDeleteDialog(true)}
-            >
-              <MessageSquareOff className="h-4 w-4 mr-2" />Delete chat
-            </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => toggleFavorite(chat.id)}>
+                  <Star className={cn('h-4 w-4 mr-2', isFav && 'fill-amber-500 text-amber-500')} />
+                  {isFav ? 'Remove from favorites' : 'Add to favorites'}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleAction('pin')}>
+                  <Pin className="h-4 w-4 mr-2" />{isPinned ? 'Unpin chat' : 'Pin chat'}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleAction('mute')}>
+                  <BellOff className="h-4 w-4 mr-2" />{isMuted ? 'Unmute notifications' : 'Mute notifications'}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleAction('archive')}>
+                  <Archive className="h-4 w-4 mr-2" />
+                  {(isArchived || contact.isArchived) ? 'Unarchive chat' : 'Archive chat'}
+                </DropdownMenuItem>
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <Tag className="h-4 w-4 mr-2" />Labels
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="w-56">
+                    {allLabels.length === 0 ? (
+                      <DropdownMenuItem disabled>No labels created</DropdownMenuItem>
+                    ) : (
+                      allLabels.map((label) => (
+                        <DropdownMenuCheckboxItem
+                          key={label.id}
+                          checked={assignedLabelIds.includes(label.id)}
+                          onCheckedChange={(checked) => toggleLabelAssignment(label.id, checked === true)}
+                        >
+                          <span
+                            className="mr-2 inline-block h-2.5 w-2.5 rounded-full"
+                            style={{ backgroundColor: label.color }}
+                          />
+                          {label.name}
+                        </DropdownMenuCheckboxItem>
+                      ))
+                    )}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={() => setShowDeleteDialog(true)}
+                >
+                  <MessageSquareOff className="h-4 w-4 mr-2" />Delete chat
+                </DropdownMenuItem>
               </>
             )}
           </DropdownMenuContent>
