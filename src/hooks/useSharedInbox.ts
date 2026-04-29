@@ -34,9 +34,8 @@ export function useSharedInbox(): SharedInboxInfo {
 
   const refresh = useCallback(async () => {
     if (!user) { setLoading(false); return; }
-
     try {
-      // Check if current user is a shared user (active membership)
+      // Check if current user is a shared user (active or revoked membership)
       const { data: sharedMembership } = await supabase
         .from('shared_inbox_users' as any)
         .select('*')
@@ -45,18 +44,20 @@ export function useSharedInbox(): SharedInboxInfo {
         .limit(1);
 
       const membership = (sharedMembership as any[])?.[0];
+
       if (membership) {
         setIsSharedUser(true);
         setSuperUserId(membership.super_user_id);
-        setBalance(membership.balance);
+        setBalance(membership.balance ?? 0);
 
-        // Get super user's name
+        // Get super user's name from profiles
         const { data: superProfile } = await supabase
           .from('profiles')
-          .select('name')
+          .select('name, email')
           .eq('user_id', membership.super_user_id)
           .maybeSingle();
-        setSuperUserName((superProfile as any)?.name || null);
+
+        setSuperUserName((superProfile as any)?.name || (superProfile as any)?.email || null);
       } else {
         setIsSharedUser(false);
         setSuperUserId(null);
@@ -71,25 +72,32 @@ export function useSharedInbox(): SharedInboxInfo {
         .eq('super_user_id', user.id);
 
       const sharedList = (mySharedUsers as any[]) || [];
+
       if (sharedList.length > 0) {
         setIsSuperUser(true);
+
         const userIds = sharedList.map((u: any) => u.shared_user_id);
+
         const { data: profiles } = await supabase
           .from('profiles')
           .select('user_id, name, email')
           .in('user_id', userIds);
 
         const profileMap: Record<string, any> = {};
-        (profiles || []).forEach((p: any) => { profileMap[p.user_id] = p; });
+        (profiles || []).forEach((p: any) => {
+          profileMap[p.user_id] = p;
+        });
 
-        setSharedUsers(sharedList.map((u: any) => ({
-          id: u.id,
-          sharedUserId: u.shared_user_id,
-          name: profileMap[u.shared_user_id]?.name || 'Unknown',
-          email: profileMap[u.shared_user_id]?.email || '',
-          balance: u.balance,
-          status: u.status,
-        })));
+        setSharedUsers(
+          sharedList.map((u: any) => ({
+            id: u.id,
+            sharedUserId: u.shared_user_id,
+            name: profileMap[u.shared_user_id]?.name || profileMap[u.shared_user_id]?.email || 'Unknown',
+            email: profileMap[u.shared_user_id]?.email || '',
+            balance: u.balance ?? 0,
+            status: u.status,
+          }))
+        );
       } else {
         setIsSuperUser(false);
         setSharedUsers([]);
