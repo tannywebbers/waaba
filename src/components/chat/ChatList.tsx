@@ -47,9 +47,13 @@ const VARIABLE_MAP: Record<string, (c: any) => string> = {
     if (!ad) return '';
     return `${ad.bank} - ${ad.accountNumber} (${ad.accountName})`;
   },
+  // FIX: correctly calculate due_date from dayType (dayType 0 = due today, positive = overdue by N days)
   due_date: (c) => {
-    const d = new Date();
-    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    if (c.dayType === undefined || c.dayType === null) return '';
+    const today = new Date();
+    const due = new Date(today);
+    due.setDate(today.getDate() - Number(c.dayType));
+    return due.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
   },
 };
 
@@ -120,6 +124,8 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const [sendingBulk, setSendingBulk] = useState(false);
   const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
   const [bulkAppType, setBulkAppType] = useState('tloan');
+  // Day type override in bulk send — defaults to 0 (due today)
+  const [bulkDayType, setBulkDayType] = useState('0');
   const [bulkSelectedLabelIds, setBulkSelectedLabelIds] = useState<string[]>([]);
   const [bulkMetaSearch, setBulkMetaSearch] = useState('');
   const [bulkAppSearch, setBulkAppSearch] = useState('');
@@ -323,7 +329,8 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
         loan_id: selected?.loanId || existingContact?.loan_id || '',
         amount: selected?.amount ?? existingContact?.amount ?? null,
         app_type: bulkAppType || selected?.appType || existingContact?.app_type || 'tloan',
-        day_type: selected?.dayType ?? existingContact?.day_type ?? 0,
+        // apply bulkDayType — always a number, defaults to 0 for new contacts, keeps existing for pre-existing ones when user hasn't changed it
+        day_type: bulkDayType !== '' ? Number(bulkDayType) : (selected?.dayType ?? existingContact?.day_type ?? 0),
         is_deleted: false,
         deleted_at: null,
       };
@@ -549,6 +556,8 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
       setSelectedContactIds([]);
       setBulkNumbers('');
       setBulkSelectedLabelIds([]);
+      // reset day type after send
+      setBulkDayType('0');
       setContactSelectionMode(false);
       setShowBulkDialog(false);
       setBulkStep('recipients');
@@ -775,20 +784,48 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
                 rows={8}
               />
               <div className="text-sm text-muted-foreground">{bulkParsedNumbers.length} pasted number(s) parsed. Local 090 numbers will be saved as 23490 international format.</div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">App</label>
-                <select value={bulkAppType} onChange={(e) => setBulkAppType(e.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
-                  {appChoices.map((app) => <option key={app} value={app}>{app.toUpperCase()}</option>)}
-                </select>
+
+              {/* FIX: App and Day Type side by side */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">App</label>
+                  <select value={bulkAppType} onChange={(e) => setBulkAppType(e.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                    {appChoices.map((app) => <option key={app} value={app}>{app.toUpperCase()}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Day Type</label>
+                  <input
+                    type="number"
+                    value={bulkDayType}
+                    onChange={(e) => setBulkDayType(e.target.value)}
+                    className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    placeholder="0"
+                  />
+                </div>
               </div>
+
               <div className="space-y-2">
                 <label className="text-sm font-medium">Labels</label>
                 <div className="flex flex-wrap gap-2">
                   {labels.length === 0 ? <span className="text-sm text-muted-foreground">No labels available</span> : labels.map((label) => {
                     const active = bulkSelectedLabelIds.includes(label.id);
                     return (
-                      <button key={label.id} type="button" onClick={() => setBulkSelectedLabelIds((prev) => active ? prev.filter((id) => id !== label.id) : [...prev, label.id])}
-                        className={cn('rounded-full border px-3 py-1 text-sm transition-colors', active ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-secondary hover:bg-accent')}>
+                      <button
+                        key={label.id}
+                        type="button"
+                        onClick={() => setBulkSelectedLabelIds((prev) => active ? prev.filter((id) => id !== label.id) : [...prev, label.id])}
+                        className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium border transition-all"
+                        style={{
+                          backgroundColor: active ? label.color : label.color + '22',
+                          borderColor: label.color,
+                          color: active ? '#ffffff' : label.color,
+                        }}
+                      >
+                        <span
+                          className="h-2 w-2 rounded-full shrink-0"
+                          style={{ backgroundColor: active ? 'rgba(255,255,255,0.7)' : label.color }}
+                        />
                         {label.name}
                       </button>
                     );
