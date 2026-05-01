@@ -34,6 +34,54 @@ const Index = () => {
     document.documentElement.classList.toggle('dark', isDark);
   }, []);
 
+  // 🔗 Deep-link: open the exact chat when launched via notification
+  // Triggers: ?chat=<id> URL, postMessage from service worker, or in-app
+  // 'open-chat' CustomEvent fallback (used by direct Notification API).
+  useEffect(() => {
+    const openChatById = (contactId: string | null | undefined) => {
+      if (!contactId) return;
+      const tryOpen = (attempt = 0) => {
+        const state = useAppStore.getState();
+        const chat = state.chats.find((c) => c.id === contactId);
+        if (chat) {
+          state.setActiveChat(chat);
+          // Clean the URL after opening so refresh doesn't re-trigger
+          if (window.location.search.includes('chat=')) {
+            const cleanUrl = window.location.pathname + window.location.hash;
+            window.history.replaceState({}, '', cleanUrl);
+          }
+          return;
+        }
+        if (attempt < 20) setTimeout(() => tryOpen(attempt + 1), 250);
+      };
+      tryOpen();
+    };
+
+    // 1. URL param on initial load
+    const params = new URLSearchParams(window.location.search);
+    const initialChat = params.get('chat');
+    if (initialChat) openChatById(initialChat);
+
+    // 2. Service worker → page postMessage (notification click while app open or PWA wakes)
+    const onSwMessage = (event: MessageEvent) => {
+      const msg = event.data;
+      if (msg?.type === 'OPEN_CHAT' && msg.contactId) {
+        openChatById(msg.contactId);
+        try { window.focus(); } catch {}
+      }
+    };
+    navigator.serviceWorker?.addEventListener('message', onSwMessage);
+
+    // 3. In-page Notification API fallback
+    const onCustom = (e: any) => openChatById(e?.detail?.contactId);
+    window.addEventListener('open-chat', onCustom);
+
+    return () => {
+      navigator.serviceWorker?.removeEventListener('message', onSwMessage);
+      window.removeEventListener('open-chat', onCustom);
+    };
+  }, []);
+
   // Load data from server on auth + initialize FCM
   useEffect(() => {
     if (user) {

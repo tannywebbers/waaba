@@ -36,62 +36,46 @@ export function SharedInboxSettings() {
 
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
 
-  // ─── FIXED: Robust user search — exact match first, then wildcard fallback ──
+  // ─── FIXED: Search any registered user via SECURITY DEFINER RPC ──────────
+  // The RPC scans auth.users (not just profiles), so users without a profile
+  // row are still found.
   const handleSearchUser = async () => {
     const emailQuery = searchEmail.trim().toLowerCase();
     if (!emailQuery || !user) return;
+    if (emailQuery.length < 3) {
+      toast({ title: 'Type at least 3 characters', variant: 'destructive' });
+      return;
+    }
 
     setSearching(true);
     setFoundUser(null);
 
     try {
-      // Step 1: try exact match (case-insensitive)
-      let { data, error } = await supabase
-        .from('profiles')
-        .select('user_id, name, email')
-        .ilike('email', emailQuery)
-        .limit(1);
+      const { data, error } = await supabase.rpc('search_users_by_email' as any, { _email: emailQuery });
 
       if (error) {
-        console.error('Profile search error (exact):', error);
-        throw new Error(`Search failed: ${error.message}. Make sure the profiles table has email and user_id columns.`);
+        console.error('Search RPC error:', error);
+        throw new Error(error.message || 'Search failed');
       }
 
-      // Step 2: if nothing found, try wildcard contains
-      if (!data || data.length === 0) {
-        const { data: wildcardData, error: wildcardError } = await supabase
-          .from('profiles')
-          .select('user_id, name, email')
-          .ilike('email', `%${emailQuery}%`)
-          .limit(5);
+      const results = (data as any[]) || [];
 
-        if (!wildcardError && wildcardData && wildcardData.length > 0) {
-          data = wildcardData;
-        }
-      }
-
-      if (!data || data.length === 0) {
+      if (results.length === 0) {
         toast({
           title: 'User not found',
-          description: `No account found with email matching "${emailQuery}". Make sure they have already signed up.`,
+          description: `No registered account matches "${emailQuery}". Make sure they have signed up and verified their email.`,
           variant: 'destructive',
         });
         return;
       }
 
-      // If multiple results from wildcard, pick the closest match
-      const result = data.find(u =>
-        (u.email || '').toLowerCase() === emailQuery
-      ) || data[0];
-
-      const userId = result.user_id || (result as any).id;
+      // Prefer exact email match, otherwise the first result
+      const exact = results.find((u: any) => (u.email || '').toLowerCase() === emailQuery);
+      const result = exact || results[0];
+      const userId = result.user_id;
 
       if (!userId) {
-        toast({
-          title: 'User data error',
-          description: 'Found user but could not read their ID. Check the profiles table schema.',
-          variant: 'destructive',
-        });
+        toast({ title: 'User data error', description: 'Could not read the user id.', variant: 'destructive' });
         return;
       }
 

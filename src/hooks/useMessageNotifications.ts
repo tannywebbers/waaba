@@ -3,10 +3,8 @@ import { useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppStore } from '@/stores/appStore';
+import { getMessagePreview } from '@/lib/utils/messagePreview';
 
-// Two distinct sounds:
-// - In-chat (user is viewing the conversation): subtle "incoming online" tone
-// - App-level (user is elsewhere in the app): louder WhatsApp web notification
 const SOUND_IN_CHAT = '/sounds/incoming-message-online-whatsapp.mp3';
 const SOUND_APP = '/sounds/whatsapp-for-web.mp3';
 
@@ -18,48 +16,47 @@ function playSound(url: string, volume = 0.7) {
 
     const audio = new Audio(url);
     audio.volume = volume;
-    audio.play().catch(() => {/* autoplay blocked */});
-  } catch {/* no-op */}
+    audio.play().catch(() => {});
+  } catch {}
 }
 
-function showBrowserNotification(contactName: string, messageContent: string, contactId: string, showPreview: boolean) {
+function showBrowserNotification(contactName: string, body: string, contactId: string, showPreview: boolean) {
   if (!('Notification' in window)) return;
   if (Notification.permission === 'default') { Notification.requestPermission(); return; }
   if (Notification.permission !== 'granted') return;
 
-  const body = showPreview ? (messageContent || 'New message') : 'You have a new message';
+  const finalBody = showPreview ? (body || 'New message') : 'You have a new message';
+  // Build a deep link the SW (or onclick) can use to open the exact chat
+  const url = `${window.location.origin}/?chat=${encodeURIComponent(contactId)}`;
   const options: NotificationOptions = {
-    body,
+    body: finalBody,
     icon: '/pwa-192x192.png',
     badge: '/pwa-192x192.png',
     tag: `message-${contactId}`,
-    silent: true, // we play our own sound
+    silent: true,
     requireInteraction: false,
-    data: { contactId, url: `/?chat=${contactId}` },
+    data: { contactId, url, type: 'chat-message' },
+  };
+
+  const fallbackOpen = () => {
+    try {
+      const n = new Notification(contactName, options);
+      n.onclick = () => {
+        window.focus();
+        // Trigger in-app open via the same hash mechanism used by the SW message
+        try { window.dispatchEvent(new CustomEvent('open-chat', { detail: { contactId } })); } catch {}
+        n.close();
+      };
+      setTimeout(() => n.close(), 6000);
+    } catch {}
   };
 
   if (navigator.serviceWorker?.controller) {
-    navigator.serviceWorker.ready.then(reg => {
-      reg.showNotification(contactName, options).catch(() => {
-        try {
-          const n = new Notification(contactName, options);
-          n.onclick = () => { window.focus(); n.close(); };
-          setTimeout(() => n.close(), 5000);
-        } catch {/* no-op */}
-      });
-    }).catch(() => {
-      try {
-        const n = new Notification(contactName, options);
-        n.onclick = () => { window.focus(); n.close(); };
-        setTimeout(() => n.close(), 5000);
-      } catch {/* no-op */}
-    });
+    navigator.serviceWorker.ready
+      .then(reg => reg.showNotification(contactName, options).catch(fallbackOpen))
+      .catch(fallbackOpen);
   } else {
-    try {
-      const n = new Notification(contactName, options);
-      n.onclick = () => { window.focus(); n.close(); };
-      setTimeout(() => n.close(), 5000);
-    } catch {/* no-op */}
+    fallbackOpen();
   }
 }
 
@@ -101,7 +98,6 @@ export function useMessageNotifications() {
 
         const isViewingChat = activeChatRef.current === message.contact_id;
 
-        // Vibrate on mobile
         try {
           const settingsJson = localStorage.getItem('notification_settings');
           const settings = settingsJson ? JSON.parse(settingsJson) : {};
@@ -111,15 +107,12 @@ export function useMessageNotifications() {
         } catch {}
 
         if (isViewingChat) {
-          // Subtle in-chat ping — don't show OS notification when chat is open
           playSound(SOUND_IN_CHAT, 0.55);
           return;
         }
 
-        // App-level notification sound
         playSound(SOUND_APP, 0.75);
 
-        // OS notification
         const settingsJson = localStorage.getItem('notification_settings');
         let showPreview = true;
         let enabled = false;
@@ -138,7 +131,9 @@ export function useMessageNotifications() {
         const contact = contacts.find((c) => c.id === message.contact_id);
         const contactName = contact?.name || 'New message';
 
-        showBrowserNotification(contactName, message.content, message.contact_id, showPreview);
+        // Use shared preview formatter so notification matches the chat-list look
+        const previewBody = getMessagePreview({ type: message.type, content: message.content });
+        showBrowserNotification(contactName, previewBody, message.contact_id, showPreview);
       })
       .subscribe();
 

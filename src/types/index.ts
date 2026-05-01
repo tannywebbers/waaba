@@ -28,11 +28,25 @@ export interface AccountDetail {
   accountName: string;
 }
 
+export interface MessageReaction {
+  emoji: string;
+  from: string;        // 'me' or sender phone
+  fromName?: string;
+  at: string;          // ISO
+}
+
+export interface ReplySnapshot {
+  type: string;
+  content: string;
+  isOutgoing: boolean;
+  fromName?: string;
+}
+
 export interface Message {
   id: string;
   contactId: string;
   content: string;
-  type: 'text' | 'image' | 'document' | 'audio' | 'video' | 'template';
+  type: 'text' | 'image' | 'document' | 'audio' | 'video' | 'template' | 'sticker';
   status: 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
   isOutgoing: boolean;
   timestamp: Date;
@@ -42,6 +56,12 @@ export interface Message {
   templateParams?: Record<string, string>;
   isDeleted?: boolean;
   deletedAt?: Date;
+  // Reply context
+  replyToMessageId?: string;
+  replyToWamid?: string;
+  replySnapshot?: ReplySnapshot;
+  // Reactions
+  reactions?: MessageReaction[];
 }
 
 export interface Chat {
@@ -63,5 +83,16 @@ export interface User {
   avatar?: string;
 }
 
+export interface Sticker {
+  id: string;
+  userId: string;
+  name?: string;
+  mediaUrl: string;
+  mimeType: string;
+  source: 'uploaded' | 'saved_from_chat';
+  sourceMessageId?: string;
+  createdAt: Date;
+}
+
 export type ViewMode = 'chats' | 'contacts' | 'settings';
-export type SettingsTab = 'api' | 'theme' | 'account' | 'notifications' | 'business' | 'templates' | 'logs';
+export type SettingsTab = 'api' | 'theme' | 'account' | 'notifications' | 'business' | 'templates' | 'logs' | 'stickers';

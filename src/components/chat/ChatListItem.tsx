@@ -31,6 +31,7 @@ import { formatChatTime } from '@/lib/utils/format';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/appStore';
 import { Chat } from '@/types';
+import { getMessagePreview } from '@/lib/utils/messagePreview';
 
 interface Label {
   id: string;
@@ -194,26 +195,10 @@ export function ChatListItem({
     setShowOptions(false);
   };
 
-  // ─── Complete message type preview with emoji ─────────────────────────────
+  // Use shared formatter so chat list, notifications, and replies stay in sync
   const getPreviewText = () => {
     if (!lastMessage) return 'No messages yet';
-
-    const t = lastMessage.type as string;
-
-    if (t === 'template') {
-      const preview = lastMessage.content?.split('\n')[0]?.trim() || 'Template';
-      return `📋 ${preview.length > 40 ? preview.slice(0, 40) + '…' : preview}`;
-    }
-    if (t === 'image') return '📷 Image';
-    if (t === 'video') return '🎬 Video';
-    if (t === 'audio') return '🎵 Voice note';
-    if (t === 'document') return `📄 ${lastMessage.content || 'Document'}`;
-    if (t === 'sticker') return '🎨 Sticker';
-    if (t === 'location') return '📍 Location';
-    if (t === 'contacts') return '👤 Contact shared';
-
-    // For text / button-reply / interactive — content is already resolved
-    return lastMessage.content || 'Message';
+    return getMessagePreview(lastMessage as any);
   };
 
   return (
