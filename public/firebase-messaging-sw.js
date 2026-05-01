@@ -1,12 +1,8 @@
 /* eslint-disable no-undef */
-// Firebase Messaging Service Worker
-// This file MUST be at the root of the public directory
-
+// Firebase Messaging Service Worker — handles background push and notification clicks
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
 
-// Firebase config — matches src/lib/firebase.ts defaults
-// To override, rebuild with VITE_FIREBASE_* env vars (SW uses hardcoded values)
 const firebaseConfig = {
   apiKey: "AIzaSyBbM4_1d7wcKy7fRDTWJAmNLSFHSYw3Df8",
   authDomain: "waba4all.firebaseapp.com",
@@ -16,43 +12,60 @@ const firebaseConfig = {
   appId: "1:155860257722:web:ad45d28788226c1ec12b83"
 };
 
+firebase.initializeApp(firebaseConfig);
 const messaging = firebase.messaging();
 
-// Background message handler
+// ── Background message handler (FCM payloads) ───────────────────────────────
 messaging.onBackgroundMessage((payload) => {
   console.log('📨 Background message:', payload);
 
-  const title = payload.notification?.title || payload.data?.title || 'Lotus CRM';
+  const data = payload.data || {};
+  const contactId = data.contactId || data.conversationId;
+  const title = payload.notification?.title || data.title || 'WABA';
+  const body = payload.notification?.body || data.body || 'You have a new message';
+
+  const url = contactId
+    ? `${self.location.origin}/?chat=${encodeURIComponent(contactId)}`
+    : `${self.location.origin}/`;
+
   const options = {
-    body: payload.notification?.body || payload.data?.body || 'You have a new message',
-    icon: payload.data?.icon || '/pwa-192x192.png',
+    body,
+    icon: data.icon || '/pwa-192x192.png',
     badge: '/pwa-192x192.png',
-    tag: payload.data?.tag || 'lotus-message',
-    data: payload.data || {},
+    tag: contactId ? `chat-${contactId}` : 'lotus-message',
+    data: { ...data, contactId, url },
     vibrate: [200, 100, 200],
     renotify: true,
+    requireInteraction: false,
   };
 
   self.registration.showNotification(title, options);
 });
 
-// Notification click handler
+// ── Click → focus app & open exact chat (works for PWA installs) ────────────
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
-  const conversationId = event.notification.data?.conversationId || event.notification.data?.contactId;
-  const url = conversationId ? `/?chat=${conversationId}` : '/';
+  const data = event.notification.data || {};
+  const contactId = data.contactId || data.conversationId;
+  const targetUrl = data.url
+    || (contactId ? `${self.location.origin}/?chat=${encodeURIComponent(contactId)}` : `${self.location.origin}/`);
 
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // Try to focus an already-open window and tell it to open the right chat
-      for (const client of clientList) {
-        if ('focus' in client) {
-          client.postMessage({ type: 'OPEN_CHAT', contactId: conversationId, url });
-          return client.focus();
+  event.waitUntil((async () => {
+    const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+
+    // Prefer focusing an open tab/PWA window and tell it to switch chat
+    for (const client of allClients) {
+      try {
+        // Same origin — reuse it
+        if (new URL(client.url).origin === self.location.origin) {
+          client.postMessage({ type: 'OPEN_CHAT', contactId, url: targetUrl });
+          if ('focus' in client) return client.focus();
         }
-      }
-      if (self.clients.openWindow) return self.clients.openWindow(url);
-    })
-  );
+      } catch { /* ignore */ }
+    }
+
+    // No window open — launch a new one (PWA standalone or browser tab)
+    if (self.clients.openWindow) return self.clients.openWindow(targetUrl);
+  })());
 });
