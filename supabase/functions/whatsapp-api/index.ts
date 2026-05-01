@@ -75,7 +75,9 @@ serve(async (req) => {
           templateName,
           templateParams,
           templateLanguage,
-          mediaFileName
+          mediaFileName,
+          replyToWamid,        // ✨ NEW: WhatsApp message ID being replied to
+          reactionEmoji,       // ✨ NEW: emoji for reaction; '' to remove
         } = params;
 
         const normalizedTo = normalizeRecipient(String(to || ''));
@@ -95,15 +97,14 @@ serve(async (req) => {
           to: normalizedTo,
         };
 
-        /**
-         * TEMPLATE MESSAGE
-         */
+        // ✨ Reply context — Meta accepts `context.message_id` on most message types
+        if (replyToWamid && type !== 'reaction' && type !== 'template') {
+          messageBody.context = { message_id: replyToWamid };
+        }
+
         if (type === 'template' && templateName) {
-
           console.log('📋 Building template:', templateName);
-
           let orderedParams: any[] = [];
-
           if (templateParams) {
             orderedParams = Object.entries(templateParams)
               .sort(([a], [b]) => {
@@ -111,80 +112,56 @@ serve(async (req) => {
                 const numB = parseInt(b.replace(/\D/g, '')) || 0;
                 return numA - numB;
               })
-              .map(([, value]) => {
-
-                const normalized = normalizeText(value);
-
-                return {
-                  type: 'text',
-                  text: normalized || ' ',
-                };
-              });
+              .map(([, value]) => ({ type: 'text', text: normalizeText(value) || ' ' }));
           }
-
           messageBody.type = 'template';
-
           messageBody.template = {
             name: templateName,
             language: { code: templateLanguage || 'en' },
-            components: [
-              {
-                type: 'body',
-                parameters: orderedParams,
-              },
-            ],
+            components: [{ type: 'body', parameters: orderedParams }],
           };
         }
-
-        /**
-         * IMAGE MESSAGE
-         */
         else if (type === 'image') {
           messageBody.type = 'image';
-          messageBody.image = {
-            link: content,
-          };
+          messageBody.image = { link: content };
         }
-
-        /**
-         * DOCUMENT MESSAGE
-         */
         else if (type === 'document') {
           messageBody.type = 'document';
-          messageBody.document = {
-            link: content,
-            filename: mediaFileName || 'document',
-          };
+          messageBody.document = { link: content, filename: mediaFileName || 'document' };
         }
-
-        /**
-         * AUDIO MESSAGE
-         */
         else if (type === 'audio') {
           messageBody.type = 'audio';
-          messageBody.audio = {
-            link: content,
+          messageBody.audio = { link: content };
+        }
+        else if (type === 'video') {
+          messageBody.type = 'video';
+          messageBody.video = { link: content };
+        }
+        // ✨ NEW: Sticker (must be a publicly reachable .webp link)
+        else if (type === 'sticker') {
+          messageBody.type = 'sticker';
+          messageBody.sticker = { link: content };
+        }
+        // ✨ NEW: Reaction — emoji on a previous message; empty string removes it
+        else if (type === 'reaction') {
+          if (!replyToWamid) {
+            return new Response(JSON.stringify({ success: false, error: 'reactionTargetWamid is required for reaction' }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
+          delete messageBody.context;
+          messageBody.type = 'reaction';
+          messageBody.reaction = {
+            message_id: replyToWamid,
+            emoji: reactionEmoji ?? '',
           };
         }
-
-        /**
-         * TEXT MESSAGE
-         */
         else {
-
-          const normalizedContent = normalizeText(content);
-
           messageBody.type = 'text';
-
-          messageBody.text = {
-            body: normalizedContent,
-          };
+          messageBody.text = { body: normalizeText(content) };
         }
 
-        console.log(
-          '📤 Final WhatsApp Payload:',
-          JSON.stringify(messageBody, null, 2)
-        );
+        console.log('📤 Final WhatsApp Payload:', JSON.stringify(messageBody, null, 2));
 
         const response = await fetch(
           `${WHATSAPP_API_URL}/${phoneNumberId}/messages`,
