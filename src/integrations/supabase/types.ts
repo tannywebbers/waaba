@@ -218,6 +218,10 @@ export type Database = {
           is_deleted: boolean | null
           is_outgoing: boolean
           media_url: string | null
+          reactions: Json
+          reply_snapshot: Json | null
+          reply_to_message_id: string | null
+          reply_to_wamid: string | null
           status: string
           template_name: string | null
           template_params: Json | null
@@ -234,6 +238,10 @@ export type Database = {
           is_deleted?: boolean | null
           is_outgoing?: boolean
           media_url?: string | null
+          reactions?: Json
+          reply_snapshot?: Json | null
+          reply_to_message_id?: string | null
+          reply_to_wamid?: string | null
           status?: string
           template_name?: string | null
           template_params?: Json | null
@@ -250,6 +258,10 @@ export type Database = {
           is_deleted?: boolean | null
           is_outgoing?: boolean
           media_url?: string | null
+          reactions?: Json
+          reply_snapshot?: Json | null
+          reply_to_message_id?: string | null
+          reply_to_wamid?: string | null
           status?: string
           template_name?: string | null
           template_params?: Json | null
@@ -263,6 +275,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_reply_to_message_id_fkey"
+            columns: ["reply_to_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
             referencedColumns: ["id"]
           },
         ]
@@ -412,6 +431,47 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      stickers: {
+        Row: {
+          created_at: string
+          id: string
+          media_url: string
+          mime_type: string
+          name: string | null
+          source: string
+          source_message_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          media_url: string
+          mime_type?: string
+          name?: string | null
+          source?: string
+          source_message_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          media_url?: string
+          mime_type?: string
+          name?: string | null
+          source?: string
+          source_message_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stickers_source_message_id_fkey"
+            columns: ["source_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       template_mappings: {
         Row: {
@@ -589,6 +649,14 @@ export type Database = {
       deduct_shared_credit: {
         Args: { _shared_user_id: string }
         Returns: number
+      }
+      search_users_by_email: {
+        Args: { _email: string }
+        Returns: {
+          email: string
+          name: string
+          user_id: string
+        }[]
       }
     }
     Enums: {
