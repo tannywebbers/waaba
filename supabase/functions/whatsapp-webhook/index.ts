@@ -498,9 +498,33 @@ const processIncomingMessages = async (
         console.log('🔘 Quick-reply button tapped:', content);
         break;
 
-      case 'reaction':
-        content = message.reaction?.emoji || '[Reaction]';
-        break;
+      case 'reaction': {
+        // Reactions are stored on the parent message, not as a new message row.
+        const targetWamid = message.reaction?.message_id;
+        const emoji = message.reaction?.emoji || '';
+        if (targetWamid) {
+          try {
+            const { data: parent } = await supabase
+              .from('messages')
+              .select('id, reactions')
+              .eq('whatsapp_message_id', targetWamid)
+              .maybeSingle();
+            if (parent) {
+              const list = Array.isArray(parent.reactions) ? parent.reactions : [];
+              const filtered = list.filter((r: any) => r?.from !== from);
+              const next = emoji ? [...filtered, { emoji, from, fromName: value.contacts?.[0]?.profile?.name, at: new Date().toISOString() }] : filtered;
+              await supabase.from('messages').update({ reactions: next }).eq('id', parent.id);
+              console.log('💬 Reaction stored on message', parent.id, emoji || '(removed)');
+            } else {
+              console.log('⚠️ Reaction target message not found for wamid', targetWamid);
+            }
+          } catch (e) {
+            console.error('❌ Failed to store reaction:', e);
+          }
+        }
+        // Skip the normal insert path entirely
+        continue;
+      }
 
       case 'location':
         content = `[Location: ${message.location?.latitude}, ${message.location?.longitude}]`;
