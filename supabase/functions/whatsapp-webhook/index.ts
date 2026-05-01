@@ -632,6 +632,28 @@ const processIncomingMessages = async (
       targetUserId,
     });
 
+    // ✨ Reply context — Meta sends `context.id` for the original message ID
+    const replyToWamid: string | null = message.context?.id || null;
+    let replyToMessageId: string | null = null;
+    let replySnapshot: any = null;
+    if (replyToWamid) {
+      const { data: parentMsg } = await supabase
+        .from('messages')
+        .select('id, content, type, is_outgoing')
+        .eq('whatsapp_message_id', replyToWamid)
+        .maybeSingle();
+      if (parentMsg) {
+        replyToMessageId = parentMsg.id;
+        replySnapshot = {
+          type: parentMsg.type,
+          content: (parentMsg.content || '').slice(0, 200),
+          isOutgoing: parentMsg.is_outgoing,
+        };
+      } else {
+        replySnapshot = { type: 'text', content: '', isOutgoing: false, missing: true };
+      }
+    }
+
     // Insert message
     const { error: msgError } = await supabase.from('messages').insert({
       user_id: targetUserId,
@@ -642,6 +664,9 @@ const processIncomingMessages = async (
       is_outgoing: false,
       media_url: mediaUrl,
       whatsapp_message_id: messageId,
+      reply_to_message_id: replyToMessageId,
+      reply_to_wamid: replyToWamid,
+      reply_snapshot: replySnapshot,
     });
 
     if (msgError) {
