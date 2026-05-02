@@ -783,7 +783,12 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
                   <span>{formatDaySeparator(new Date(message.timestamp))}</span>
                 </div>
               )}
-              <MessageBubble message={message} onDelete={() => handleDeleteMessage(message.id)} />
+              <MessageBubble
+                message={message}
+                onDelete={() => handleDeleteMessage(message.id)}
+                onReply={(m) => { setReplyTo(m); setTimeout(() => inputRef.current?.focus(), 50); }}
+                onReact={handleReact}
+              />
             </div>
           );
         })}
