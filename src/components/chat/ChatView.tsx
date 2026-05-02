@@ -206,7 +206,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
     type: 'text' | 'image' | 'document' | 'audio' | 'sticker' = 'text',
     mediaUrl?: string,
     mediaMeta?: { fileName?: string; mimeType?: string },
-    contextMessageId?: string,
+    replyToWamid?: string,
   ) => {
     if (!activeChat || !user) return null;
 
@@ -223,7 +223,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
         to: normalizedPhone, type, content: mediaUrl || content,
         mediaFileName: mediaMeta?.fileName, mediaMimeType: mediaMeta?.mimeType,
-        contextMessageId,
+        replyToWamid,
       },
     });
 
@@ -271,7 +271,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
           body: {
             action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
             to: normalizedPhone, type: 'reaction',
-            reactionMessageId: m.whatsappMessageId, reactionEmoji: emoji,
+            replyToWamid: m.whatsappMessageId, reactionEmoji: emoji,
           },
         });
       }
