@@ -59,6 +59,34 @@ export function MessageBubble({ message, onDelete }: MessageBubbleProps) {
       );
     }
 
+    if (type === 'video' && mediaUrl) {
+      const fileName = getDisplayName();
+      return (
+        <div className="space-y-0.5">
+          <div className="relative rounded-lg overflow-hidden max-w-[260px] sm:max-w-[320px] cursor-pointer group/video" onClick={() => setMediaPreview(true)}>
+            <video
+              src={mediaUrl}
+              preload="metadata"
+              className="w-full max-h-[280px] object-cover bg-black"
+              playsInline
+              muted
+            />
+            <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover/video:bg-black/30 transition-colors">
+              <div className="h-12 w-12 rounded-full bg-black/60 flex items-center justify-center">
+                <PlayIcon className="h-6 w-6 text-white ml-0.5" fill="white" />
+              </div>
+            </div>
+          </div>
+          {fileName && fileName !== '[Video]' && (
+            <div className="flex items-center gap-1 pt-0.5">
+              <VideoIcon className="h-3 w-3 text-muted-foreground shrink-0" />
+              <p className="text-[12px] text-muted-foreground truncate">{fileName}</p>
+            </div>
+          )}
+        </div>
+      );
+    }
+
     if (type === 'audio' && mediaUrl) {
       const fileName = getDisplayName();
       if (audioError) {
