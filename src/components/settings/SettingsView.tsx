@@ -78,6 +78,7 @@ export function SettingsView() {
               </div>
             )}
             {activeTab === 'logs' && <ApiStatsPage />}
+            {activeTab === 'stickers' && <StickersSettings />}
             {activeTab === 'theme' && <ThemeSettings />}
             {activeTab === 'account' && <AccountSettings />}
           </div>
@@ -122,6 +123,7 @@ export function SettingsView() {
             </div>
           )}
           {activeTab === 'logs' && <ApiStatsPage />}
+          {activeTab === 'stickers' && <StickersSettings />}
           {activeTab === 'theme' && <ThemeSettings />}
           {activeTab === 'account' && <AccountSettings />}
         </div>
