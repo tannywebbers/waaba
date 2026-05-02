@@ -1,0 +1,113 @@
+import { useEffect, useRef, useState } from 'react';
+import { Sticker as StickerIcon, Upload, Trash2 } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Button } from '@/components/ui/button';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
+
+interface StickerPickerProps {
+  onSelect: (sticker: { mediaUrl: string; mimeType: string }) => void;
+}
+
+export function StickerPicker({ onSelect }: StickerPickerProps) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [stickers, setStickers] = useState<any[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const load = async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from('stickers' as any)
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+    setStickers((data as any[]) || []);
+  };
+
+  useEffect(() => {
+    if (open) load();
+  }, [open, user?.id]);
+
+  const handleUpload = async (file: File) => {
+    if (!user) return;
+    if (!file.type.startsWith('image/')) {
+      toast({ title: 'Only image files allowed', variant: 'destructive' });
+      return;
+    }
+    setUploading(true);
+    try {
+      const path = `${user.id}/${Date.now()}-${file.name}`;
+      const { error: upErr } = await supabase.storage.from('stickers').upload(path, file, {
+        contentType: file.type, upsert: false,
+      });
+      if (upErr) throw upErr;
+      const { data: urlData } = supabase.storage.from('stickers').getPublicUrl(path);
+      const { error: insErr } = await supabase.from('stickers' as any).insert({
+        user_id: user.id, name: file.name, media_url: urlData.publicUrl,
+        mime_type: file.type, source: 'uploaded',
+      } as any);
+      if (insErr) throw insErr;
+      await load();
+      toast({ title: '✅ Sticker added' });
+    } catch (e: any) {
+      toast({ title: 'Upload failed', description: e.message, variant: 'destructive' });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    await supabase.from('stickers' as any).delete().eq('id', id);
+    setStickers(s => s.filter(x => x.id !== id));
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button className="text-[hsl(var(--chat-control-icon))] hover:text-primary transition-colors p-1.5" title="Stickers">
+          <StickerIcon className="h-[22px] w-[22px]" strokeWidth={2.25} />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[320px] p-3" side="top" align="end">
+        <div className="flex items-center justify-between mb-2">
+          <p className="font-semibold text-sm">Stickers</p>
+          <Button size="sm" variant="ghost" disabled={uploading} onClick={() => fileRef.current?.click()}>
+            <Upload className="h-4 w-4 mr-1" />Add
+          </Button>
+          <input
+            ref={fileRef} type="file" accept="image/*,image/webp" hidden
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f); e.target.value = ''; }}
+          />
+        </div>
+        {stickers.length === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-6">
+            No stickers yet. Upload one or save received stickers from chats.
+          </p>
+        ) : (
+          <div className="grid grid-cols-4 gap-2 max-h-[260px] overflow-y-auto">
+            {stickers.map(s => (
+              <div key={s.id} className="relative group aspect-square">
+                <button
+                  onClick={() => { onSelect({ mediaUrl: s.media_url, mimeType: s.mime_type }); setOpen(false); }}
+                  className="w-full h-full rounded-lg overflow-hidden bg-muted hover:ring-2 hover:ring-primary"
+                >
+                  <img src={s.media_url} alt="sticker" className="w-full h-full object-contain" />
+                </button>
+                <button
+                  onClick={() => handleDelete(s.id)}
+                  className="absolute top-0.5 right-0.5 h-5 w-5 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 flex items-center justify-center"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}

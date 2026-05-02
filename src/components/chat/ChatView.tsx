@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, Clock, MessageCircle, Send } from 'lucide-react';
+import { ArrowLeft, Clock, MessageCircle, Send, X, Reply as ReplyIcon } from 'lucide-react';
 import { EmojiPickerButton, MobileEmojiPanel } from '@/components/chat/EmojiPickerButton';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -18,12 +18,15 @@ import { FileUploadButton } from '@/components/chat/FileUploadButton';
 import { UnifiedTemplateSelector } from '@/components/chat/UnifiedTemplateSelector';
 import { VoiceRecorderButton } from '@/components/chat/VoiceRecorderButton';
 import { ImagePastePreview } from '@/components/chat/ImagePastePreview';
+import { StickerPicker } from '@/components/chat/StickerPicker';
 import { globalVoiceRecorder } from '@/lib/globalVoiceRecorder';
 import { formatPresenceStatus } from '@/lib/utils/presence';
 import { useIsMobile } from '@/hooks/use-mobile';
 import chatBg from '@/assets/chat-bg.png';
 import { format, isSameDay, isToday, isYesterday } from 'date-fns';
 import { getWhatsAppErrorExplanation } from '@/lib/whatsappErrors';
+import { getMessagePreview } from '@/lib/utils/messagePreview';
+import type { Message } from '@/types';
 
 interface ChatViewProps { onBack?: () => void; showBackButton?: boolean }
 
@@ -47,6 +50,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
   const [emojiPanelOpen, setEmojiPanelOpen] = useState(false);
   const [showScheduleDialog, setShowScheduleDialog] = useState(false);
   const [scheduleAt, setScheduleAt] = useState('');
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
   const schedulePressTimer = useRef<NodeJS.Timeout | null>(null);
 
   // Check if the phone number is assigned to another user in the shared inbox (uses SECURITY DEFINER to bypass RLS)
@@ -116,6 +120,10 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
             type: newMsg.type, status: newMsg.status, isOutgoing: newMsg.is_outgoing,
             timestamp: new Date(newMsg.created_at), mediaUrl: newMsg.media_url || undefined,
             whatsappMessageId: newMsg.whatsapp_message_id || undefined,
+            replyToMessageId: newMsg.reply_to_message_id || undefined,
+            replyToWamid: newMsg.reply_to_wamid || undefined,
+            replySnapshot: newMsg.reply_snapshot || undefined,
+            reactions: newMsg.reactions || [],
           });
         }
       )
@@ -123,6 +131,19 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         (payload) => {
           const updated = payload.new as any;
           updateMessageStatus(activeChat.id, updated.id, updated.status);
+          // Sync reactions/reply changes
+          useAppStore.setState((state) => ({
+            messages: {
+              ...state.messages,
+              [activeChat.id]: (state.messages[activeChat.id] || []).map(m =>
+                m.id === updated.id ? {
+                  ...m,
+                  reactions: updated.reactions || [],
+                  replySnapshot: updated.reply_snapshot || m.replySnapshot,
+                } : m
+              ),
+            },
+          }));
         }
       )
       .subscribe();
@@ -182,9 +203,10 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
 
   const sendMessageToWhatsApp = async (
     content: string,
-    type: 'text' | 'image' | 'document' | 'audio' = 'text',
+    type: 'text' | 'image' | 'document' | 'audio' | 'sticker' = 'text',
     mediaUrl?: string,
     mediaMeta?: { fileName?: string; mimeType?: string },
+    replyToWamid?: string,
   ) => {
     if (!activeChat || !user) return null;
 
@@ -201,6 +223,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
         to: normalizedPhone, type, content: mediaUrl || content,
         mediaFileName: mediaMeta?.fileName, mediaMimeType: mediaMeta?.mimeType,
+        replyToWamid,
       },
     });
 
@@ -210,8 +233,83 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       toast({ title: `❌ ${details.title}`, description: `${details.description}\n\n💡 ${details.action}`, variant: 'destructive', duration: 8000 });
       return null;
     }
-    
+
     return data.messageId as string;
+  };
+
+  // Build a reply snapshot for storing in DB
+  const buildReplySnapshot = (m: Message) => ({
+    type: m.type,
+    content: m.content,
+    isOutgoing: m.isOutgoing,
+    fromName: m.isOutgoing ? 'You' : (activeChat?.contact.name || 'Contact'),
+  });
+
+  const handleReact = async (m: Message, emoji: string) => {
+    if (!activeChat || !user) return;
+    const existing = (m.reactions || []).filter(r => r.from !== 'me');
+    const newReactions = [...existing, { emoji, from: 'me', fromName: 'You', at: new Date().toISOString() }];
+
+    // Optimistic update
+    useAppStore.setState((state) => ({
+      messages: {
+        ...state.messages,
+        [activeChat.id]: (state.messages[activeChat.id] || []).map(x =>
+          x.id === m.id ? { ...x, reactions: newReactions } : x
+        ),
+      },
+    }));
+
+    await supabase.from('messages').update({ reactions: newReactions } as any).eq('id', m.id);
+
+    // Send reaction to WhatsApp if we have the original wamid
+    if (m.whatsappMessageId) {
+      const { data: settings } = await supabase.from('whatsapp_settings').select('api_token, phone_number_id').eq('user_id', user.id).maybeSingle();
+      if (settings?.api_token && settings?.phone_number_id) {
+        const normalizedPhone = activeChat.contact.phone.replace(/[^\d+]/g, '').replace(/^\+/, '');
+        await supabase.functions.invoke('whatsapp-api', {
+          body: {
+            action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
+            to: normalizedPhone, type: 'reaction',
+            replyToWamid: m.whatsappMessageId, reactionEmoji: emoji,
+          },
+        });
+      }
+    }
+  };
+
+  const handleSendSticker = async (sticker: { mediaUrl: string; mimeType: string }) => {
+    if (!activeChat || !user) return;
+    setSending(true);
+    try {
+      const blocked = await checkConflictingAssignment();
+      if (blocked) { setSending(false); return; }
+
+      const wamid = await sendMessageToWhatsApp('[Sticker]', 'sticker', sticker.mediaUrl, { mimeType: sticker.mimeType }, replyTo?.whatsappMessageId);
+      const status = wamid ? 'sent' : 'failed';
+      const replySnap = replyTo ? buildReplySnapshot(replyTo) : null;
+
+      const { data } = await supabase.from('messages').insert({
+        user_id: user.id, contact_id: activeChat.id, content: '[Sticker]',
+        type: 'sticker', is_outgoing: true, status,
+        media_url: sticker.mediaUrl, whatsapp_message_id: wamid || null,
+        reply_to_message_id: replyTo?.id || null,
+        reply_to_wamid: replyTo?.whatsappMessageId || null,
+        reply_snapshot: replySnap,
+      } as any).select().maybeSingle();
+      if (data) {
+        addMessage(activeChat.id, {
+          id: data.id, contactId: data.contact_id, content: '[Sticker]', type: 'sticker',
+          status, isOutgoing: true, timestamp: new Date(data.created_at), mediaUrl: sticker.mediaUrl,
+          whatsappMessageId: wamid || undefined,
+          replyToMessageId: replyTo?.id, replyToWamid: replyTo?.whatsappMessageId,
+          replySnapshot: replySnap as any,
+        });
+      }
+      setReplyTo(null);
+    } finally {
+      setSending(false);
+    }
   };
 
   const handleSendMetaTemplate = async (template: any, params: Record<string, string>) => {
@@ -355,13 +453,20 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       const blocked = await checkConflictingAssignment();
       if (blocked) { setSending(false); setInputValue(content); return; }
 
-      const whatsappMessageId = await sendMessageToWhatsApp(content);
+      const currentReply = replyTo;
+      setReplyTo(null);
+      const replySnap = currentReply ? buildReplySnapshot(currentReply) : null;
+
+      const whatsappMessageId = await sendMessageToWhatsApp(content, 'text', undefined, undefined, currentReply?.whatsappMessageId);
       const status = whatsappMessageId ? 'sent' : 'failed';
 
       const { data, error } = await supabase.from('messages').insert({
         user_id: user.id, contact_id: activeChat.id, content, type: 'text', is_outgoing: true,
         status, whatsapp_message_id: whatsappMessageId || null,
-      }).select().maybeSingle();
+        reply_to_message_id: currentReply?.id || null,
+        reply_to_wamid: currentReply?.whatsappMessageId || null,
+        reply_snapshot: replySnap,
+      } as any).select().maybeSingle();
 
       if (error) throw error;
 
@@ -369,6 +474,8 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         id: data.id, contactId: data.contact_id, content: data.content, type: 'text',
         status, isOutgoing: true, timestamp: new Date(data.created_at),
         whatsappMessageId: whatsappMessageId || undefined,
+        replyToMessageId: currentReply?.id, replyToWamid: currentReply?.whatsappMessageId,
+        replySnapshot: replySnap as any,
       });
 
       // Auto-assign contact to shared user on first message
@@ -676,7 +783,12 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
                   <span>{formatDaySeparator(new Date(message.timestamp))}</span>
                 </div>
               )}
-              <MessageBubble message={message} onDelete={() => handleDeleteMessage(message.id)} />
+              <MessageBubble
+                message={message}
+                onDelete={() => handleDeleteMessage(message.id)}
+                onReply={(m) => { setReplyTo(m); setTimeout(() => inputRef.current?.focus(), 50); }}
+                onReact={handleReact}
+              />
             </div>
           );
         })}
@@ -711,6 +823,24 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       {voiceStatus && (
         <div className="px-4 py-2 bg-primary/10 text-center text-sm font-medium text-primary animate-pulse shrink-0">
           {voiceStatus}
+        </div>
+      )}
+
+      {/* Reply preview bar */}
+      {replyTo && (
+        <div className="px-3 py-2 mx-2 sm:mx-3 mb-1 bg-card border-l-[3px] border-primary rounded-md flex items-start gap-2 shrink-0 z-20">
+          <ReplyIcon className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-[12px] font-semibold text-primary">
+              Replying to {replyTo.isOutgoing ? 'yourself' : (activeChat.contact.name || 'Contact')}
+            </p>
+            <p className="text-[12px] text-muted-foreground truncate">
+              {getMessagePreview(replyTo)}
+            </p>
+          </div>
+          <button onClick={() => setReplyTo(null)} className="p-1 hover:bg-accent rounded-full shrink-0">
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
 
@@ -797,10 +927,15 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
 
                 {/* File upload button */}
                 <div className="shrink-0 self-end pb-[2px]">
-                  <FileUploadButton 
-                    onFileSelect={(file, type) => handleFileUpload(file, type)} 
+                  <FileUploadButton
+                    onFileSelect={(file, type) => handleFileUpload(file, type)}
                     uploading={uploading}
                   />
+                </div>
+
+                {/* Sticker picker */}
+                <div className="shrink-0 self-end pb-[2px]">
+                  <StickerPicker onSelect={handleSendSticker} />
                 </div>
 
                 {/* Template button */}

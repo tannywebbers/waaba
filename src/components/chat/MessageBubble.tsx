@@ -1,47 +1,102 @@
 // @ts-nocheck
-import { useRef, useState } from 'react';
-import { AlertCircle, Copy, FileText, Image as ImageIcon, Music, MoreVertical, Pause, Play, Trash2, Video as VideoIcon, Play as PlayIcon } from 'lucide-react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { useEffect, useRef, useState } from 'react';
+import { AlertCircle, Copy, FileText, Image as ImageIcon, Music, MoreVertical, Pause, Play, Trash2, Video as VideoIcon, Play as PlayIcon, Reply, Smile, Sticker as StickerIcon, BookmarkPlus } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Message } from '@/types';
 import { MessageStatus } from '@/components/shared/MessageStatus';
 import { MediaPreviewModal } from '@/components/chat/MediaPreviewModal';
 import { formatMessageTime } from '@/lib/utils/format';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { voiceQueue } from '@/lib/voiceQueue';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { getMessagePreview } from '@/lib/utils/messagePreview';
 
 interface MessageBubbleProps {
   message: Message;
   onDelete?: () => void;
+  onReply?: (message: Message) => void;
+  onReact?: (message: Message, emoji: string) => void;
 }
 
-export function MessageBubble({ message, onDelete }: MessageBubbleProps) {
-  const { content, isOutgoing, timestamp, status, type, mediaUrl } = message;
+const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+
+export function MessageBubble({ message, onDelete, onReply, onReact }: MessageBubbleProps) {
+  const { content, isOutgoing, timestamp, status, type, mediaUrl, replySnapshot, reactions } = message;
   const [mediaPreview, setMediaPreview] = useState(false);
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [audioDuration, setAudioDuration] = useState<string | null>(null);
   const [audioProgress, setAudioProgress] = useState(0);
   const [audioError, setAudioError] = useState(false);
+  const [reactOpen, setReactOpen] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const isSticker = (type as string) === 'sticker' || (type === 'image' && content === '[Sticker]');
 
-  // Extract a readable filename from content
+  // Register voice notes with the sequential player queue
+  useEffect(() => {
+    if (type === 'audio' && audioRef.current && message.id) {
+      const order = new Date(timestamp).getTime();
+      voiceQueue.register(message.id, message.contactId, order, audioRef.current, setAudioPlaying);
+      return () => voiceQueue.unregister(message.id);
+    }
+  }, [type, message.id, message.contactId, timestamp]);
+
   const getDisplayName = () => {
     if (!content || content.startsWith('[')) return null;
     return content;
   };
 
   const toggleAudio = () => {
-    if (!audioRef.current || audioError) return;
-    if (audioPlaying) audioRef.current.pause();
-    else audioRef.current.play();
-    setAudioPlaying(!audioPlaying);
+    if (audioError || !message.id) return;
+    if (audioPlaying) voiceQueue.pause(message.id);
+    else voiceQueue.play(message.id);
+  };
+
+  const handleSaveSticker = async () => {
+    if (!user || !mediaUrl) return;
+    const { error } = await supabase.from('stickers' as any).insert({
+      user_id: user.id, media_url: mediaUrl, mime_type: 'image/webp',
+      source: 'saved_from_chat', source_message_id: message.id,
+    } as any);
+    if (error) toast({ title: 'Failed to save', description: error.message, variant: 'destructive' });
+    else toast({ title: '✅ Sticker saved', description: 'Available in Stickers section.' });
+  };
+
+  const renderReplyQuote = () => {
+    if (!replySnapshot) return null;
+    return (
+      <div className="mb-1.5 pl-2 border-l-[3px] border-primary bg-black/5 dark:bg-white/5 rounded-r-md py-1 pr-2 cursor-pointer">
+        <p className="text-[11px] font-semibold text-primary truncate">
+          {replySnapshot.isOutgoing ? 'You' : (replySnapshot.fromName || 'Contact')}
+        </p>
+        <p className="text-[12px] text-muted-foreground truncate">
+          {getMessagePreview({ type: replySnapshot.type, content: replySnapshot.content })}
+        </p>
+      </div>
+    );
   };
 
   const renderContent = () => {
     if (isSticker && mediaUrl) {
-      return <img src={mediaUrl} alt="Sticker" className="max-w-[140px] max-h-[140px] object-contain cursor-pointer" onClick={() => setMediaPreview(true)} />;
+      return (
+        <div className="relative group/sticker">
+          <img src={mediaUrl} alt="Sticker" className="max-w-[140px] max-h-[140px] object-contain cursor-pointer" onClick={() => setMediaPreview(true)} />
+          {!isOutgoing && (
+            <button
+              onClick={handleSaveSticker}
+              className="absolute -top-1 -right-1 h-7 w-7 rounded-full bg-primary text-primary-foreground opacity-0 group-hover/sticker:opacity-100 transition-opacity flex items-center justify-center shadow-md"
+              title="Save sticker"
+            >
+              <BookmarkPlus className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      );
     }
 
     if (type === 'image' && mediaUrl) {
@@ -64,13 +119,7 @@ export function MessageBubble({ message, onDelete }: MessageBubbleProps) {
       return (
         <div className="space-y-0.5">
           <div className="relative rounded-lg overflow-hidden max-w-[260px] sm:max-w-[320px] cursor-pointer group/video" onClick={() => setMediaPreview(true)}>
-            <video
-              src={mediaUrl}
-              preload="metadata"
-              className="w-full max-h-[280px] object-cover bg-black"
-              playsInline
-              muted
-            />
+            <video src={mediaUrl} preload="metadata" className="w-full max-h-[280px] object-cover bg-black" playsInline muted />
             <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover/video:bg-black/30 transition-colors">
               <div className="h-12 w-12 rounded-full bg-black/60 flex items-center justify-center">
                 <PlayIcon className="h-6 w-6 text-white ml-0.5" fill="white" />
@@ -92,9 +141,7 @@ export function MessageBubble({ message, onDelete }: MessageBubbleProps) {
       if (audioError) {
         return (
           <div className="flex items-center gap-2.5 min-w-[180px] text-destructive">
-            <div className="h-9 w-9 rounded-full bg-destructive/20 flex items-center justify-center shrink-0">
-              <AlertCircle className="h-4 w-4" />
-            </div>
+            <div className="h-9 w-9 rounded-full bg-destructive/20 flex items-center justify-center shrink-0"><AlertCircle className="h-4 w-4" /></div>
             <div className="flex-1 min-w-[80px]">
               <p className="text-xs font-medium">Audio unavailable</p>
               <p className="text-[10px] opacity-70">Failed to load audio file</p>
@@ -140,7 +187,12 @@ export function MessageBubble({ message, onDelete }: MessageBubbleProps) {
                     setAudioDuration(`${Math.floor(secs / 60)}:${(secs % 60).toString().padStart(2, '0')}`);
                   }
                 }}
-                onEnded={() => { setAudioPlaying(false); setAudioProgress(0); }}
+                onEnded={() => {
+                  setAudioProgress(0);
+                  if (message.id) voiceQueue.ended(message.id);
+                }}
+                onPause={() => setAudioPlaying(false)}
+                onPlay={() => setAudioPlaying(true)}
                 onError={() => { setAudioError(true); setAudioPlaying(false); }}
                 className="hidden"
               />
@@ -173,32 +225,80 @@ export function MessageBubble({ message, onDelete }: MessageBubbleProps) {
     return <p className="text-[15px] sm:text-[14px] leading-[1.3] whitespace-pre-wrap break-words font-medium" style={{ overflowWrap: 'anywhere' }}>{content}</p>;
   };
 
+  // Group reactions by emoji and count
+  const reactionCounts: Record<string, number> = {};
+  (reactions || []).forEach(r => { if (r.emoji) reactionCounts[r.emoji] = (reactionCounts[r.emoji] || 0) + 1; });
+  const hasReactions = Object.keys(reactionCounts).length > 0;
+
   return (
     <>
       <div className={cn('flex animate-message-in', isOutgoing ? 'justify-end' : 'justify-start')}>
         <div className="relative group">
-          {onDelete && (
-            <div className={cn('absolute top-1 z-10', isOutgoing ? 'left-1' : 'right-1')}>
+          {/* Action buttons (reply, react, menu) */}
+          <div className={cn('absolute -top-1 z-10 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity', isOutgoing ? '-left-20' : '-right-20')}>
+            {onReact && (
+              <Popover open={reactOpen} onOpenChange={setReactOpen}>
+                <PopoverTrigger asChild>
+                  <button className="h-7 w-7 rounded-full bg-card border border-border shadow-sm flex items-center justify-center hover:bg-accent" title="React">
+                    <Smile className="h-3.5 w-3.5" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-1.5" side="top">
+                  <div className="flex gap-1">
+                    {QUICK_REACTIONS.map(emoji => (
+                      <button
+                        key={emoji}
+                        className="h-9 w-9 rounded-full hover:bg-accent text-xl flex items-center justify-center"
+                        onClick={() => { onReact(message, emoji); setReactOpen(false); }}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
+            {onReply && (
+              <button
+                onClick={() => onReply(message)}
+                className="h-7 w-7 rounded-full bg-card border border-border shadow-sm flex items-center justify-center hover:bg-accent"
+                title="Reply"
+              >
+                <Reply className="h-3.5 w-3.5" />
+              </button>
+            )}
+            {onDelete && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="h-5 w-5 rounded-full bg-black/10 text-black flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <MoreVertical className="h-3 w-3" />
+                  <button className="h-7 w-7 rounded-full bg-card border border-border shadow-sm flex items-center justify-center hover:bg-accent">
+                    <MoreVertical className="h-3.5 w-3.5" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align={isOutgoing ? 'start' : 'end'}>
+                  {onReply && (
+                    <DropdownMenuItem onClick={() => onReply(message)}>
+                      <Reply className="h-4 w-4 mr-2" />Reply
+                    </DropdownMenuItem>
+                  )}
+                  {isSticker && mediaUrl && !isOutgoing && (
+                    <DropdownMenuItem onClick={handleSaveSticker}>
+                      <BookmarkPlus className="h-4 w-4 mr-2" />Save sticker
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem onClick={async () => {
                     await navigator.clipboard.writeText(content || '');
                     toast({ title: 'Message copied' });
                   }}>
                     <Copy className="h-4 w-4 mr-2" />Copy message
                   </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
                     <Trash2 className="h-4 w-4 mr-2" />Delete message
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            </div>
-          )}
+            )}
+          </div>
 
           <div
             className={cn(
@@ -208,6 +308,7 @@ export function MessageBubble({ message, onDelete }: MessageBubbleProps) {
               !isSticker && (isOutgoing ? 'bg-[hsl(var(--bubble-outgoing))] text-[hsl(var(--bubble-text))]' : 'bg-[hsl(var(--bubble-incoming))] text-[hsl(var(--bubble-text))]')
             )}
           >
+            {!isSticker && renderReplyQuote()}
             {renderContent()}
             {!isSticker && (
               <div className={cn('flex items-center gap-1 mt-0.5', isOutgoing ? 'justify-end' : 'justify-start')}>
@@ -216,12 +317,24 @@ export function MessageBubble({ message, onDelete }: MessageBubbleProps) {
               </div>
             )}
             {status === 'failed' && isOutgoing && (
-              <div className="flex items-center gap-1 mt-1 text-destructive cursor-pointer" title="Tap for details">
+              <div className="flex items-center gap-1 mt-1 text-destructive">
                 <AlertCircle className="h-3 w-3" />
                 <span className="text-[11px] font-medium">Failed to send</span>
               </div>
             )}
           </div>
+
+          {/* Reactions row */}
+          {hasReactions && (
+            <div className={cn('flex gap-1 -mt-1.5 px-1', isOutgoing ? 'justify-end' : 'justify-start')}>
+              {Object.entries(reactionCounts).map(([emoji, count]) => (
+                <span key={emoji} className="bg-card border border-border rounded-full px-1.5 py-0.5 text-[11px] shadow-sm flex items-center gap-0.5">
+                  <span>{emoji}</span>
+                  {count > 1 && <span className="text-muted-foreground">{count}</span>}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
