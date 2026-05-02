@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, Clock, MessageCircle, Send } from 'lucide-react';
+import { ArrowLeft, Clock, MessageCircle, Send, X, Reply as ReplyIcon } from 'lucide-react';
 import { EmojiPickerButton, MobileEmojiPanel } from '@/components/chat/EmojiPickerButton';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -18,12 +18,15 @@ import { FileUploadButton } from '@/components/chat/FileUploadButton';
 import { UnifiedTemplateSelector } from '@/components/chat/UnifiedTemplateSelector';
 import { VoiceRecorderButton } from '@/components/chat/VoiceRecorderButton';
 import { ImagePastePreview } from '@/components/chat/ImagePastePreview';
+import { StickerPicker } from '@/components/chat/StickerPicker';
 import { globalVoiceRecorder } from '@/lib/globalVoiceRecorder';
 import { formatPresenceStatus } from '@/lib/utils/presence';
 import { useIsMobile } from '@/hooks/use-mobile';
 import chatBg from '@/assets/chat-bg.png';
 import { format, isSameDay, isToday, isYesterday } from 'date-fns';
 import { getWhatsAppErrorExplanation } from '@/lib/whatsappErrors';
+import { getMessagePreview } from '@/lib/utils/messagePreview';
+import type { Message } from '@/types';
 
 interface ChatViewProps { onBack?: () => void; showBackButton?: boolean }
 
@@ -47,6 +50,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
   const [emojiPanelOpen, setEmojiPanelOpen] = useState(false);
   const [showScheduleDialog, setShowScheduleDialog] = useState(false);
   const [scheduleAt, setScheduleAt] = useState('');
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
   const schedulePressTimer = useRef<NodeJS.Timeout | null>(null);
 
   // Check if the phone number is assigned to another user in the shared inbox (uses SECURITY DEFINER to bypass RLS)
