@@ -453,13 +453,20 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       const blocked = await checkConflictingAssignment();
       if (blocked) { setSending(false); setInputValue(content); return; }
 
-      const whatsappMessageId = await sendMessageToWhatsApp(content);
+      const currentReply = replyTo;
+      setReplyTo(null);
+      const replySnap = currentReply ? buildReplySnapshot(currentReply) : null;
+
+      const whatsappMessageId = await sendMessageToWhatsApp(content, 'text', undefined, undefined, currentReply?.whatsappMessageId);
       const status = whatsappMessageId ? 'sent' : 'failed';
 
       const { data, error } = await supabase.from('messages').insert({
         user_id: user.id, contact_id: activeChat.id, content, type: 'text', is_outgoing: true,
         status, whatsapp_message_id: whatsappMessageId || null,
-      }).select().maybeSingle();
+        reply_to_message_id: currentReply?.id || null,
+        reply_to_wamid: currentReply?.whatsappMessageId || null,
+        reply_snapshot: replySnap,
+      } as any).select().maybeSingle();
 
       if (error) throw error;
 
@@ -467,6 +474,8 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         id: data.id, contactId: data.contact_id, content: data.content, type: 'text',
         status, isOutgoing: true, timestamp: new Date(data.created_at),
         whatsappMessageId: whatsappMessageId || undefined,
+        replyToMessageId: currentReply?.id, replyToWamid: currentReply?.whatsappMessageId,
+        replySnapshot: replySnap as any,
       });
 
       // Auto-assign contact to shared user on first message
