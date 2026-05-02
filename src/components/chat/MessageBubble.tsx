@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useRef, useState } from 'react';
-import { AlertCircle, Copy, FileText, Image as ImageIcon, Music, MoreVertical, Pause, Play, Trash2 } from 'lucide-react';
+import { AlertCircle, Copy, FileText, Image as ImageIcon, Music, MoreVertical, Pause, Play, Trash2, Video as VideoIcon, Play as PlayIcon } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Message } from '@/types';
 import { MessageStatus } from '@/components/shared/MessageStatus';
