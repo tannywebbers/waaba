@@ -203,9 +203,10 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
 
   const sendMessageToWhatsApp = async (
     content: string,
-    type: 'text' | 'image' | 'document' | 'audio' = 'text',
+    type: 'text' | 'image' | 'document' | 'audio' | 'sticker' = 'text',
     mediaUrl?: string,
     mediaMeta?: { fileName?: string; mimeType?: string },
+    contextMessageId?: string,
   ) => {
     if (!activeChat || !user) return null;
 
@@ -222,6 +223,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
         to: normalizedPhone, type, content: mediaUrl || content,
         mediaFileName: mediaMeta?.fileName, mediaMimeType: mediaMeta?.mimeType,
+        contextMessageId,
       },
     });
 
@@ -231,8 +233,83 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       toast({ title: `❌ ${details.title}`, description: `${details.description}\n\n💡 ${details.action}`, variant: 'destructive', duration: 8000 });
       return null;
     }
-    
+
     return data.messageId as string;
+  };
+
+  // Build a reply snapshot for storing in DB
+  const buildReplySnapshot = (m: Message) => ({
+    type: m.type,
+    content: m.content,
+    isOutgoing: m.isOutgoing,
+    fromName: m.isOutgoing ? 'You' : (activeChat?.contact.name || 'Contact'),
+  });
+
+  const handleReact = async (m: Message, emoji: string) => {
+    if (!activeChat || !user) return;
+    const existing = (m.reactions || []).filter(r => r.from !== 'me');
+    const newReactions = [...existing, { emoji, from: 'me', fromName: 'You', at: new Date().toISOString() }];
+
+    // Optimistic update
+    useAppStore.setState((state) => ({
+      messages: {
+        ...state.messages,
+        [activeChat.id]: (state.messages[activeChat.id] || []).map(x =>
+          x.id === m.id ? { ...x, reactions: newReactions } : x
+        ),
+      },
+    }));
+
+    await supabase.from('messages').update({ reactions: newReactions } as any).eq('id', m.id);
+
+    // Send reaction to WhatsApp if we have the original wamid
+    if (m.whatsappMessageId) {
+      const { data: settings } = await supabase.from('whatsapp_settings').select('api_token, phone_number_id').eq('user_id', user.id).maybeSingle();
+      if (settings?.api_token && settings?.phone_number_id) {
+        const normalizedPhone = activeChat.contact.phone.replace(/[^\d+]/g, '').replace(/^\+/, '');
+        await supabase.functions.invoke('whatsapp-api', {
+          body: {
+            action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
+            to: normalizedPhone, type: 'reaction',
+            reactionMessageId: m.whatsappMessageId, reactionEmoji: emoji,
+          },
+        });
+      }
+    }
+  };
+
+  const handleSendSticker = async (sticker: { mediaUrl: string; mimeType: string }) => {
+    if (!activeChat || !user) return;
+    setSending(true);
+    try {
+      const blocked = await checkConflictingAssignment();
+      if (blocked) { setSending(false); return; }
+
+      const wamid = await sendMessageToWhatsApp('[Sticker]', 'sticker', sticker.mediaUrl, { mimeType: sticker.mimeType }, replyTo?.whatsappMessageId);
+      const status = wamid ? 'sent' : 'failed';
+      const replySnap = replyTo ? buildReplySnapshot(replyTo) : null;
+
+      const { data } = await supabase.from('messages').insert({
+        user_id: user.id, contact_id: activeChat.id, content: '[Sticker]',
+        type: 'sticker', is_outgoing: true, status,
+        media_url: sticker.mediaUrl, whatsapp_message_id: wamid || null,
+        reply_to_message_id: replyTo?.id || null,
+        reply_to_wamid: replyTo?.whatsappMessageId || null,
+        reply_snapshot: replySnap,
+      } as any).select().maybeSingle();
+      if (data) {
+        addMessage(activeChat.id, {
+          id: data.id, contactId: data.contact_id, content: '[Sticker]', type: 'sticker',
+          status, isOutgoing: true, timestamp: new Date(data.created_at), mediaUrl: sticker.mediaUrl,
+          whatsappMessageId: wamid || undefined,
+          replyToMessageId: replyTo?.id, replyToWamid: replyTo?.whatsappMessageId,
+          replySnapshot: replySnap as any,
+        });
+      }
+      setReplyTo(null);
+    } finally {
+      setSending(false);
+    }
   };
 
   const handleSendMetaTemplate = async (template: any, params: Record<string, string>) => {
