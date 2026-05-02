@@ -403,6 +403,10 @@ export const useAppStore = create<AppState>()((set, get) => ({
           templateParams: m.template_params as Record<string, string> || undefined,
           isDeleted: m.is_deleted || false,
           deletedAt: m.deleted_at ? new Date(m.deleted_at) : undefined,
+          replyToMessageId: m.reply_to_message_id || undefined,
+          replyToWamid: m.reply_to_wamid || undefined,
+          replySnapshot: m.reply_snapshot || undefined,
+          reactions: m.reactions || [],
         };
         if (!messagesMap[m.contact_id]) messagesMap[m.contact_id] = [];
         messagesMap[m.contact_id].push(message);
