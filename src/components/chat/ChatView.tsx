@@ -120,6 +120,10 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
             type: newMsg.type, status: newMsg.status, isOutgoing: newMsg.is_outgoing,
             timestamp: new Date(newMsg.created_at), mediaUrl: newMsg.media_url || undefined,
             whatsappMessageId: newMsg.whatsapp_message_id || undefined,
+            replyToMessageId: newMsg.reply_to_message_id || undefined,
+            replyToWamid: newMsg.reply_to_wamid || undefined,
+            replySnapshot: newMsg.reply_snapshot || undefined,
+            reactions: newMsg.reactions || [],
           });
         }
       )
@@ -127,6 +131,19 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         (payload) => {
           const updated = payload.new as any;
           updateMessageStatus(activeChat.id, updated.id, updated.status);
+          // Sync reactions/reply changes
+          useAppStore.setState((state) => ({
+            messages: {
+              ...state.messages,
+              [activeChat.id]: (state.messages[activeChat.id] || []).map(m =>
+                m.id === updated.id ? {
+                  ...m,
+                  reactions: updated.reactions || [],
+                  replySnapshot: updated.reply_snapshot || m.replySnapshot,
+                } : m
+              ),
+            },
+          }));
         }
       )
       .subscribe();
