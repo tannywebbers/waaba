@@ -826,6 +826,24 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         </div>
       )}
 
+      {/* Reply preview bar */}
+      {replyTo && (
+        <div className="px-3 py-2 mx-2 sm:mx-3 mb-1 bg-card border-l-[3px] border-primary rounded-md flex items-start gap-2 shrink-0 z-20">
+          <ReplyIcon className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-[12px] font-semibold text-primary">
+              Replying to {replyTo.isOutgoing ? 'yourself' : (activeChat.contact.name || 'Contact')}
+            </p>
+            <p className="text-[12px] text-muted-foreground truncate">
+              {getMessagePreview(replyTo)}
+            </p>
+          </div>
+          <button onClick={() => setReplyTo(null)} className="p-1 hover:bg-accent rounded-full shrink-0">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {/* Input bar */}
       <div className="px-2 sm:px-3 pt-1.5 shrink-0 z-20" style={{ paddingBottom: 'max(5px, env(safe-area-inset-bottom))' }}>
         <div className="flex w-full items-end gap-2 max-w-3xl mx-auto pr-2">
@@ -909,10 +927,15 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
 
                 {/* File upload button */}
                 <div className="shrink-0 self-end pb-[2px]">
-                  <FileUploadButton 
-                    onFileSelect={(file, type) => handleFileUpload(file, type)} 
+                  <FileUploadButton
+                    onFileSelect={(file, type) => handleFileUpload(file, type)}
                     uploading={uploading}
                   />
+                </div>
+
+                {/* Sticker picker */}
+                <div className="shrink-0 self-end pb-[2px]">
+                  <StickerPicker onSelect={handleSendSticker} />
                 </div>
 
                 {/* Template button */}
