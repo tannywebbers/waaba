@@ -863,6 +863,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
                       setInputValue((prev) => prev + emoji);
                       setDraft(activeChat.id, inputValue + emoji);
                     }}
+                    onStickerSelect={handleSendSticker}
                     onDeleteChar={() => {
                       setInputValue((prev) => {
                         const arr = [...prev];
