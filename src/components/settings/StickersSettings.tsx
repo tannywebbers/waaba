@@ -56,8 +56,10 @@ export function StickersSettings() {
           <Upload className="h-4 w-4 mr-2" />Upload
         </Button>
         <input
-          ref={fileRef} type="file" accept="image/*,image/webp" hidden
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f); e.target.value = ''; }}
+          ref={fileRef} type="file" multiple
+          accept="image/*,image/webp,image/png,image/jpeg,image/gif,.webp,.png,.jpg,.jpeg,.gif"
+          hidden
+          onChange={(e) => { const fs = e.target.files; if (fs && fs.length) handleUpload(fs); e.target.value = ''; }}
         />
       </div>
 
