@@ -987,6 +987,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
                 return arr.join('');
               });
             }}
+            onStickerSelect={(s) => { handleSendSticker(s); setEmojiPanelOpen(true); }}
           />
         </div>
       )}
