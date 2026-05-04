@@ -934,11 +934,6 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
                   />
                 </div>
 
-                {/* Sticker picker */}
-                <div className="shrink-0 self-end pb-[2px]">
-                  <StickerPicker onSelect={handleSendSticker} />
-                </div>
-
                 {/* Template button */}
                 <div className="shrink-0 self-end pb-[2px]">
                   <UnifiedTemplateSelector
