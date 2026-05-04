@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { uploadStickerFile } from '@/lib/utils/stickerUpload';
 
 interface StickerGridProps {
   onSelect: (sticker: { mediaUrl: string; mimeType: string }) => void;
