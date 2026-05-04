@@ -90,7 +90,8 @@ export function MessageBubble({ message, onDelete, onReply, onReact }: MessageBu
           {!isOutgoing && (
             <button
               onClick={handleSaveSticker}
-              className="absolute -top-1 -right-1 h-7 w-7 rounded-full bg-primary text-primary-foreground opacity-0 group-hover/sticker:opacity-100 transition-opacity flex items-center justify-center shadow-md"
+              disabled={savingSticker}
+              className="absolute -top-1 -right-1 h-7 w-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md disabled:opacity-50 hover:scale-105 transition-transform"
               title="Save sticker"
             >
               <BookmarkPlus className="h-3.5 w-3.5" />
