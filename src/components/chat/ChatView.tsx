@@ -18,7 +18,7 @@ import { FileUploadButton } from '@/components/chat/FileUploadButton';
 import { UnifiedTemplateSelector } from '@/components/chat/UnifiedTemplateSelector';
 import { VoiceRecorderButton } from '@/components/chat/VoiceRecorderButton';
 import { ImagePastePreview } from '@/components/chat/ImagePastePreview';
-import { StickerPicker } from '@/components/chat/StickerPicker';
+
 import { globalVoiceRecorder } from '@/lib/globalVoiceRecorder';
 import { formatPresenceStatus } from '@/lib/utils/presence';
 import { useIsMobile } from '@/hooks/use-mobile';
