@@ -57,13 +57,14 @@ export function MessageBubble({ message, onDelete, onReply, onReact }: MessageBu
     else voiceQueue.play(message.id);
   };
 
+  const [savingSticker, setSavingSticker] = useState(false);
   const handleSaveSticker = async () => {
-    if (!user || !mediaUrl) return;
-    const { error } = await supabase.from('stickers' as any).insert({
-      user_id: user.id, media_url: mediaUrl, mime_type: 'image/webp',
-      source: 'saved_from_chat', source_message_id: message.id,
-    } as any);
-    if (error) toast({ title: 'Failed to save', description: error.message, variant: 'destructive' });
+    if (!user || !mediaUrl || savingSticker) return;
+    setSavingSticker(true);
+    const { saveRemoteStickerToLibrary } = await import('@/lib/utils/stickerUpload');
+    const r = await saveRemoteStickerToLibrary(mediaUrl, user.id, message.id);
+    setSavingSticker(false);
+    if (!r.ok) toast({ title: 'Failed to save', description: r.error, variant: 'destructive' });
     else toast({ title: '✅ Sticker saved', description: 'Available in Stickers section.' });
   };
 
