@@ -105,12 +105,12 @@ export function VoiceRecorderButton({ onRecordingComplete, disabled }: VoiceReco
   return (
     <Button
       variant="ghost" size="icon"
-      className="h-[46px] w-[46px] shrink-0 rounded-full bg-primary hover:bg-primary/90 shadow-md"
+      className="h-[54px] w-[54px] shrink-0 rounded-full bg-[hsl(143_75%_18%)] hover:bg-[hsl(143_80%_14%)] dark:bg-[hsl(143_70%_16%)] dark:hover:bg-[hsl(143_75%_12%)] shadow-lg"
       onClick={handleStart}
       disabled={disabled || !navigator.mediaDevices}
       title={!navigator.mediaDevices ? 'Voice recording not supported' : 'Record voice message'}
     >
-      <Mic className="h-5 w-5 text-primary-foreground" strokeWidth={2.25} />
+      <Mic className="h-6 w-6 text-white" strokeWidth={2.5} />
     </Button>
   );
 }

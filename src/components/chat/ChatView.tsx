@@ -18,7 +18,7 @@ import { FileUploadButton } from '@/components/chat/FileUploadButton';
 import { UnifiedTemplateSelector } from '@/components/chat/UnifiedTemplateSelector';
 import { VoiceRecorderButton } from '@/components/chat/VoiceRecorderButton';
 import { ImagePastePreview } from '@/components/chat/ImagePastePreview';
-import { StickerPicker } from '@/components/chat/StickerPicker';
+
 import { globalVoiceRecorder } from '@/lib/globalVoiceRecorder';
 import { formatPresenceStatus } from '@/lib/utils/presence';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -863,6 +863,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
                       setInputValue((prev) => prev + emoji);
                       setDraft(activeChat.id, inputValue + emoji);
                     }}
+                    onStickerSelect={handleSendSticker}
                     onDeleteChar={() => {
                       setInputValue((prev) => {
                         const arr = [...prev];
@@ -933,11 +934,6 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
                   />
                 </div>
 
-                {/* Sticker picker */}
-                <div className="shrink-0 self-end pb-[2px]">
-                  <StickerPicker onSelect={handleSendSticker} />
-                </div>
-
                 {/* Template button */}
                 <div className="shrink-0 self-end pb-[2px]">
                   <UnifiedTemplateSelector
@@ -991,6 +987,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
                 return arr.join('');
               });
             }}
+            onStickerSelect={(s) => { handleSendSticker(s); setEmojiPanelOpen(true); }}
           />
         </div>
       )}
