@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { uploadStickerFile } from '@/lib/utils/stickerUpload';
 
 export function StickersSettings() {
   const { user } = useAuth();
@@ -24,25 +25,19 @@ export function StickersSettings() {
 
   useEffect(() => { load(); }, [user?.id]);
 
-  const handleUpload = async (file: File) => {
-    if (!user || !file.type.startsWith('image/')) return;
+  const handleUpload = async (files: FileList) => {
+    if (!user) return;
     setUploading(true);
-    try {
-      const path = `${user.id}/${Date.now()}-${file.name}`;
-      const { error: upErr } = await supabase.storage.from('stickers').upload(path, file, {
-        contentType: file.type, upsert: false,
-      });
-      if (upErr) throw upErr;
-      const { data: urlData } = supabase.storage.from('stickers').getPublicUrl(path);
-      await supabase.from('stickers' as any).insert({
-        user_id: user.id, name: file.name, media_url: urlData.publicUrl,
-        mime_type: file.type, source: 'uploaded',
-      } as any);
-      await load();
-      toast({ title: '✅ Sticker added' });
-    } catch (e: any) {
-      toast({ title: 'Upload failed', description: e.message, variant: 'destructive' });
-    } finally { setUploading(false); }
+    let okCount = 0;
+    let firstErr: string | undefined;
+    for (const file of Array.from(files)) {
+      const r = await uploadStickerFile(file, user.id);
+      if (r.ok) okCount++; else firstErr ??= r.error;
+    }
+    setUploading(false);
+    await load();
+    if (okCount > 0) toast({ title: `✅ ${okCount} sticker${okCount > 1 ? 's' : ''} added` });
+    if (firstErr) toast({ title: 'Some uploads failed', description: firstErr, variant: 'destructive' });
   };
 
   const handleDelete = async (id: string) => {
@@ -61,8 +56,10 @@ export function StickersSettings() {
           <Upload className="h-4 w-4 mr-2" />Upload
         </Button>
         <input
-          ref={fileRef} type="file" accept="image/*,image/webp" hidden
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f); e.target.value = ''; }}
+          ref={fileRef} type="file" multiple
+          accept="image/*,image/webp,image/png,image/jpeg,image/gif,.webp,.png,.jpg,.jpeg,.gif"
+          hidden
+          onChange={(e) => { const fs = e.target.files; if (fs && fs.length) handleUpload(fs); e.target.value = ''; }}
         />
       </div>
 
