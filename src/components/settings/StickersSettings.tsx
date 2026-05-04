@@ -25,25 +25,19 @@ export function StickersSettings() {
 
   useEffect(() => { load(); }, [user?.id]);
 
-  const handleUpload = async (file: File) => {
-    if (!user || !file.type.startsWith('image/')) return;
+  const handleUpload = async (files: FileList) => {
+    if (!user) return;
     setUploading(true);
-    try {
-      const path = `${user.id}/${Date.now()}-${file.name}`;
-      const { error: upErr } = await supabase.storage.from('stickers').upload(path, file, {
-        contentType: file.type, upsert: false,
-      });
-      if (upErr) throw upErr;
-      const { data: urlData } = supabase.storage.from('stickers').getPublicUrl(path);
-      await supabase.from('stickers' as any).insert({
-        user_id: user.id, name: file.name, media_url: urlData.publicUrl,
-        mime_type: file.type, source: 'uploaded',
-      } as any);
-      await load();
-      toast({ title: '✅ Sticker added' });
-    } catch (e: any) {
-      toast({ title: 'Upload failed', description: e.message, variant: 'destructive' });
-    } finally { setUploading(false); }
+    let okCount = 0;
+    let firstErr: string | undefined;
+    for (const file of Array.from(files)) {
+      const r = await uploadStickerFile(file, user.id);
+      if (r.ok) okCount++; else firstErr ??= r.error;
+    }
+    setUploading(false);
+    await load();
+    if (okCount > 0) toast({ title: `✅ ${okCount} sticker${okCount > 1 ? 's' : ''} added` });
+    if (firstErr) toast({ title: 'Some uploads failed', description: firstErr, variant: 'destructive' });
   };
 
   const handleDelete = async (id: string) => {
