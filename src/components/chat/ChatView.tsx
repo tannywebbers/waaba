@@ -203,7 +203,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
 
   const sendMessageToWhatsApp = async (
     content: string,
-    type: 'text' | 'image' | 'document' | 'audio' | 'sticker' = 'text',
+    type: 'text' | 'image' | 'video' | 'document' | 'audio' | 'sticker' = 'text',
     mediaUrl?: string,
     mediaMeta?: { fileName?: string; mimeType?: string },
     replyToWamid?: string,
