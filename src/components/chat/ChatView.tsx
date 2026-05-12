@@ -594,7 +594,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(filePath);
       const mediaUrl = urlData.publicUrl;
 
-      const msgType = effectiveType === 'audio' ? 'audio' : effectiveType;
+      const msgType = effectiveType;
       const displayName = finalFile.name;
       
       const whatsappMessageId = await sendMessageToWhatsApp(displayName, msgType, mediaUrl, { 
