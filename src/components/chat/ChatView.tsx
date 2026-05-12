@@ -570,8 +570,15 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       const finalFile = file;
       const finalMimeType = file.type || 'application/octet-stream';
 
+      // Detect video files (selected via Photos & Videos picker, which uses type='image')
+      let effectiveType: 'image' | 'document' | 'audio' | 'video' = type;
+      const isVideo = finalMimeType.toLowerCase().startsWith('video/') ||
+        /\.(mp4|3gp|mov|m4v|webm|mkv)$/i.test(finalFile.name);
+      if (type === 'image' && isVideo) {
+        effectiveType = 'video';
+      }
+
       // If audio format isn't supported by Meta, send as document so recipient can open it
-      let effectiveType: 'image' | 'document' | 'audio' = type;
       if (type === 'audio' && !SUPPORTED_AUDIO_MIMES.some(m => finalMimeType.toLowerCase().startsWith(m))) {
         console.log(`⚠️ Audio MIME "${finalMimeType}" not supported by WhatsApp, sending as document`);
         effectiveType = 'document';
