@@ -534,9 +534,22 @@ const processIncomingMessages = async (
         content = `[Contact: ${message.contacts?.[0]?.name?.formatted_name || 'Unknown'}]`;
         break;
 
+      case 'unsupported': {
+        // Meta cannot relay this message through the Cloud API (e.g. authentication
+        // templates with one-tap OTP autofill from Temu, banks, etc.). The OTP is
+        // NOT included in the webhook payload — the recipient must open WhatsApp
+        // on their phone to view/copy the code.
+        type = 'text';
+        const errInfo = message.errors?.[0];
+        const detail = errInfo?.error_data?.details || errInfo?.title || 'Message type not supported by WhatsApp Cloud API';
+        content = `🔒 Authentication / OTP message\n\nThis message (likely a one-tap verification code) cannot be displayed here — Meta does not deliver its content through the Business API.\n\nOpen WhatsApp on your phone to view and copy the code.\n\n(${detail})`;
+        console.log('🔒 Unsupported message (likely OTP):', JSON.stringify(message));
+        break;
+      }
+
       default:
         content = `[${message.type || 'unknown'}]`;
-        console.log('⚠️ Unhandled message type:', message.type);
+        console.log('⚠️ Unhandled message type:', message.type, JSON.stringify(message));
         break;
     }
 
