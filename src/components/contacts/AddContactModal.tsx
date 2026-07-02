@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { normalizePhoneNumber } from '@/lib/utils/phone';
+import { useApps } from '@/hooks/useApps';
 
 interface AccountDetail {
   bank: string;
@@ -31,6 +32,7 @@ export function AddContactModal() {
   const { showAddContactModal, setShowAddContactModal, addContact, addContacts } = useAppStore();
   const { user } = useAuth();
   const { isSharedUser, superUserId } = useSharedInbox();
+  const { apps: userApps } = useApps();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   
@@ -333,8 +335,9 @@ export function AddContactModal() {
                     onChange={(e) => setSingleForm({ ...singleForm, appType: e.target.value })}
                     className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
                   >
-                    <option value="tloan">Tloan</option>
-                    <option value="quickash">Quickash</option>
+                    {userApps.map((a) => (
+                      <option key={a.id} value={a.name.toLowerCase()}>{a.name}</option>
+                    ))}
                     <option value="others">Others</option>
                   </select>
                   {singleForm.appType === 'others' && (
@@ -441,8 +444,9 @@ export function AddContactModal() {
                     onChange={(e) => setBulkForm({ ...bulkForm, appType: e.target.value })}
                     className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
                   >
-                    <option value="tloan">Tloan</option>
-                    <option value="quickash">Quickash</option>
+                    {userApps.map((a) => (
+                      <option key={a.id} value={a.name.toLowerCase()}>{a.name}</option>
+                    ))}
                     <option value="others">Others</option>
                   </select>
                 </div>
