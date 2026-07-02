@@ -79,6 +79,7 @@ export function SettingsView() {
                 <TemplateMappingSettings />
               </div>
             )}
+            {activeTab === 'apps' && <AppsSettings />}
             {activeTab === 'logs' && <ApiStatsPage />}
             {activeTab === 'stickers' && <StickersSettings />}
             {activeTab === 'theme' && <ThemeSettings />}
