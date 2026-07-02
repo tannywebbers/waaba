@@ -13,7 +13,7 @@ interface ContactJSON {
   name: string;
   phone: string;
   amount?: number;
-  appType?: 'tloan' | 'quickash';
+  appType?: string;
   dayType?: -1 | 0;
   accountDetails?: {
     bank: string;
@@ -101,8 +101,9 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
       if (!contact.phone || typeof contact.phone !== 'string') {
         rowErrors.push('phone is required');
       }
-      if (contact.appType && !['tloan', 'quickash'].includes(contact.appType)) {
-        rowErrors.push('appType must be "tloan" or "quickash"');
+      // appType is free-form now (managed in Settings › Apps)
+      if (contact.appType && typeof contact.appType !== 'string') {
+        rowErrors.push('appType must be a string');
       }
       if (contact.dayType !== undefined && ![-1, 0].includes(contact.dayType)) {
         rowErrors.push('dayType must be -1 or 0');
