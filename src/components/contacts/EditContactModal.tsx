@@ -14,6 +14,7 @@ import { useAppStore } from '@/stores/appStore';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { normalizePhoneNumber } from '@/lib/utils/phone';
+import { useApps } from '@/hooks/useApps';
 
 interface AccountDetail {
   id?: string;
@@ -30,6 +31,7 @@ interface EditContactModalProps {
 
 export function EditContactModal({ open, onOpenChange, contactId }: EditContactModalProps) {
   const { contacts, updateContact } = useAppStore();
+  const { apps: userApps } = useApps();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   
@@ -52,8 +54,8 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
   useEffect(() => {
     if (contact && open && !initializedRef.current) {
       initializedRef.current = true;
-      const knownAppTypes = ['tloan', 'quickash', 'others'];
-      const currentAppType = (contact.appType || 'tloan').toLowerCase();
+      const knownAppTypes = [...userApps.map(a => a.name.toLowerCase()), 'others'];
+      const currentAppType = (contact.appType || '').toLowerCase();
       const appTypeIsKnown = knownAppTypes.includes(currentAppType);
 
       setFormData({
@@ -188,7 +190,7 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
             <Input type="number" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })} placeholder="Enter amount" />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>App Type</Label>
               <select
@@ -196,8 +198,9 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
                 onChange={(e) => setFormData({ ...formData, appType: e.target.value })}
                 className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
               >
-                <option value="tloan">Tloan</option>
-                <option value="quickash">Quickash</option>
+                {userApps.map((a) => (
+                  <option key={a.id} value={a.name.toLowerCase()}>{a.name}</option>
+                ))}
                 <option value="others">Others</option>
               </select>
               {formData.appType === 'others' && (

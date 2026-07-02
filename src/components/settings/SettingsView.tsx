@@ -1,4 +1,4 @@
-import { Key, Palette, User, ChevronRight, ArrowLeft, FileText, Activity, Sticker } from 'lucide-react';
+import { Key, Palette, User, ChevronRight, ArrowLeft, FileText, Activity, Sticker, AppWindow } from 'lucide-react';
 import { useState } from 'react';
 import { WhatsAppApiSettings } from '@/components/settings/WhatsAppApiSettings';
 import { ThemeSettings } from '@/components/settings/ThemeSettings';
@@ -7,6 +7,7 @@ import { TemplateMappingSettings } from '@/components/settings/TemplateMappingSe
 import { AppTemplateSettings } from '@/components/settings/AppTemplateSettings';
 import { ApiStatsPage } from '@/components/settings/ApiStatsPage';
 import { StickersSettings } from '@/components/settings/StickersSettings';
+import { AppsSettings } from '@/components/settings/AppsSettings';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { SettingsTab } from '@/types';
@@ -15,6 +16,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 
 const settingsTabs: { id: SettingsTab; label: string; icon: typeof Key; description: string }[] = [
   { id: 'api', label: 'WhatsApp API', icon: Key, description: 'Configure WhatsApp Cloud API' },
+  { id: 'apps', label: 'Apps', icon: AppWindow, description: 'Manage your app names' },
   { id: 'templates', label: 'Templates', icon: FileText, description: 'App templates & mapping' },
   { id: 'stickers', label: 'Stickers', icon: Sticker, description: 'Manage your sticker collection' },
   { id: 'logs', label: 'API Stats & Logs', icon: Activity, description: 'Stats, delivery rates & webhook logs' },
@@ -77,6 +79,7 @@ export function SettingsView() {
                 <TemplateMappingSettings />
               </div>
             )}
+            {activeTab === 'apps' && <AppsSettings />}
             {activeTab === 'logs' && <ApiStatsPage />}
             {activeTab === 'stickers' && <StickersSettings />}
             {activeTab === 'theme' && <ThemeSettings />}
@@ -122,6 +125,7 @@ export function SettingsView() {
               <TemplateMappingSettings />
             </div>
           )}
+          {activeTab === 'apps' && <AppsSettings />}
           {activeTab === 'logs' && <ApiStatsPage />}
           {activeTab === 'stickers' && <StickersSettings />}
           {activeTab === 'theme' && <ThemeSettings />}
