@@ -190,7 +190,7 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
             <Input type="number" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })} placeholder="Enter amount" />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>App Type</Label>
               <select

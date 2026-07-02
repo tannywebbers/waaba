@@ -298,7 +298,7 @@ export function AddContactModal() {
 
           <TabsContent value="single" className="mt-4">
             <form onSubmit={handleSingleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="loanId" className="flex items-center gap-1.5">
                     <CreditCard className="h-3.5 w-3.5" /> Loan ID
@@ -311,7 +311,7 @@ export function AddContactModal() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="name" className="flex items-center gap-1.5">
                     <User className="h-3.5 w-3.5" /> Customer Name <span className="text-destructive">*</span>
@@ -327,7 +327,7 @@ export function AddContactModal() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="flex items-center gap-1.5"><Smartphone className="h-3.5 w-3.5" /> App Type</Label>
                   <select
@@ -436,7 +436,7 @@ export function AddContactModal() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="flex items-center gap-1.5"><Smartphone className="h-3.5 w-3.5" /> App Type (all)</Label>
                   <select
