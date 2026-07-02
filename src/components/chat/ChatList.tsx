@@ -139,7 +139,12 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const bulkFilteredApp = appTemplates.filter(t => t.name.toLowerCase().includes(bulkAppSearch.toLowerCase()));
   const bulkParsedNumbers = parsePhoneNumbers(bulkNumbers);
   const bulkRecipientCount = Array.from(new Set([...selectedContactIds, ...bulkParsedNumbers])).length;
-  const appChoices = useMemo(() => Array.from(new Set(['tloan', 'quickash', ...contacts.map((c) => (c.appType || '').toLowerCase()).filter(Boolean)])), [contacts]);
+  const { apps: userApps } = useApps();
+  const appChoices = useMemo(() => {
+    const fromSettings = userApps.map((a) => a.name.toLowerCase());
+    const fromContacts = contacts.map((c) => (c.appType || '').toLowerCase()).filter(Boolean);
+    return Array.from(new Set([...fromSettings, ...fromContacts]));
+  }, [contacts, userApps]);
   const appTemplatesMap = useMemo(() => Object.fromEntries(appTemplates.map((template) => [template.name, template.body])), [appTemplates]);
 
   const fetchLabels = useCallback(async () => {
