@@ -29,7 +29,7 @@ function resolveField(field: string, contact: TemplateSelectorProps['contact']):
     case 'loan_id': return contact.loanId;
     case 'amount': return contact.amount?.toString() || '';
     case 'payment_details': return paymentDetails;
-    case 'app_name': return contact.appType || 'Tloan';
+    case 'app_name': return contact.appType || '';
     case 'due_date': {
       const dayType = contact.dayType;
       if (dayType === undefined || dayType === null) return '';
@@ -69,7 +69,7 @@ function mapNamedVariables(text: string, contact: TemplateSelectorProps['contact
     .replace(/\{\{loan_id\}\}/gi, contact.loanId)
     .replace(/\{\{amount\}\}/gi, contact.amount?.toString() || '')
     .replace(/\{\{payment_details\}\}/gi, paymentDetails)
-    .replace(/\{\{app_name\}\}/gi, contact.appType || 'Tloan')
+    .replace(/\{\{app_name\}\}/gi, contact.appType || '')
     .replace(/\{\{due_date\}\}/gi, calculateDue(contact.dayType))
     .replace(/\{\{day_type\}\}/gi, contact.dayType?.toString() || '')
     .replace(/\{\{current_date\}\}/gi, new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }))
@@ -148,7 +148,7 @@ export function TemplateSelector({ contact, onSelectTemplate }: TemplateSelector
             if (lower.includes('name') || lower.includes('customer')) resolvedParams[paramKey] = contact.name;
             else if (lower.includes('loan') || lower.includes('id')) resolvedParams[paramKey] = contact.loanId;
             else if (lower.includes('amount')) resolvedParams[paramKey] = contact.amount?.toString() || '';
-            else if (lower.includes('app')) resolvedParams[paramKey] = contact.appType || 'Tloan';
+            else if (lower.includes('app')) resolvedParams[paramKey] = contact.appType || '';
             else if (lower.includes('due') || lower.includes('date')) resolvedParams[paramKey] = resolveField('due_date', contact);
             else if (lower.includes('day')) resolvedParams[paramKey] = contact.dayType?.toString() || '';
             else if ((lower.includes('account') || lower.includes('payment')) && contact.accountDetails?.[0]) {

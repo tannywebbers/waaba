@@ -117,7 +117,7 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
           name: contact.name,
           phone: contact.phone,
           amount: contact.amount ? Number(contact.amount) : undefined,
-          appType: contact.appType || 'tloan',
+          appType: contact.appType || '',
           dayType: contact.dayType ?? 0,
           accountDetails: contact.accountDetails || [],
         });
@@ -208,7 +208,7 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
         name: c.name,
         phone: c.phone,
         amount: c.amount ? Number(c.amount) : undefined,
-        appType: c.app_type || 'tloan',
+        appType: c.app_type || '',
         dayType: c.day_type ?? 0,
         createdAt: new Date(c.created_at),
         updatedAt: new Date(c.updated_at),

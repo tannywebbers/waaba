@@ -41,7 +41,7 @@ export function AddContactModal() {
     name: '',
     phone: '',
     amount: '',
-    appType: 'tloan',
+    appType: '',
     appTypeCustom: '',
     dayType: '0',
   });
@@ -51,9 +51,17 @@ export function AddContactModal() {
     contactIds: '',
     customerNames: '',
     phoneNumbers: '',
-    appType: 'tloan',
+    appType: '',
     dayType: '0',
   });
+
+  // Seed default appType from user's first app once loaded
+  useEffect(() => {
+    if (userApps.length === 0) return;
+    const first = userApps[0].name.toLowerCase();
+    setSingleForm((f) => f.appType ? f : { ...f, appType: first });
+    setBulkForm((f) => f.appType ? f : { ...f, appType: first });
+  }, [userApps]);
 
   // Labels
   interface LabelOption { id: string; name: string; color: string }
@@ -70,9 +78,10 @@ export function AddContactModal() {
   useEffect(() => { fetchLabels(); }, [fetchLabels]);
 
   const resetForms = () => {
-    setSingleForm({ loanId: '', name: '', phone: '', amount: '', appType: 'tloan', appTypeCustom: '', dayType: '0' });
+    const first = userApps[0]?.name.toLowerCase() || '';
+    setSingleForm({ loanId: '', name: '', phone: '', amount: '', appType: first, appTypeCustom: '', dayType: '0' });
     setAccountDetails([]);
-    setBulkForm({ contactIds: '', customerNames: '', phoneNumbers: '', appType: 'tloan', dayType: '0' });
+    setBulkForm({ contactIds: '', customerNames: '', phoneNumbers: '', appType: first, dayType: '0' });
     setSelectedLabelIds([]);
     setBulkSelectedLabelIds([]);
   };
