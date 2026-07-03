@@ -155,6 +155,20 @@ export function NewChatModal({ open, onClose, onSelectContact }: NewChatModalPro
                 <p className="text-xs text-muted-foreground">{creatingQuickChat ? 'Creating...' : 'Start a conversation with this number'}</p>
               </div>
             </button>
+            {userApps.length > 0 && (
+              <div className="mt-2">
+                <label className="text-xs text-muted-foreground">App</label>
+                <select
+                  value={quickAppType}
+                  onChange={(e) => setQuickAppType(e.target.value)}
+                  className="mt-1 w-full h-9 rounded-md border border-input bg-background px-2 text-sm"
+                >
+                  {userApps.map((a) => (
+                    <option key={a.id} value={a.name.toLowerCase()}>{a.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
         )}
 
