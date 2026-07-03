@@ -148,7 +148,7 @@ export function TemplateSelector({ contact, onSelectTemplate }: TemplateSelector
             if (lower.includes('name') || lower.includes('customer')) resolvedParams[paramKey] = contact.name;
             else if (lower.includes('loan') || lower.includes('id')) resolvedParams[paramKey] = contact.loanId;
             else if (lower.includes('amount')) resolvedParams[paramKey] = contact.amount?.toString() || '';
-            else if (lower.includes('app')) resolvedParams[paramKey] = contact.appType || 'Tloan';
+            else if (lower.includes('app')) resolvedParams[paramKey] = contact.appType || '';
             else if (lower.includes('due') || lower.includes('date')) resolvedParams[paramKey] = resolveField('due_date', contact);
             else if (lower.includes('day')) resolvedParams[paramKey] = contact.dayType?.toString() || '';
             else if ((lower.includes('account') || lower.includes('payment')) && contact.accountDetails?.[0]) {

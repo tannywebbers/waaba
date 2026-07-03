@@ -195,7 +195,7 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
             if (lower.includes('name') || lower.includes('customer')) resolved[paramKey] = contact.name;
             else if (lower.includes('loan') || lower.includes('id')) resolved[paramKey] = contact.loanId;
             else if (lower.includes('amount')) resolved[paramKey] = contact.amount?.toString() || '';
-            else if (lower.includes('app')) resolved[paramKey] = contact.appType || 'Tloan';
+            else if (lower.includes('app')) resolved[paramKey] = contact.appType || '';
             else if (lower.includes('due') || lower.includes('date')) resolved[paramKey] = calculateDueDate(contact.dayType);
             else if (lower.includes('day')) resolved[paramKey] = contact.dayType?.toString() || '';
             else resolved[paramKey] = param;
