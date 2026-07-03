@@ -1,9 +1,10 @@
 // @ts-nocheck
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, Phone } from 'lucide-react';
 import { useAppStore } from '@/stores/appStore';
 import { useAuth } from '@/hooks/useAuth';
 import { useSharedInbox } from '@/hooks/useSharedInbox';
+import { useApps } from '@/hooks/useApps';
 import { ContactAvatar } from '@/components/shared/ContactAvatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,9 +27,15 @@ export function NewChatModal({ open, onClose, onSelectContact }: NewChatModalPro
   const { contacts, chats, addContact, setActiveChat, setViewMode } = useAppStore();
   const { user } = useAuth();
   const { isSharedUser, superUserId } = useSharedInbox();
+  const { apps: userApps } = useApps();
   const { toast } = useToast();
   const [search, setSearch] = useState('');
+  const [quickAppType, setQuickAppType] = useState('');
   const [creatingQuickChat, setCreatingQuickChat] = useState(false);
+
+  useEffect(() => {
+    if (!quickAppType && userApps.length > 0) setQuickAppType(userApps[0].name.toLowerCase());
+  }, [userApps, quickAppType]);
 
   const filteredContacts = contacts.filter(contact =>
     contact.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -83,6 +90,7 @@ export function NewChatModal({ open, onClose, onSelectContact }: NewChatModalPro
         name: existingContact?.name || phone,
         phone,
         loan_id: existingContact?.loan_id || '',
+        app_type: quickAppType || existingContact?.app_type || '',
         is_deleted: false,
         deleted_at: null,
         created_at: new Date().toISOString(),
@@ -97,6 +105,7 @@ export function NewChatModal({ open, onClose, onSelectContact }: NewChatModalPro
 
       const newContact: Contact = {
         id: data.id, loanId: data.loan_id, name: data.name, phone: data.phone,
+        appType: data.app_type || '',
         createdAt: new Date(data.created_at), updatedAt: new Date(data.updated_at),
         isPinned: false, isMuted: false, isArchived: false,
       };
