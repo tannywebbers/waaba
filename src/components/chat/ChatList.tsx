@@ -41,7 +41,7 @@ const VARIABLE_MAP: Record<string, (c: any) => string> = {
   loan_id: (c) => c.loanId || '',
   amount: (c) => c.amount?.toString() || '',
   phone_number: (c) => c.phone || '',
-  app_name: (c) => c.appType || 'Tloan',
+  app_name: (c) => c.appType || '',
   day_type: (c) => c.dayType?.toString() || '',
   payment_details: (c) => {
     const ad = c.accountDetails?.[0];
@@ -124,7 +124,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [sendingBulk, setSendingBulk] = useState(false);
   const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
-  const [bulkAppType, setBulkAppType] = useState('tloan');
+  const [bulkAppType, setBulkAppType] = useState('');
   // Day type override in bulk send — defaults to 0 (due today)
   const [bulkDayType, setBulkDayType] = useState('0');
   const [bulkSelectedLabelIds, setBulkSelectedLabelIds] = useState<string[]>([]);
@@ -215,8 +215,13 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
       return sortDir === 'asc' ? cmp : (sortBy === 'recent' ? cmp : -cmp);
     });
 
-  const appTypeOptions = useMemo(() => ['all', ...Array.from(new Set(contacts.map((c) => (c.appType || 'unknown').toLowerCase())))], [contacts]);
+  const appTypeOptions = useMemo(() => ['all', ...Array.from(new Set([...userApps.map(a => a.name.toLowerCase()), ...contacts.map((c) => (c.appType || '').toLowerCase()).filter(Boolean)]))], [contacts, userApps]);
   const dayTypeOptions = useMemo(() => ['all', ...Array.from(new Set(contacts.map((c) => String(c.dayType ?? '0'))))], [contacts]);
+
+  // Seed bulk app default from first user app once loaded
+  useEffect(() => {
+    if (!bulkAppType && userApps.length > 0) setBulkAppType(userApps[0].name.toLowerCase());
+  }, [userApps, bulkAppType]);
 
   const filteredContacts = contacts
     .filter((contact) => showTrash === !!contact.isDeleted)

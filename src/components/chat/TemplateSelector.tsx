@@ -29,7 +29,7 @@ function resolveField(field: string, contact: TemplateSelectorProps['contact']):
     case 'loan_id': return contact.loanId;
     case 'amount': return contact.amount?.toString() || '';
     case 'payment_details': return paymentDetails;
-    case 'app_name': return contact.appType || 'Tloan';
+    case 'app_name': return contact.appType || '';
     case 'due_date': {
       const dayType = contact.dayType;
       if (dayType === undefined || dayType === null) return '';
@@ -69,7 +69,7 @@ function mapNamedVariables(text: string, contact: TemplateSelectorProps['contact
     .replace(/\{\{loan_id\}\}/gi, contact.loanId)
     .replace(/\{\{amount\}\}/gi, contact.amount?.toString() || '')
     .replace(/\{\{payment_details\}\}/gi, paymentDetails)
-    .replace(/\{\{app_name\}\}/gi, contact.appType || 'Tloan')
+    .replace(/\{\{app_name\}\}/gi, contact.appType || '')
     .replace(/\{\{due_date\}\}/gi, calculateDue(contact.dayType))
     .replace(/\{\{day_type\}\}/gi, contact.dayType?.toString() || '')
     .replace(/\{\{current_date\}\}/gi, new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }))

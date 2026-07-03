@@ -46,7 +46,7 @@ function resolveField(field: string, contact: Contact, appTemplatesMap: Record<s
     case 'loan_id': return contact.loanId;
     case 'amount': return contact.amount?.toString() || '';
     case 'payment_details': return paymentDetails;
-    case 'app_name': return contact.appType || 'Tloan';
+    case 'app_name': return contact.appType || '';
     case 'due_date': return calculateDueDate(contact.dayType);
     case 'phone_number': return contact.phone;
     case 'day_type': return contact.dayType?.toString() || '';
@@ -64,7 +64,7 @@ function mapNamedVariables(text: string, contact: Contact): string {
     .replace(/\{\{loan_id\}\}/gi, contact.loanId)
     .replace(/\{\{amount\}\}/gi, contact.amount?.toString() || '')
     .replace(/\{\{payment_details\}\}/gi, paymentDetails)
-    .replace(/\{\{app_name\}\}/gi, contact.appType || 'Tloan')
+    .replace(/\{\{app_name\}\}/gi, contact.appType || '')
     .replace(/\{\{due_date\}\}/gi, calculateDueDate(contact.dayType))
     .replace(/\{\{day_type\}\}/gi, contact.dayType?.toString() || '')
     .replace(/\{\{current_date\}\}/gi, format(new Date(), 'dd MMM yyyy'))
@@ -76,7 +76,7 @@ const APP_VARIABLE_MAP: Record<string, (c: Contact) => string> = {
   loan_id: (c) => c.loanId,
   amount: (c) => c.amount?.toString() || '',
   phone_number: (c) => c.phone,
-  app_name: (c) => c.appType || 'Tloan',
+  app_name: (c) => c.appType || '',
   day_type: (c) => c.dayType?.toString() || '',
   due_date: (c) => calculateDueDate(c.dayType),
   account_number: (c) => c.accountDetails?.[0]?.accountNumber || '',
