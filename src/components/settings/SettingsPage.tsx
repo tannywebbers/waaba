@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ChevronRight, ArrowLeft, BarChart3, FileText, LayoutTemplate, Users } from 'lucide-react';
+import { ChevronRight, ArrowLeft, BarChart3, FileText, LayoutTemplate, Users, AppWindow } from 'lucide-react';
 import { WhatsAppApiSettings } from '@/components/settings/WhatsAppApiSettings';
 import { ThemeSettings } from '@/components/settings/ThemeSettings';
 import { AccountSettings } from '@/components/settings/AccountSettings';
@@ -8,13 +8,14 @@ import { WhatsAppBusinessProfile } from '@/components/settings/WhatsAppBusinessP
 import { ApiStatsPage } from '@/components/settings/ApiStatsPage';
 import { TemplateMappingSettings } from '@/components/settings/TemplateMappingSettings';
 import { AppTemplateSettings } from '@/components/settings/AppTemplateSettings';
+import { AppsSettings } from '@/components/settings/AppsSettings';
 import { SharedInboxSettings } from '@/components/settings/SharedInboxSettings';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 
-type SettingsTab = 'api' | 'theme' | 'account' | 'notifications' | 'business' | 'stats' | 'template-mapping' | 'app-templates' | 'shared-inbox';
+type SettingsTab = 'api' | 'theme' | 'account' | 'notifications' | 'business' | 'stats' | 'template-mapping' | 'apps' | 'app-templates' | 'shared-inbox';
 
 interface SettingsItem {
   id: SettingsTab;
@@ -30,6 +31,7 @@ const settingsTabs: SettingsItem[] = [
   { id: 'api',              label: 'WhatsApp API',        description: 'Configure Cloud API',               iconSrc: '/icons/webhook.png',           iconBg: 'bg-[hsl(145,63%,49%)]', showBadge: true },
   { id: 'stats',            label: 'API Stats',           description: 'Message analytics & usage',         iconBg: 'bg-[hsl(199,89%,48%)]' },
   { id: 'template-mapping', label: 'Template Mapping',    description: 'Map template variables to data',    iconBg: 'bg-[hsl(32,95%,52%)]' },
+  { id: 'apps',             label: 'Apps',                description: 'Manage your app names',              iconBg: 'bg-[hsl(280,70%,50%)]' },
   { id: 'app-templates',    label: 'App Templates',       description: 'Create & manage message templates',  iconBg: 'bg-[hsl(262,83%,58%)]' },
   { id: 'shared-inbox',     label: 'Shared Inbox',        description: 'Share inbox with other users',       iconBg: 'bg-[hsl(210,70%,50%)]' },
   { id: 'notifications',    label: 'Notifications',       description: 'Message alerts and sounds',         iconBg: 'bg-[hsl(0,84%,60%)]' },
@@ -74,6 +76,7 @@ export function SettingsPage() {
             {activeTab === 'api'              && <WhatsAppApiSettings onConnectionChange={setIsConnected} />}
             {activeTab === 'stats'            && <ApiStatsPage />}
             {activeTab === 'template-mapping' && <TemplateMappingSettings />}
+            {activeTab === 'apps'             && <AppsSettings />}
             {activeTab === 'app-templates'    && <AppTemplateSettings />}
             {activeTab === 'shared-inbox'     && <SharedInboxSettings />}
             {activeTab === 'notifications'    && <NotificationSettings />}
@@ -106,6 +109,8 @@ export function SettingsPage() {
                   <BarChart3 className="h-[18px] w-[18px] text-white" />
                 ) : id === 'template-mapping' ? (
                   <FileText className="h-[18px] w-[18px] text-white" />
+                ) : id === 'apps' ? (
+                  <AppWindow className="h-[18px] w-[18px] text-white" />
                 ) : id === 'app-templates' ? (
                   <LayoutTemplate className="h-[18px] w-[18px] text-white" />
                 ) : id === 'shared-inbox' ? (
