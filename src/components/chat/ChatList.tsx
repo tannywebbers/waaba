@@ -215,7 +215,13 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
       return sortDir === 'asc' ? cmp : (sortBy === 'recent' ? cmp : -cmp);
     });
 
-  const appTypeOptions = useMemo(() => ['all', ...Array.from(new Set([...userApps.map(a => a.name.toLowerCase()), ...contacts.map((c) => (c.appType || '').toLowerCase()).filter(Boolean)]))], [contacts, userApps]);
+  const appTypeLabels = useMemo(() => {
+    const m: Record<string, string> = {};
+    userApps.forEach((a) => { m[a.name.toLowerCase()] = a.name; });
+    contacts.forEach((c) => { const k = (c.appType || '').toLowerCase(); if (k && !m[k]) m[k] = c.appType!; });
+    return m;
+  }, [userApps, contacts]);
+  const appTypeOptions = useMemo(() => ['all', ...Object.keys(appTypeLabels)], [appTypeLabels]);
   const dayTypeOptions = useMemo(() => ['all', ...Array.from(new Set(contacts.map((c) => String(c.dayType ?? '0'))))], [contacts]);
 
   // Seed bulk app default from first user app once loaded
@@ -695,7 +701,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
             </select>
 
             <select value={contactAppTypeFilter} onChange={(e) => setContactAppTypeFilter(e.target.value)} className="h-8 rounded-full px-3 text-xs border bg-secondary">
-              {appTypeOptions.map((v) => <option key={v} value={v}>{v === 'all' ? 'All app types' : v.toUpperCase()}</option>)}
+              {appTypeOptions.map((v) => <option key={v} value={v}>{v === 'all' ? 'All app types' : (appTypeLabels[v] || v)}</option>)}
             </select>
           </div>
 
@@ -801,7 +807,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">App</label>
                   <select value={bulkAppType} onChange={(e) => setBulkAppType(e.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
-                    {appChoices.map((app) => <option key={app} value={app}>{app.toUpperCase()}</option>)}
+                    {appChoices.map((app) => <option key={app} value={app}>{appTypeLabels[app] || app}</option>)}
                   </select>
                 </div>
                 <div className="space-y-2">
