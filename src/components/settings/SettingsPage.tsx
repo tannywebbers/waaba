@@ -109,6 +109,8 @@ export function SettingsPage() {
                   <BarChart3 className="h-[18px] w-[18px] text-white" />
                 ) : id === 'template-mapping' ? (
                   <FileText className="h-[18px] w-[18px] text-white" />
+                ) : id === 'apps' ? (
+                  <AppWindow className="h-[18px] w-[18px] text-white" />
                 ) : id === 'app-templates' ? (
                   <LayoutTemplate className="h-[18px] w-[18px] text-white" />
                 ) : id === 'shared-inbox' ? (
