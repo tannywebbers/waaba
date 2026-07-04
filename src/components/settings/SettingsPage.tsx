@@ -76,6 +76,7 @@ export function SettingsPage() {
             {activeTab === 'api'              && <WhatsAppApiSettings onConnectionChange={setIsConnected} />}
             {activeTab === 'stats'            && <ApiStatsPage />}
             {activeTab === 'template-mapping' && <TemplateMappingSettings />}
+            {activeTab === 'apps'             && <AppsSettings />}
             {activeTab === 'app-templates'    && <AppTemplateSettings />}
             {activeTab === 'shared-inbox'     && <SharedInboxSettings />}
             {activeTab === 'notifications'    && <NotificationSettings />}
