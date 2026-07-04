@@ -39,7 +39,8 @@ export function AppsSettings() {
         <Input
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
-          placeholder="App name (e.g. Tloan)"
+          παceholder="App name"
+          placeholder="App name"
           onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
           className="flex-1"
         />

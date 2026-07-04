@@ -369,7 +369,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
       const contacts: Contact[] = (contactsData || []).map((c: any) => ({
         id: c.id, loanId: c.loan_id, name: c.name, phone: c.phone,
         amount: c.amount ? Number(c.amount) : undefined,
-        appType: c.app_type || 'tloan', dayType: c.day_type ?? 0,
+        appType: c.app_type || '', dayType: c.day_type ?? 0,
         isOnline: c.is_online || false,
         lastSeen: c.last_seen ? new Date(c.last_seen) : undefined,
         avatar: c.avatar_url || undefined,

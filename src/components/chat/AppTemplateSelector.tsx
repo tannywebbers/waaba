@@ -31,7 +31,7 @@ const VARIABLE_MAP: Record<string, (c: Contact) => string> = {
   loan_id: (c) => c.loanId,
   amount: (c) => c.amount?.toString() || '',
   phone_number: (c) => c.phone,
-  app_name: (c) => c.appType || 'Tloan',
+  app_name: (c) => c.appType || '',
   day_type: (c) => c.dayType?.toString() || '',
   due_date: (c) => calculateDueDate(c.dayType),
   account_number: (c) => c.accountDetails?.[0]?.accountNumber || '',

@@ -82,7 +82,7 @@ const toDateTimeLocalValue = (date = new Date()) => {
 const toContactModel = (c: any) => ({
   id: c.id, name: c.name, phone: c.phone, loanId: c.loan_id || '',
   amount: c.amount ? Number(c.amount) : undefined,
-  appType: c.app_type || 'tloan', dayType: c.day_type ?? 0,
+  appType: c.app_type || '', dayType: c.day_type ?? 0,
   isDeleted: c.is_deleted || false,
   deletedAt: c.deleted_at ? new Date(c.deleted_at) : undefined,
   createdAt: new Date(c.created_at), updatedAt: new Date(c.updated_at),
@@ -339,7 +339,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
         name: selected?.name || existingContact?.name || phone,
         loan_id: selected?.loanId || existingContact?.loan_id || '',
         amount: selected?.amount ?? existingContact?.amount ?? null,
-        app_type: bulkAppType || selected?.appType || existingContact?.app_type || 'tloan',
+        app_type: bulkAppType || selected?.appType || existingContact?.app_type || '',
         // apply bulkDayType — always a number, defaults to 0 for new contacts, keeps existing for pre-existing ones when user hasn't changed it
         day_type: bulkDayType !== '' ? Number(bulkDayType) : (selected?.dayType ?? existingContact?.day_type ?? 0),
         is_deleted: false,
