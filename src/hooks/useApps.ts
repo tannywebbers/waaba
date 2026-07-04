@@ -39,17 +39,20 @@ export function useApps() {
     if (!user) return;
     const trimmed = name.trim();
     if (!trimmed) return;
-    await supabase.from('apps').insert({ user_id: user.id, name: trimmed });
+    const { error } = await supabase.from('apps').insert({ user_id: user.id, name: trimmed });
+    if (error) throw error;
     await load();
   };
 
   const renameApp = async (id: string, name: string) => {
-    await supabase.from('apps').update({ name: name.trim() }).eq('id', id);
+    const { error } = await supabase.from('apps').update({ name: name.trim() }).eq('id', id);
+    if (error) throw error;
     await load();
   };
 
   const deleteApp = async (id: string) => {
-    await supabase.from('apps').delete().eq('id', id);
+    const { error } = await supabase.from('apps').delete().eq('id', id);
+    if (error) throw error;
     await load();
   };
 
