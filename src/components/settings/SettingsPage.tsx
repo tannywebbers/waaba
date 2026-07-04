@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ChevronRight, ArrowLeft, BarChart3, FileText, LayoutTemplate, Users } from 'lucide-react';
+import { ChevronRight, ArrowLeft, BarChart3, FileText, LayoutTemplate, Users, AppWindow } from 'lucide-react';
 import { WhatsAppApiSettings } from '@/components/settings/WhatsAppApiSettings';
 import { ThemeSettings } from '@/components/settings/ThemeSettings';
 import { AccountSettings } from '@/components/settings/AccountSettings';
@@ -8,6 +8,7 @@ import { WhatsAppBusinessProfile } from '@/components/settings/WhatsAppBusinessP
 import { ApiStatsPage } from '@/components/settings/ApiStatsPage';
 import { TemplateMappingSettings } from '@/components/settings/TemplateMappingSettings';
 import { AppTemplateSettings } from '@/components/settings/AppTemplateSettings';
+import { AppsSettings } from '@/components/settings/AppsSettings';
 import { SharedInboxSettings } from '@/components/settings/SharedInboxSettings';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
