@@ -31,6 +31,7 @@ const settingsTabs: SettingsItem[] = [
   { id: 'api',              label: 'WhatsApp API',        description: 'Configure Cloud API',               iconSrc: '/icons/webhook.png',           iconBg: 'bg-[hsl(145,63%,49%)]', showBadge: true },
   { id: 'stats',            label: 'API Stats',           description: 'Message analytics & usage',         iconBg: 'bg-[hsl(199,89%,48%)]' },
   { id: 'template-mapping', label: 'Template Mapping',    description: 'Map template variables to data',    iconBg: 'bg-[hsl(32,95%,52%)]' },
+  { id: 'apps',             label: 'Apps',                description: 'Manage your app names',              iconBg: 'bg-[hsl(280,70%,50%)]' },
   { id: 'app-templates',    label: 'App Templates',       description: 'Create & manage message templates',  iconBg: 'bg-[hsl(262,83%,58%)]' },
   { id: 'shared-inbox',     label: 'Shared Inbox',        description: 'Share inbox with other users',       iconBg: 'bg-[hsl(210,70%,50%)]' },
   { id: 'notifications',    label: 'Notifications',       description: 'Message alerts and sounds',         iconBg: 'bg-[hsl(0,84%,60%)]' },
