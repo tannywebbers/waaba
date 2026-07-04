@@ -43,7 +43,7 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
     name: '',
     phone: '',
     amount: '',
-    appType: 'tloan',
+    appType: '',
     appTypeCustom: '',
     dayType: '0',
   });

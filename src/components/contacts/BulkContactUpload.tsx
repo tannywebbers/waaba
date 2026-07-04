@@ -32,7 +32,7 @@ const DEMO_JSON: ContactJSON[] = [
     name: "John Doe",
     phone: "2348012345678",
     amount: 50000,
-    appType: "tloan",
+    appType: "",
     dayType: 0,
     accountDetails: [
       {
@@ -47,7 +47,7 @@ const DEMO_JSON: ContactJSON[] = [
     name: "Jane Smith",
     phone: "2348098765432",
     amount: 75000,
-    appType: "quickash",
+    appType: "",
     dayType: -1,
     accountDetails: [
       {

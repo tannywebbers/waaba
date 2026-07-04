@@ -89,7 +89,7 @@ export function ContactPanel() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">App Type</p>
-                  <p className="font-medium capitalize">{contact.appType || 'Tloan'}</p>
+                  <p className="font-medium capitalize">{contact.appType || '—'}</p>
                 </div>
               </div>
 

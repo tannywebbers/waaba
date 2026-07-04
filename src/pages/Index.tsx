@@ -166,7 +166,7 @@ const Index = () => {
           name: fullContact.name,
           phone: fullContact.phone,
           amount: fullContact.amount ? Number(fullContact.amount) : undefined,
-          appType: fullContact.app_type || 'tloan',
+          appType: fullContact.app_type || '',
           dayType: fullContact.day_type ?? 0,
           isOnline: fullContact.is_online || false,
           lastSeen: fullContact.last_seen ? new Date(fullContact.last_seen) : undefined,
@@ -308,7 +308,7 @@ const Index = () => {
           name: c.name,
           amount: c.amount ? Number(c.amount) : undefined,
           dayType: c.day_type ?? 0,
-          appType: c.app_type || 'tloan',
+          appType: c.app_type || '',
         });
       })
       .subscribe((status) => {

@@ -26,7 +26,7 @@ function autoFormatPhone(phone: string): string {
   return normalizePhoneNumber(phone);
 }
 
-const APP_TYPE_OPTIONS = ['tloan', 'quickash', 'others'];
+
 
 export function AddContactModal() {
   const { showAddContactModal, setShowAddContactModal, addContact, addContacts } = useAppStore();
@@ -184,7 +184,7 @@ export function AddContactModal() {
         name: contactData.name,
         phone: contactData.phone,
         amount: contactData.amount ? Number(contactData.amount) : undefined,
-        appType: contactData.app_type || 'tloan',
+        appType: contactData.app_type || '',
         dayType: contactData.day_type ?? 0,
         createdAt: new Date(contactData.created_at),
         updatedAt: new Date(contactData.updated_at),
