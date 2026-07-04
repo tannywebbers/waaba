@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 
-type SettingsTab = 'api' | 'theme' | 'account' | 'notifications' | 'business' | 'stats' | 'template-mapping' | 'app-templates' | 'shared-inbox';
+type SettingsTab = 'api' | 'theme' | 'account' | 'notifications' | 'business' | 'stats' | 'template-mapping' | 'apps' | 'app-templates' | 'shared-inbox';
 
 interface SettingsItem {
   id: SettingsTab;
