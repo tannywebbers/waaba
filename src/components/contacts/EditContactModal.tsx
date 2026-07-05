@@ -193,22 +193,20 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>App Type</Label>
-              <select
-                value={formData.appType}
-                onChange={(e) => setFormData({ ...formData, appType: e.target.value })}
-                className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-              >
-                {userApps.map((a) => (
-                  <option key={a.id} value={a.name.toLowerCase()}>{a.name}</option>
-                ))}
-                <option value="others">Others</option>
-              </select>
-              {formData.appType === 'others' && (
-                <Input
-                  placeholder="Enter app name"
-                  value={formData.appTypeCustom}
-                  onChange={(e) => setFormData({ ...formData, appTypeCustom: e.target.value })}
-                />
+              {userApps.length === 0 ? (
+                <div className="rounded-md border border-dashed border-input p-3 text-xs text-muted-foreground">
+                  No Apps Found. Go to <span className="font-medium text-foreground">Settings → Apps</span> to create your first App.
+                </div>
+              ) : (
+                <select
+                  value={formData.appType}
+                  onChange={(e) => setFormData({ ...formData, appType: e.target.value })}
+                  className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  {userApps.map((a) => (
+                    <option key={a.id} value={a.name.toLowerCase()}>{a.name}</option>
+                  ))}
+                </select>
               )}
             </div>
 
