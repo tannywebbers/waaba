@@ -141,11 +141,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const bulkParsedNumbers = parsePhoneNumbers(bulkNumbers);
   const bulkRecipientCount = Array.from(new Set([...selectedContactIds, ...bulkParsedNumbers])).length;
   const { apps: userApps } = useApps();
-  const appChoices = useMemo(() => {
-    const fromSettings = userApps.map((a) => a.name.toLowerCase());
-    const fromContacts = contacts.map((c) => (c.appType || '').toLowerCase()).filter(Boolean);
-    return Array.from(new Set([...fromSettings, ...fromContacts]));
-  }, [contacts, userApps]);
+  const appChoices = useMemo(() => userApps.map((a) => a.name.toLowerCase()), [userApps]);
   const appTemplatesMap = useMemo(() => Object.fromEntries(appTemplates.map((template) => [template.name, template.body])), [appTemplates]);
 
   const fetchLabels = useCallback(async () => {
@@ -806,9 +802,15 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">App</label>
-                  <select value={bulkAppType} onChange={(e) => setBulkAppType(e.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
-                    {appChoices.map((app) => <option key={app} value={app}>{appTypeLabels[app] || app}</option>)}
-                  </select>
+                  {userApps.length === 0 ? (
+                    <div className="rounded-md border border-dashed border-input p-2 text-xs text-muted-foreground">
+                      No apps available. Add one in <span className="font-medium text-foreground">Settings → Apps</span>.
+                    </div>
+                  ) : (
+                    <select value={bulkAppType} onChange={(e) => setBulkAppType(e.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                      {appChoices.map((app) => <option key={app} value={app}>{appTypeLabels[app] || app}</option>)}
+                    </select>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Day Type</label>
@@ -849,8 +851,8 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
                   })}
                 </div>
               </div>
-              <Button className="w-full" onClick={handleBulkRecipientsNext} disabled={sendingBulk || bulkRecipientCount === 0}>
-                {sendingBulk ? 'Creating contacts...' : `Next: create ${bulkRecipientCount} contact(s)`}
+              <Button className="w-full" onClick={handleBulkRecipientsNext} disabled={sendingBulk || bulkRecipientCount === 0 || userApps.length === 0}>
+                {sendingBulk ? 'Creating contacts...' : userApps.length === 0 ? 'Add an App in Settings → Apps first' : `Next: create ${bulkRecipientCount} contact(s)`}
               </Button>
             </div>
           ) : (

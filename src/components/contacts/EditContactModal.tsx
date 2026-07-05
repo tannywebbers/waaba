@@ -54,7 +54,7 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
   useEffect(() => {
     if (contact && open && !initializedRef.current) {
       initializedRef.current = true;
-      const knownAppTypes = [...userApps.map(a => a.name.toLowerCase()), 'others'];
+      const knownAppTypes = userApps.map(a => a.name.toLowerCase());
       const currentAppType = (contact.appType || '').toLowerCase();
       const appTypeIsKnown = knownAppTypes.includes(currentAppType);
 
@@ -63,8 +63,8 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
         name: contact.name || '',
         phone: contact.phone || '',
         amount: contact.amount?.toString() || '',
-        appType: appTypeIsKnown ? currentAppType : 'others',
-        appTypeCustom: appTypeIsKnown ? '' : (contact.appType || ''),
+        appType: appTypeIsKnown ? currentAppType : (knownAppTypes[0] || ''),
+        appTypeCustom: '',
         dayType: contact.dayType?.toString() || '0',
       });
       setAccountDetails(contact.accountDetails?.map(ad => ({
@@ -78,13 +78,13 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
     if (!open) {
       initializedRef.current = false;
     }
-  }, [contact, open]);
+  }, [contact, open, userApps]);
 
   const handleSave = async () => {
     if (!contact) return;
     setLoading(true);
 
-    const resolvedAppType = formData.appType === 'others' ? (formData.appTypeCustom.trim() || 'others') : formData.appType;
+    const resolvedAppType = formData.appType;
 
     try {
       const parsedDayType = parseInt(formData.dayType);
@@ -193,22 +193,20 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>App Type</Label>
-              <select
-                value={formData.appType}
-                onChange={(e) => setFormData({ ...formData, appType: e.target.value })}
-                className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-              >
-                {userApps.map((a) => (
-                  <option key={a.id} value={a.name.toLowerCase()}>{a.name}</option>
-                ))}
-                <option value="others">Others</option>
-              </select>
-              {formData.appType === 'others' && (
-                <Input
-                  placeholder="Enter app name"
-                  value={formData.appTypeCustom}
-                  onChange={(e) => setFormData({ ...formData, appTypeCustom: e.target.value })}
-                />
+              {userApps.length === 0 ? (
+                <div className="rounded-md border border-dashed border-input p-3 text-xs text-muted-foreground">
+                  No Apps Found. Go to <span className="font-medium text-foreground">Settings → Apps</span> to create your first App.
+                </div>
+              ) : (
+                <select
+                  value={formData.appType}
+                  onChange={(e) => setFormData({ ...formData, appType: e.target.value })}
+                  className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  {userApps.map((a) => (
+                    <option key={a.id} value={a.name.toLowerCase()}>{a.name}</option>
+                  ))}
+                </select>
               )}
             </div>
 

@@ -111,7 +111,11 @@ export function AddContactModal() {
     }
     if (!user) return;
 
-    const resolvedAppType = singleForm.appType === 'others' ? (singleForm.appTypeCustom.trim() || 'others') : singleForm.appType;
+    if (userApps.length === 0) {
+      toast({ title: 'No apps found', description: 'Go to Settings → Apps to create your first App.', variant: 'destructive' });
+      return;
+    }
+    const resolvedAppType = singleForm.appType;
     const formattedPhone = autoFormatPhone(singleForm.phone);
     setLoading(true);
     try {
@@ -227,6 +231,10 @@ export function AddContactModal() {
       return;
     }
     if (!user) return;
+    if (userApps.length === 0) {
+      toast({ title: 'No apps found', description: 'Go to Settings → Apps to create your first App.', variant: 'destructive' });
+      return;
+    }
 
     setLoading(true);
     try {
@@ -339,22 +347,20 @@ export function AddContactModal() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="flex items-center gap-1.5"><Smartphone className="h-3.5 w-3.5" /> App Type</Label>
-                  <select
-                    value={singleForm.appType}
-                    onChange={(e) => setSingleForm({ ...singleForm, appType: e.target.value })}
-                    className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  >
-                    {userApps.map((a) => (
-                      <option key={a.id} value={a.name.toLowerCase()}>{a.name}</option>
-                    ))}
-                    <option value="others">Others</option>
-                  </select>
-                  {singleForm.appType === 'others' && (
-                    <Input
-                      placeholder="Enter app name"
-                      value={singleForm.appTypeCustom}
-                      onChange={(e) => setSingleForm({ ...singleForm, appTypeCustom: e.target.value })}
-                    />
+                  {userApps.length === 0 ? (
+                    <div className="rounded-md border border-dashed border-input p-3 text-xs text-muted-foreground">
+                      No Apps Found. Go to <span className="font-medium text-foreground">Settings → Apps</span> to create your first App.
+                    </div>
+                  ) : (
+                    <select
+                      value={singleForm.appType}
+                      onChange={(e) => setSingleForm({ ...singleForm, appType: e.target.value })}
+                      className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    >
+                      {userApps.map((a) => (
+                        <option key={a.id} value={a.name.toLowerCase()}>{a.name}</option>
+                      ))}
+                    </select>
                   )}
                 </div>
                 <div className="space-y-2">
@@ -448,16 +454,21 @@ export function AddContactModal() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="flex items-center gap-1.5"><Smartphone className="h-3.5 w-3.5" /> App Type (all)</Label>
-                  <select
-                    value={bulkForm.appType}
-                    onChange={(e) => setBulkForm({ ...bulkForm, appType: e.target.value })}
-                    className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  >
-                    {userApps.map((a) => (
-                      <option key={a.id} value={a.name.toLowerCase()}>{a.name}</option>
-                    ))}
-                    <option value="others">Others</option>
-                  </select>
+                  {userApps.length === 0 ? (
+                    <div className="rounded-md border border-dashed border-input p-3 text-xs text-muted-foreground">
+                      No Apps Found. Go to <span className="font-medium text-foreground">Settings → Apps</span> to create your first App.
+                    </div>
+                  ) : (
+                    <select
+                      value={bulkForm.appType}
+                      onChange={(e) => setBulkForm({ ...bulkForm, appType: e.target.value })}
+                      className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    >
+                      {userApps.map((a) => (
+                        <option key={a.id} value={a.name.toLowerCase()}>{a.name}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label className="flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" /> Day Type (all)</Label>

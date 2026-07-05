@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useApps } from '@/hooks/useApps';
 import { Contact } from '@/types';
 import { format } from 'date-fns';
 
@@ -94,6 +95,7 @@ function resolveAppTemplate(body: string, contact: Contact): string {
 
 export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInsertAppTemplate }: UnifiedTemplateSelectorProps) {
   const { user } = useAuth();
+  const { apps: userApps } = useApps();
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<'meta' | 'app'>('meta');
 
@@ -105,6 +107,9 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
   const [metaParams, setMetaParams] = useState<Record<string, string>>({});
   const [mappings, setMappings] = useState<Record<number, string>>({});
   const [unmappedVars, setUnmappedVars] = useState<number[]>([]);
+  const [selectedApp, setSelectedApp] = useState<string>('');
+  // Var numbers whose mapped_field === 'app_name' (auto-filled + hidden from user)
+  const [appVarNums, setAppVarNums] = useState<number[]>([]);
 
   // App state
   const [appTemplates, setAppTemplates] = useState<any[]>([]);
@@ -121,8 +126,28 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
       setSelectedMeta(null);
       setMetaSearch('');
       setAppSearch('');
+      setAppVarNums([]);
     }
   }, [open, user]);
+
+  // Seed selectedApp from contact.appType or first user app
+  useEffect(() => {
+    if (selectedApp) return;
+    const contactApp = (contact.appType || '').toLowerCase();
+    const match = userApps.find((a) => a.name.toLowerCase() === contactApp);
+    if (match) setSelectedApp(match.name);
+    else if (userApps[0]) setSelectedApp(userApps[0].name);
+  }, [userApps, contact.appType, selectedApp]);
+
+  // Whenever selectedApp changes, propagate to app-var params
+  useEffect(() => {
+    if (!selectedApp || appVarNums.length === 0) return;
+    setMetaParams((prev) => {
+      const next = { ...prev };
+      appVarNums.forEach((n) => { next[`{{${n}}}`] = selectedApp; });
+      return next;
+    });
+  }, [selectedApp, appVarNums]);
 
   const fetchMetaTemplates = async () => {
     if (!user) return;
@@ -175,9 +200,14 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
 
     const resolved: Record<string, string> = {};
     const unmapped: number[] = [];
+    const appVars: number[] = [];
+    const currentApp = selectedApp || contact.appType || '';
     varNums.forEach(num => {
       const field = dbMappings[num];
-      if (field) {
+      if (field === 'app_name') {
+        appVars.push(num);
+        resolved[`{{${num}}}`] = currentApp;
+      } else if (field) {
         resolved[`{{${num}}}`] = resolveField(field, contact, appTemplatesMap);
       } else {
         resolved[`{{${num}}}`] = '';
@@ -190,12 +220,13 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
       template.components.forEach((comp: any) => {
         if (comp.type === 'BODY' && comp.example?.body_text) {
           comp.example.body_text[0]?.forEach((param: string, index: number) => {
-            const paramKey = `{{${index + 1}}}`;
+            const num = index + 1;
+            const paramKey = `{{${num}}}`;
             const lower = param.toLowerCase();
             if (lower.includes('name') || lower.includes('customer')) resolved[paramKey] = contact.name;
             else if (lower.includes('loan') || lower.includes('id')) resolved[paramKey] = contact.loanId;
             else if (lower.includes('amount')) resolved[paramKey] = contact.amount?.toString() || '';
-            else if (lower.includes('app')) resolved[paramKey] = contact.appType || '';
+            else if (lower.includes('app')) { resolved[paramKey] = currentApp; appVars.push(num); }
             else if (lower.includes('due') || lower.includes('date')) resolved[paramKey] = calculateDueDate(contact.dayType);
             else if (lower.includes('day')) resolved[paramKey] = contact.dayType?.toString() || '';
             else resolved[paramKey] = param;
@@ -204,7 +235,8 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
       });
     }
     setMetaParams(resolved);
-    setUnmappedVars(unmapped);
+    setUnmappedVars(unmapped.filter((n) => !appVars.includes(n)));
+    setAppVarNums(appVars);
   };
 
   const handleMetaConfirm = () => {
@@ -275,20 +307,48 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
                   </p>
                 </div>
 
-                {/* Template Parameters */}
+                {/* App selector (auto-fills app_name variable) */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">App</label>
+                  {userApps.length === 0 ? (
+                    <div className="rounded-md border border-dashed border-input p-2 text-xs text-muted-foreground">
+                      No apps available. Add one in <span className="font-medium text-foreground">Settings → Apps</span>.
+                    </div>
+                  ) : (
+                    <select
+                      value={selectedApp}
+                      onChange={(e) => setSelectedApp(e.target.value)}
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    >
+                      {userApps.map((a) => (
+                        <option key={a.id} value={a.name}>{a.name}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                {/* Template Parameters (app-mapped vars are hidden — filled by the App selector above) */}
                 <div className="space-y-3">
                   <h4 className="text-sm font-medium">Template Parameters</h4>
                   <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                    {Object.entries(metaParams).map(([key, value]) => (
-                      <div key={key} className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground w-16 shrink-0">{key}</span>
-                        <Input
-                          value={value}
-                          onChange={(e) => setMetaParams({ ...metaParams, [key]: e.target.value })}
-                          placeholder={`Value for ${key}`}
-                        />
-                      </div>
-                    ))}
+                    {Object.entries(metaParams)
+                      .filter(([key]) => {
+                        const num = parseInt(key.replace(/[{}]/g, ''));
+                        return !appVarNums.includes(num);
+                      })
+                      .map(([key, value]) => (
+                        <div key={key} className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground w-16 shrink-0">{key}</span>
+                          <Input
+                            value={value}
+                            onChange={(e) => setMetaParams({ ...metaParams, [key]: e.target.value })}
+                            placeholder={`Value for ${key}`}
+                          />
+                        </div>
+                      ))}
+                    {Object.entries(metaParams).filter(([k]) => !appVarNums.includes(parseInt(k.replace(/[{}]/g,'')))).length === 0 && (
+                      <p className="text-xs text-muted-foreground">No editable parameters — all values are auto-filled.</p>
+                    )}
                   </div>
 
                   {unmappedVars.length > 0 && Object.keys(mappings).length > 0 && (

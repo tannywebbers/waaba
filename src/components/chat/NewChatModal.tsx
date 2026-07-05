@@ -70,6 +70,10 @@ export function NewChatModal({ open, onClose, onSelectContact }: NewChatModalPro
       handleSelect(existingContactForPhone);
       return;
     }
+    if (userApps.length === 0) {
+      toast({ title: 'No apps available', description: 'Add an app in Settings → Apps first.', variant: 'destructive' });
+      return;
+    }
 
     setCreatingQuickChat(true);
     try {
@@ -155,7 +159,11 @@ export function NewChatModal({ open, onClose, onSelectContact }: NewChatModalPro
                 <p className="text-xs text-muted-foreground">{creatingQuickChat ? 'Creating...' : 'Start a conversation with this number'}</p>
               </div>
             </button>
-            {userApps.length > 0 && (
+            {userApps.length === 0 ? (
+              <div className="mt-2 rounded-md border border-dashed border-input p-2 text-xs text-muted-foreground">
+                No apps available. Add one in <span className="font-medium text-foreground">Settings → Apps</span>.
+              </div>
+            ) : (
               <div className="mt-2">
                 <label className="text-xs text-muted-foreground">App</label>
                 <select
