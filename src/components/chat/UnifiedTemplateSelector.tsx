@@ -200,9 +200,14 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
 
     const resolved: Record<string, string> = {};
     const unmapped: number[] = [];
+    const appVars: number[] = [];
+    const currentApp = selectedApp || contact.appType || '';
     varNums.forEach(num => {
       const field = dbMappings[num];
-      if (field) {
+      if (field === 'app_name') {
+        appVars.push(num);
+        resolved[`{{${num}}}`] = currentApp;
+      } else if (field) {
         resolved[`{{${num}}}`] = resolveField(field, contact, appTemplatesMap);
       } else {
         resolved[`{{${num}}}`] = '';
@@ -215,12 +220,13 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
       template.components.forEach((comp: any) => {
         if (comp.type === 'BODY' && comp.example?.body_text) {
           comp.example.body_text[0]?.forEach((param: string, index: number) => {
-            const paramKey = `{{${index + 1}}}`;
+            const num = index + 1;
+            const paramKey = `{{${num}}}`;
             const lower = param.toLowerCase();
             if (lower.includes('name') || lower.includes('customer')) resolved[paramKey] = contact.name;
             else if (lower.includes('loan') || lower.includes('id')) resolved[paramKey] = contact.loanId;
             else if (lower.includes('amount')) resolved[paramKey] = contact.amount?.toString() || '';
-            else if (lower.includes('app')) resolved[paramKey] = contact.appType || '';
+            else if (lower.includes('app')) { resolved[paramKey] = currentApp; appVars.push(num); }
             else if (lower.includes('due') || lower.includes('date')) resolved[paramKey] = calculateDueDate(contact.dayType);
             else if (lower.includes('day')) resolved[paramKey] = contact.dayType?.toString() || '';
             else resolved[paramKey] = param;
@@ -229,7 +235,8 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
       });
     }
     setMetaParams(resolved);
-    setUnmappedVars(unmapped);
+    setUnmappedVars(unmapped.filter((n) => !appVars.includes(n)));
+    setAppVarNums(appVars);
   };
 
   const handleMetaConfirm = () => {
