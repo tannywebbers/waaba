@@ -54,7 +54,7 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
   useEffect(() => {
     if (contact && open && !initializedRef.current) {
       initializedRef.current = true;
-      const knownAppTypes = [...userApps.map(a => a.name.toLowerCase()), 'others'];
+      const knownAppTypes = userApps.map(a => a.name.toLowerCase());
       const currentAppType = (contact.appType || '').toLowerCase();
       const appTypeIsKnown = knownAppTypes.includes(currentAppType);
 
@@ -63,8 +63,8 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
         name: contact.name || '',
         phone: contact.phone || '',
         amount: contact.amount?.toString() || '',
-        appType: appTypeIsKnown ? currentAppType : 'others',
-        appTypeCustom: appTypeIsKnown ? '' : (contact.appType || ''),
+        appType: appTypeIsKnown ? currentAppType : (knownAppTypes[0] || ''),
+        appTypeCustom: '',
         dayType: contact.dayType?.toString() || '0',
       });
       setAccountDetails(contact.accountDetails?.map(ad => ({
@@ -78,7 +78,7 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
     if (!open) {
       initializedRef.current = false;
     }
-  }, [contact, open]);
+  }, [contact, open, userApps]);
 
   const handleSave = async () => {
     if (!contact) return;
