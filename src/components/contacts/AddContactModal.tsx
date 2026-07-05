@@ -111,7 +111,11 @@ export function AddContactModal() {
     }
     if (!user) return;
 
-    const resolvedAppType = singleForm.appType === 'others' ? (singleForm.appTypeCustom.trim() || 'others') : singleForm.appType;
+    if (userApps.length === 0) {
+      toast({ title: 'No apps found', description: 'Go to Settings → Apps to create your first App.', variant: 'destructive' });
+      return;
+    }
+    const resolvedAppType = singleForm.appType;
     const formattedPhone = autoFormatPhone(singleForm.phone);
     setLoading(true);
     try {
