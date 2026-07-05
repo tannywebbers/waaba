@@ -802,9 +802,15 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">App</label>
-                  <select value={bulkAppType} onChange={(e) => setBulkAppType(e.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
-                    {appChoices.map((app) => <option key={app} value={app}>{appTypeLabels[app] || app}</option>)}
-                  </select>
+                  {userApps.length === 0 ? (
+                    <div className="rounded-md border border-dashed border-input p-2 text-xs text-muted-foreground">
+                      No apps available. Add one in <span className="font-medium text-foreground">Settings → Apps</span>.
+                    </div>
+                  ) : (
+                    <select value={bulkAppType} onChange={(e) => setBulkAppType(e.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                      {appChoices.map((app) => <option key={app} value={app}>{appTypeLabels[app] || app}</option>)}
+                    </select>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Day Type</label>
