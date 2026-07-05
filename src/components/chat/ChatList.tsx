@@ -851,8 +851,8 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
                   })}
                 </div>
               </div>
-              <Button className="w-full" onClick={handleBulkRecipientsNext} disabled={sendingBulk || bulkRecipientCount === 0}>
-                {sendingBulk ? 'Creating contacts...' : `Next: create ${bulkRecipientCount} contact(s)`}
+              <Button className="w-full" onClick={handleBulkRecipientsNext} disabled={sendingBulk || bulkRecipientCount === 0 || userApps.length === 0}>
+                {sendingBulk ? 'Creating contacts...' : userApps.length === 0 ? 'Add an App in Settings → Apps first' : `Next: create ${bulkRecipientCount} contact(s)`}
               </Button>
             </div>
           ) : (
