@@ -84,7 +84,7 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
     if (!contact) return;
     setLoading(true);
 
-    const resolvedAppType = formData.appType === 'others' ? (formData.appTypeCustom.trim() || 'others') : formData.appType;
+    const resolvedAppType = formData.appType;
 
     try {
       const parsedDayType = parseInt(formData.dayType);
