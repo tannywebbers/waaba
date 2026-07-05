@@ -95,6 +95,7 @@ function resolveAppTemplate(body: string, contact: Contact): string {
 
 export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInsertAppTemplate }: UnifiedTemplateSelectorProps) {
   const { user } = useAuth();
+  const { apps: userApps } = useApps();
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<'meta' | 'app'>('meta');
 
@@ -106,6 +107,9 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
   const [metaParams, setMetaParams] = useState<Record<string, string>>({});
   const [mappings, setMappings] = useState<Record<number, string>>({});
   const [unmappedVars, setUnmappedVars] = useState<number[]>([]);
+  const [selectedApp, setSelectedApp] = useState<string>('');
+  // Var numbers whose mapped_field === 'app_name' (auto-filled + hidden from user)
+  const [appVarNums, setAppVarNums] = useState<number[]>([]);
 
   // App state
   const [appTemplates, setAppTemplates] = useState<any[]>([]);
