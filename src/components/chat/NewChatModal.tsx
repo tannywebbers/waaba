@@ -70,6 +70,10 @@ export function NewChatModal({ open, onClose, onSelectContact }: NewChatModalPro
       handleSelect(existingContactForPhone);
       return;
     }
+    if (userApps.length === 0) {
+      toast({ title: 'No apps available', description: 'Add an app in Settings → Apps first.', variant: 'destructive' });
+      return;
+    }
 
     setCreatingQuickChat(true);
     try {
