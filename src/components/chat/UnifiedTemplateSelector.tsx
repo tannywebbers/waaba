@@ -307,20 +307,48 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
                   </p>
                 </div>
 
-                {/* Template Parameters */}
+                {/* App selector (auto-fills app_name variable) */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">App</label>
+                  {userApps.length === 0 ? (
+                    <div className="rounded-md border border-dashed border-input p-2 text-xs text-muted-foreground">
+                      No apps available. Add one in <span className="font-medium text-foreground">Settings → Apps</span>.
+                    </div>
+                  ) : (
+                    <select
+                      value={selectedApp}
+                      onChange={(e) => setSelectedApp(e.target.value)}
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    >
+                      {userApps.map((a) => (
+                        <option key={a.id} value={a.name}>{a.name}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                {/* Template Parameters (app-mapped vars are hidden — filled by the App selector above) */}
                 <div className="space-y-3">
                   <h4 className="text-sm font-medium">Template Parameters</h4>
                   <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                    {Object.entries(metaParams).map(([key, value]) => (
-                      <div key={key} className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground w-16 shrink-0">{key}</span>
-                        <Input
-                          value={value}
-                          onChange={(e) => setMetaParams({ ...metaParams, [key]: e.target.value })}
-                          placeholder={`Value for ${key}`}
-                        />
-                      </div>
-                    ))}
+                    {Object.entries(metaParams)
+                      .filter(([key]) => {
+                        const num = parseInt(key.replace(/[{}]/g, ''));
+                        return !appVarNums.includes(num);
+                      })
+                      .map(([key, value]) => (
+                        <div key={key} className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground w-16 shrink-0">{key}</span>
+                          <Input
+                            value={value}
+                            onChange={(e) => setMetaParams({ ...metaParams, [key]: e.target.value })}
+                            placeholder={`Value for ${key}`}
+                          />
+                        </div>
+                      ))}
+                    {Object.entries(metaParams).filter(([k]) => !appVarNums.includes(parseInt(k.replace(/[{}]/g,'')))).length === 0 && (
+                      <p className="text-xs text-muted-foreground">No editable parameters — all values are auto-filled.</p>
+                    )}
                   </div>
 
                   {unmappedVars.length > 0 && Object.keys(mappings).length > 0 && (
