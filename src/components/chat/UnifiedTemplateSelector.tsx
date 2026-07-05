@@ -126,8 +126,28 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
       setSelectedMeta(null);
       setMetaSearch('');
       setAppSearch('');
+      setAppVarNums([]);
     }
   }, [open, user]);
+
+  // Seed selectedApp from contact.appType or first user app
+  useEffect(() => {
+    if (selectedApp) return;
+    const contactApp = (contact.appType || '').toLowerCase();
+    const match = userApps.find((a) => a.name.toLowerCase() === contactApp);
+    if (match) setSelectedApp(match.name);
+    else if (userApps[0]) setSelectedApp(userApps[0].name);
+  }, [userApps, contact.appType, selectedApp]);
+
+  // Whenever selectedApp changes, propagate to app-var params
+  useEffect(() => {
+    if (!selectedApp || appVarNums.length === 0) return;
+    setMetaParams((prev) => {
+      const next = { ...prev };
+      appVarNums.forEach((n) => { next[`{{${n}}}`] = selectedApp; });
+      return next;
+    });
+  }, [selectedApp, appVarNums]);
 
   const fetchMetaTemplates = async () => {
     if (!user) return;
