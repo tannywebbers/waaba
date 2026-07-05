@@ -231,6 +231,10 @@ export function AddContactModal() {
       return;
     }
     if (!user) return;
+    if (userApps.length === 0) {
+      toast({ title: 'No apps found', description: 'Go to Settings → Apps to create your first App.', variant: 'destructive' });
+      return;
+    }
 
     setLoading(true);
     try {
