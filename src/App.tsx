@@ -65,9 +65,7 @@ function AppRoutes() {
 
   // 📲 Listen for openChat CustomEvent from React Native WebView
   useEffect(() => {
-    const handler = (e: Event) => {
-      const contactId = (e as CustomEvent).detail?.contactId;
-      if (!contactId) return;
+    const openChatById = (contactId: string) => {
       const state = useAppStore.getState();
       const chat = state.chats.find((c: any) => c.contact?.id === contactId);
       if (chat) {
@@ -80,20 +78,47 @@ function AppRoutes() {
           state.setViewMode('chats');
         }
       }
+      // Clear the OS notification for this specific chat
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.ready.then(reg => {
+          reg.getNotifications({ tag: `chat-${contactId}` }).then(ns => ns.forEach(n => n.close()));
+          reg.getNotifications({ tag: `message-${contactId}` }).then(ns => ns.forEach(n => n.close()));
+        }).catch(() => {});
+      }
+    };
+
+    const handler = (e: Event) => {
+      const contactId = (e as CustomEvent).detail?.contactId;
+      if (contactId) openChatById(contactId);
     };
     window.addEventListener('openChat', handler);
+    window.addEventListener('open-chat', handler as any);
 
     // 🔔 Listen for OPEN_CHAT messages from the service worker (notification click)
     const swHandler = (event: MessageEvent) => {
       if (event.data?.type === 'OPEN_CHAT' && event.data.contactId) {
-        window.dispatchEvent(new CustomEvent('openChat', { detail: { contactId: event.data.contactId } }));
+        openChatById(event.data.contactId);
       }
     };
     navigator.serviceWorker?.addEventListener?.('message', swHandler);
 
+    // Also clear notifications whenever the active chat changes
+    const unsub = useAppStore.subscribe((state, prev) => {
+      const id = state.activeChat?.contact?.id;
+      const prevId = prev?.activeChat?.contact?.id;
+      if (id && id !== prevId && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.ready.then(reg => {
+          reg.getNotifications({ tag: `chat-${id}` }).then(ns => ns.forEach(n => n.close()));
+          reg.getNotifications({ tag: `message-${id}` }).then(ns => ns.forEach(n => n.close()));
+        }).catch(() => {});
+      }
+    });
+
     return () => {
       window.removeEventListener('openChat', handler);
+      window.removeEventListener('open-chat', handler as any);
       navigator.serviceWorker?.removeEventListener?.('message', swHandler);
+      unsub?.();
     };
   }, []);
 
