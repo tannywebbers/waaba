@@ -1,0 +1,15 @@
+{
+  "name": "WABA - WhatsApp Cloud Messaging",
+  "short_name": "WABA",
+  "description": "WhatsApp Business Account management for customers, loans, and financial records.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b141a",
+  "theme_color": "#25D366",
+  "icons": [
+    { "src": "/pwa-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/pwa-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

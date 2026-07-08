@@ -15,6 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { normalizePhoneNumber } from '@/lib/utils/phone';
 import { useApps } from '@/hooks/useApps';
+import { useDialogBackButton } from '@/hooks/useDialogBackButton';
 
 interface AccountDetail {
   id?: string;
@@ -161,6 +162,8 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
   };
 
   if (!contact) return null;
+
+  useDialogBackButton(open, () => onOpenChange(false));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

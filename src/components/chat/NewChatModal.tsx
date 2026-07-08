@@ -16,6 +16,7 @@ import { Contact } from '@/types';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { normalizePhoneNumber } from '@/lib/utils/phone';
+import { useDialogBackButton } from '@/hooks/useDialogBackButton';
 
 interface NewChatModalProps {
   open: boolean;
@@ -123,6 +124,8 @@ export function NewChatModal({ open, onClose, onSelectContact }: NewChatModalPro
       setCreatingQuickChat(false);
     }
   };
+
+  useDialogBackButton(open, onClose);
 
   return (
     <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
