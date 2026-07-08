@@ -15,6 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { normalizePhoneNumber } from '@/lib/utils/phone';
 import { useApps } from '@/hooks/useApps';
+import { useDialogBackButton } from '@/hooks/useDialogBackButton';
 
 interface AccountDetail {
   bank: string;
@@ -296,6 +297,8 @@ export function AddContactModal() {
       toast({ title: 'Error adding contacts', description: (error as Error).message, variant: 'destructive' });
     } finally { setLoading(false); }
   };
+
+  useDialogBackButton(showAddContactModal, () => setShowAddContactModal(false));
 
   return (
     <Dialog open={showAddContactModal} onOpenChange={setShowAddContactModal}>

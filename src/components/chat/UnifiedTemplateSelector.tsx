@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useApps } from '@/hooks/useApps';
+import { useDialogBackButton } from '@/hooks/useDialogBackButton';
 import { Contact } from '@/types';
 import { format } from 'date-fns';
 
@@ -269,6 +270,8 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
   const filteredApp = appTemplates.filter(t =>
     t.name.toLowerCase().includes(appSearch.toLowerCase())
   );
+
+  useDialogBackButton(open, () => setOpen(false));
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
