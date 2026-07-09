@@ -1,3 +1,4 @@
+import { getEffectiveWhatsAppUserId } from '@/lib/effectiveUser';
 // @ts-nocheck
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -210,7 +211,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
   ) => {
     if (!activeChat || !user) return null;
 
-    const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', user.id).maybeSingle();
+    const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', await getEffectiveWhatsAppUserId(user.id)).maybeSingle();
     if (!settings?.api_token || !settings?.phone_number_id) {
       toast({ title: '❌ WhatsApp not configured', description: 'Go to Settings > WhatsApp API to configure your credentials.', variant: 'destructive', duration: 5000 });
       return null;
@@ -264,7 +265,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
 
     // Send reaction to WhatsApp if we have the original wamid
     if (m.whatsappMessageId) {
-      const { data: settings } = await supabase.from('whatsapp_settings').select('api_token, phone_number_id').eq('user_id', user.id).maybeSingle();
+      const { data: settings } = await supabase.from('whatsapp_settings').select('api_token, phone_number_id').eq('user_id', await getEffectiveWhatsAppUserId(user.id)).maybeSingle();
       if (settings?.api_token && settings?.phone_number_id) {
         const normalizedPhone = activeChat.contact.phone.replace(/[^\d+]/g, '').replace(/^\+/, '');
         await supabase.functions.invoke('whatsapp-api', {
@@ -364,7 +365,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         }
       }
 
-      const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', user.id).maybeSingle();
+      const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', await getEffectiveWhatsAppUserId(user.id)).maybeSingle();
       if (!settings?.api_token || !settings?.phone_number_id) {
         toast({ title: '❌ WhatsApp not configured', variant: 'destructive', duration: 5000 });
         return;
@@ -647,7 +648,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       const mp3File = new File([blob], `voice-${Date.now()}.mp3`, { type: blob.type || 'audio/mpeg' });
 
       // Get WhatsApp settings
-      const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', user.id).maybeSingle();
+      const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', await getEffectiveWhatsAppUserId(user.id)).maybeSingle();
       if (!settings?.api_token || !settings?.phone_number_id) {
         toast({ title: '❌ WhatsApp not configured', variant: 'destructive' });
         return;
