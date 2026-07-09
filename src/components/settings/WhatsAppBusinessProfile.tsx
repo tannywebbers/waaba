@@ -8,6 +8,7 @@ import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { getEffectiveWhatsAppUserId } from '@/lib/effectiveUser';
 
 interface BusinessProfile {
   name: string;
