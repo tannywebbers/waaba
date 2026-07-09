@@ -1,5 +1,5 @@
-import { getEffectiveWhatsAppUserId } from '@/lib/effectiveUser';
 // @ts-nocheck
+import { getEffectiveWhatsAppUserId } from '@/lib/effectiveUser';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { ArrowLeft, Clock, MessageCircle, Send, X, Reply as ReplyIcon } from 'lucide-react';
