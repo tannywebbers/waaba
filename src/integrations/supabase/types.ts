@@ -674,6 +674,18 @@ export type Database = {
         Args: { _shared_user_id: string }
         Returns: number
       }
+      get_effective_whatsapp_user_id: {
+        Args: { _user_id: string }
+        Returns: string
+      }
+      get_users_info: {
+        Args: { _ids: string[] }
+        Returns: {
+          email: string
+          name: string
+          user_id: string
+        }[]
+      }
       search_users_by_email: {
         Args: { _email: string }
         Returns: {
