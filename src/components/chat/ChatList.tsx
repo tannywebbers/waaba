@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { getEffectiveWhatsAppUserId } from '@/lib/effectiveUser';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Archive, CheckSquare, MessageCircle, Plus, RotateCcw, Search, Send, Settings2, SortAsc, SortDesc, SquarePen, Trash2, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -382,7 +383,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
     let failedCount = 0;
     const failReasons: string[] = [];
     try {
-      const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', user.id).maybeSingle();
+      const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', await getEffectiveWhatsAppUserId(user.id)).maybeSingle();
       if (!settings?.api_token || !settings?.phone_number_id) {
         toast({ title: 'WhatsApp not configured', variant: 'destructive' });
         return;
