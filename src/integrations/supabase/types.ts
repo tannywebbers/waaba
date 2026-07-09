@@ -670,6 +670,10 @@ export type Database = {
           owner_name: string
         }[]
       }
+      copy_super_user_credentials: {
+        Args: { _shared_user_id: string; _super_user_id: string }
+        Returns: undefined
+      }
       deduct_shared_credit: {
         Args: { _shared_user_id: string }
         Returns: number
@@ -685,6 +689,10 @@ export type Database = {
           name: string
           user_id: string
         }[]
+      }
+      remove_shared_credentials: {
+        Args: { _shared_user_id: string }
+        Returns: undefined
       }
       search_users_by_email: {
         Args: { _email: string }
