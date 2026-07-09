@@ -78,22 +78,22 @@ export function useSharedInbox(): SharedInboxInfo {
 
         const userIds = sharedList.map((u: any) => u.shared_user_id);
 
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('user_id, name, email')
-          .in('user_id', userIds);
+        // Use SECURITY DEFINER RPC that reads from auth.users so users
+        // without a public.profiles row still resolve to a real name/email
+        // (fixes "Unknown" in the shared inbox list).
+        const { data: infos } = await supabase.rpc('get_users_info' as any, { _ids: userIds });
 
-        const profileMap: Record<string, any> = {};
-        (profiles || []).forEach((p: any) => {
-          profileMap[p.user_id] = p;
+        const infoMap: Record<string, any> = {};
+        ((infos as any[]) || []).forEach((p: any) => {
+          infoMap[p.user_id] = p;
         });
 
         setSharedUsers(
           sharedList.map((u: any) => ({
             id: u.id,
             sharedUserId: u.shared_user_id,
-            name: profileMap[u.shared_user_id]?.name || profileMap[u.shared_user_id]?.email || 'Unknown',
-            email: profileMap[u.shared_user_id]?.email || '',
+            name: infoMap[u.shared_user_id]?.name || infoMap[u.shared_user_id]?.email || 'Unknown',
+            email: infoMap[u.shared_user_id]?.email || '',
             balance: u.balance ?? 0,
             status: u.status,
           }))
