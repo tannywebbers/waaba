@@ -50,14 +50,12 @@ export function useSharedInbox(): SharedInboxInfo {
         setSuperUserId(membership.super_user_id);
         setBalance(membership.balance ?? 0);
 
-        // Get super user's name from profiles
-        const { data: superProfile } = await supabase
-          .from('profiles')
-          .select('name, email')
-          .eq('user_id', membership.super_user_id)
-          .maybeSingle();
-
-        setSuperUserName((superProfile as any)?.name || (superProfile as any)?.email || null);
+        // Get super user's name via RPC (falls back to auth.users)
+        const { data: superInfo } = await supabase.rpc('get_users_info' as any, {
+          _ids: [membership.super_user_id],
+        });
+        const superRow = ((superInfo as any[]) || [])[0];
+        setSuperUserName(superRow?.name || superRow?.email || null);
       } else {
         setIsSharedUser(false);
         setSuperUserId(null);
