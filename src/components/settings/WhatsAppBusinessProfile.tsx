@@ -41,10 +41,11 @@ export function WhatsAppBusinessProfile() {
 
     try {
       // Use the same pattern as Settings page — fetch settings first, then call edge function
+      const effectiveUserId = await getEffectiveWhatsAppUserId(user.id);
       const { data: settings, error: settingsError } = await supabase
         .from('whatsapp_settings')
         .select('api_token, phone_number_id, is_connected')
-        .eq('user_id', user.id)
+        .eq('user_id', effectiveUserId)
         .maybeSingle();
 
       if (settingsError) throw new Error('Failed to load WhatsApp settings');
