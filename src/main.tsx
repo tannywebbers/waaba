@@ -2,9 +2,13 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import { applyAdminAppearance } from '@/lib/adminAppearance';
+import { installSystemLogCapture } from '@/lib/systemLog';
 
 const SW_VERSION = import.meta.env.VITE_APP_VERSION || '1';
 const SW_CACHE_PREFIX = `waba-${SW_VERSION}`;
+
+// Capture every console call / error from app boot onwards (Settings → System Logs)
+installSystemLogCapture();
 
 applyAdminAppearance();
 window.addEventListener('storage', (event) => {
