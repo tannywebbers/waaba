@@ -238,61 +238,81 @@ serve(async (req) => {
 
         console.log('📤 Final WhatsApp Payload:', JSON.stringify(messageBody, null, 2));
 
-        const response = await fetch(
-          `${WHATSAPP_API_URL}/${phoneNumberId}/messages`,
-          {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(messageBody),
-          }
-        );
+        const requestUrl = `${WHATSAPP_API_URL}/${phoneNumberId}/messages`;
+        const startedAt = Date.now();
 
-        const data = await response.json();
+        const response = await fetch(requestUrl, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(messageBody),
+        });
+
+        const rawResponse = await response.text();
+        let data: any = null;
+        try { data = rawResponse ? JSON.parse(rawResponse) : null; } catch { data = { raw: rawResponse }; }
+
+        const diagnostics = {
+          graphApiVersion: 'v25.0',
+          endpoint: requestUrl,
+          phoneNumberId,
+          recipient: normalizedTo,
+          messageType: messageBody.type,
+          templateName: type === 'template' ? templateName : undefined,
+          templateLanguage: type === 'template' ? (templateLanguage || 'en') : undefined,
+          templateComponentsSent: type === 'template' ? messageBody?.template?.components ?? [] : undefined,
+          templateParamsReceived: type === 'template' ? templateParams ?? null : undefined,
+          requestPayload: messageBody,
+          httpStatus: response.status,
+          durationMs: Date.now() - startedAt,
+          metaResponse: data,
+        };
 
         if (!response.ok) {
+          const err = data?.error || {};
+          const errorCode = err.code ?? response.status;
+          const errorSubcode = err.error_subcode ?? null;
+          const errorMessage = err.message || 'Failed to send message';
+          const errorDetails = err.error_data?.details || err.error_user_msg || null;
+          const errorTitle = err.error_user_title || err.type || null;
+          const fbtraceId = err.fbtrace_id || null;
 
-          const errorCode = data?.error?.code || response.status;
-          const errorMessage =
-            data?.error?.message || 'Failed to send message';
-
-          console.error(
-            `❌ WhatsApp Send Error (${errorCode}):`,
-            errorMessage
-          );
+          console.error(`❌ WhatsApp Send Error (${errorCode}/${errorSubcode}): ${errorMessage}`, JSON.stringify({
+            details: errorDetails, fbtraceId, payload: messageBody,
+          }));
 
           return new Response(
             JSON.stringify({
               success: false,
               error: errorMessage,
               errorCode,
+              errorSubcode,
+              errorTitle,
+              errorDetails,
+              fbtraceId,
+              diagnostics,
             }),
-            {
-              headers: {
-                ...corsHeaders,
-                'Content-Type': 'application/json',
-              },
-            }
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
         const messageId = data?.messages?.[0]?.id;
+        const messageStatus = data?.messages?.[0]?.message_status || 'accepted';
 
-        console.log('✅ Message sent:', messageId);
+        console.log('✅ Message sent:', messageId, 'status:', messageStatus);
 
         return new Response(
           JSON.stringify({
             success: true,
             messageId,
+            messageStatus,
+            messages: data?.messages ?? [],
+            contacts: data?.contacts ?? [],
+            diagnostics,
           }),
-          {
-            headers: {
-              ...corsHeaders,
-              'Content-Type': 'application/json',
-            },
-          }
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 

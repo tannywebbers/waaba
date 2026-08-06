@@ -27,6 +27,8 @@ import chatBg from '@/assets/chat-bg.png';
 import { format, isSameDay, isToday, isYesterday } from 'date-fns';
 import { getWhatsAppErrorExplanation } from '@/lib/whatsappErrors';
 import { getMessagePreview } from '@/lib/utils/messagePreview';
+import { logSendDiagnostics } from '@/lib/sendDiagnostics';
+import { logEvent } from '@/lib/systemLog';
 import type { Message } from '@/types';
 
 interface ChatViewProps { onBack?: () => void; showBackButton?: boolean }
@@ -219,19 +221,35 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
 
     const normalizedPhone = activeChat.contact.phone.replace(/[^\d+]/g, '').replace(/^\+/, '');
 
-    const { data, error } = await supabase.functions.invoke('whatsapp-api', {
-      body: {
-        action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
-        to: normalizedPhone, type, content: mediaUrl || content,
-        mediaFileName: mediaMeta?.fileName, mediaMimeType: mediaMeta?.mimeType,
-        replyToWamid,
-      },
+    const requestBody = {
+      action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
+      to: normalizedPhone, type, content: mediaUrl || content,
+      mediaFileName: mediaMeta?.fileName, mediaMimeType: mediaMeta?.mimeType,
+      replyToWamid,
+    };
+
+    const { data, error } = await supabase.functions.invoke('whatsapp-api', { body: requestBody });
+
+    await logSendDiagnostics({
+      context: type === 'text' ? 'chat:text' : `chat:${type}`,
+      userId: user.id,
+      to: normalizedPhone,
+      messageType: type,
+      request: { ...requestBody, token: '«redacted»' },
+      response: data,
+      invokeError: error,
     });
 
     if (error || !data?.success) {
       const errMsg = data?.error || error?.message || 'Failed to send message';
       const details = getWhatsAppErrorExplanation(errMsg);
-      toast({ title: `❌ ${details.title}`, description: `${details.description}\n\n💡 ${details.action}`, variant: 'destructive', duration: 8000 });
+      const metaCode = data?.errorCode ? ` (Meta code ${data.errorCode}${data?.errorSubcode ? `/${data.errorSubcode}` : ''})` : '';
+      toast({
+        title: `❌ ${details.title}${metaCode}`,
+        description: `${data?.errorDetails || details.description}\n\n💡 ${details.action}\n\nSee Settings → System Logs for the full payload.`,
+        variant: 'destructive',
+        duration: 9000,
+      });
       return null;
     }
 
@@ -376,19 +394,45 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       let previewText = body?.text || template.name;
       Object.entries(params).forEach(([key, value]) => { previewText = previewText.replace(key, value || key); });
 
-      const { data, error } = await supabase.functions.invoke('whatsapp-api', {
-        body: {
-          action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
-          to: normalizedPhone, type: 'template', templateName: template.name,
-          templateParams: params, templateLanguage: template.language || 'en',
-          templateComponents: Array.isArray(template.components) ? template.components : undefined,
-        },
+      const templateRequest = {
+        action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
+        to: normalizedPhone, type: 'template', templateName: template.name,
+        templateParams: params, templateLanguage: template.language || 'en',
+        templateComponents: Array.isArray(template.components) ? template.components : undefined,
+      };
+
+      logEvent('info', 'send:chat:template', `📤 Sending approved template "${template.name}" (${template.language || 'en'}) to ${normalizedPhone}`, {
+        templateDefinition: template.components ?? null,
+        paramsCollected: params,
+        templateStatus: template.status ?? null,
+        templateCategory: template.category ?? null,
       });
-      
+
+      const { data, error } = await supabase.functions.invoke('whatsapp-api', { body: templateRequest });
+
+      await logSendDiagnostics({
+        context: 'chat:template',
+        userId: user.id,
+        to: normalizedPhone,
+        messageType: 'template',
+        templateName: template.name,
+        templateLanguage: template.language || 'en',
+        templateParams: params,
+        request: { ...templateRequest, token: '«redacted»' },
+        response: data,
+        invokeError: error,
+      });
+
       if (error || !data?.success) {
         const errMsg = data?.error || error?.message || 'Failed to send template';
         const details = getWhatsAppErrorExplanation(errMsg);
-        toast({ title: `❌ ${details.title}`, description: `${details.description}\n\n💡 ${details.action}`, variant: 'destructive', duration: 8000 });
+        const metaCode = data?.errorCode ? ` (Meta ${data.errorCode}${data?.errorSubcode ? `/${data.errorSubcode}` : ''})` : '';
+        toast({
+          title: `❌ ${details.title}${metaCode}`,
+          description: `${data?.errorDetails || errMsg}\n\n💡 ${details.action}\n\nOpen Settings → System Logs for the exact payload sent to Meta.`,
+          variant: 'destructive',
+          duration: 10000,
+        });
         
         // Failed messages do NOT deduct credits
         const { data: msgData } = await supabase.from('messages').insert({
