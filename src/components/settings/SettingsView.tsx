@@ -6,6 +6,7 @@ import { AccountSettings } from '@/components/settings/AccountSettings';
 import { TemplateMappingSettings } from '@/components/settings/TemplateMappingSettings';
 import { AppTemplateSettings } from '@/components/settings/AppTemplateSettings';
 import { ApiStatsPage } from '@/components/settings/ApiStatsPage';
+import { SystemLogsSettings } from '@/components/settings/SystemLogsSettings';
 import { StickersSettings } from '@/components/settings/StickersSettings';
 import { AppsSettings } from '@/components/settings/AppsSettings';
 import { Button } from '@/components/ui/button';
@@ -80,7 +81,12 @@ export function SettingsView() {
               </div>
             )}
             {activeTab === 'apps' && <AppsSettings />}
-            {activeTab === 'logs' && <ApiStatsPage />}
+            {activeTab === 'logs' && (
+              <div className="space-y-6">
+                <ApiStatsPage />
+                <SystemLogsSettings />
+              </div>
+            )}
             {activeTab === 'stickers' && <StickersSettings />}
             {activeTab === 'theme' && <ThemeSettings />}
             {activeTab === 'account' && <AccountSettings />}
@@ -126,7 +132,12 @@ export function SettingsView() {
             </div>
           )}
           {activeTab === 'apps' && <AppsSettings />}
-          {activeTab === 'logs' && <ApiStatsPage />}
+          {activeTab === 'logs' && (
+            <div className="space-y-6">
+              <ApiStatsPage />
+              <SystemLogsSettings />
+            </div>
+          )}
           {activeTab === 'stickers' && <StickersSettings />}
           {activeTab === 'theme' && <ThemeSettings />}
           {activeTab === 'account' && <AccountSettings />}

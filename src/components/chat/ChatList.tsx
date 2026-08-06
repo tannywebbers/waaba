@@ -513,6 +513,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
                 action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
                 to: normalizedPhone, type: 'template', templateName: metaTemplate.name,
                 templateParams, templateLanguage: (metaTemplate as any).language || 'en',
+                templateComponents: Array.isArray((metaTemplate as any).components) ? (metaTemplate as any).components : undefined,
               },
             });
 

@@ -6,6 +6,7 @@ import { AccountSettings } from '@/components/settings/AccountSettings';
 import { NotificationSettings } from '@/components/settings/NotificationSettings';
 import { WhatsAppBusinessProfile } from '@/components/settings/WhatsAppBusinessProfile';
 import { ApiStatsPage } from '@/components/settings/ApiStatsPage';
+import { SystemLogsSettings } from '@/components/settings/SystemLogsSettings';
 import { TemplateMappingSettings } from '@/components/settings/TemplateMappingSettings';
 import { AppTemplateSettings } from '@/components/settings/AppTemplateSettings';
 import { AppsSettings } from '@/components/settings/AppsSettings';
@@ -15,7 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 
-type SettingsTab = 'api' | 'theme' | 'account' | 'notifications' | 'business' | 'stats' | 'template-mapping' | 'apps' | 'app-templates' | 'shared-inbox';
+type SettingsTab = 'api' | 'theme' | 'account' | 'notifications' | 'business' | 'stats' | 'system-logs' | 'template-mapping' | 'apps' | 'app-templates' | 'shared-inbox';
 
 interface SettingsItem {
   id: SettingsTab;
@@ -30,6 +31,7 @@ const settingsTabs: SettingsItem[] = [
   { id: 'business',         label: 'Business Profile',   description: 'WhatsApp Business info',            iconSrc: '/icons/business-profile.png', iconBg: 'bg-[hsl(168,100%,18%)]' },
   { id: 'api',              label: 'WhatsApp API',        description: 'Configure Cloud API',               iconSrc: '/icons/webhook.png',           iconBg: 'bg-[hsl(145,63%,49%)]', showBadge: true },
   { id: 'stats',            label: 'API Stats',           description: 'Message analytics & usage',         iconBg: 'bg-[hsl(199,89%,48%)]' },
+  { id: 'system-logs',      label: 'System Logs',         description: 'Real-time app logs & errors',        iconBg: 'bg-[hsl(143,65%,42%)]' },
   { id: 'template-mapping', label: 'Template Mapping',    description: 'Map template variables to data',    iconBg: 'bg-[hsl(32,95%,52%)]' },
   { id: 'apps',             label: 'Apps',                description: 'Manage your app names',              iconBg: 'bg-[hsl(280,70%,50%)]' },
   { id: 'app-templates',    label: 'App Templates',       description: 'Create & manage message templates',  iconBg: 'bg-[hsl(262,83%,58%)]' },
@@ -75,6 +77,7 @@ export function SettingsPage() {
             {activeTab === 'business'         && <WhatsAppBusinessProfile />}
             {activeTab === 'api'              && <WhatsAppApiSettings onConnectionChange={setIsConnected} />}
             {activeTab === 'stats'            && <ApiStatsPage />}
+            {activeTab === 'system-logs'      && <SystemLogsSettings />}
             {activeTab === 'template-mapping' && <TemplateMappingSettings />}
             {activeTab === 'apps'             && <AppsSettings />}
             {activeTab === 'app-templates'    && <AppTemplateSettings />}
@@ -107,6 +110,13 @@ export function SettingsPage() {
                   <img src={iconSrc} alt={label} className="h-[18px] w-[18px] object-contain brightness-0 invert" />
                 ) : id === 'stats' ? (
                   <BarChart3 className="h-[18px] w-[18px] text-white" />
+                ) : id === 'system-logs' ? (
+                  <svg className="h-[18px] w-[18px] text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M8 9h8" />
+                    <path d="M8 13h5" />
+                    <path d="M8 17h3" />
+                    <rect x="3" y="4" width="18" height="16" rx="2" />
+                  </svg>
                 ) : id === 'template-mapping' ? (
                   <FileText className="h-[18px] w-[18px] text-white" />
                 ) : id === 'apps' ? (

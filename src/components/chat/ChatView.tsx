@@ -381,6 +381,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
           action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
           to: normalizedPhone, type: 'template', templateName: template.name,
           templateParams: params, templateLanguage: template.language || 'en',
+          templateComponents: Array.isArray(template.components) ? template.components : undefined,
         },
       });
       
