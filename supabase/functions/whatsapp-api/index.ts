@@ -105,65 +105,95 @@ serve(async (req) => {
 
         if (type === 'template' && templateName) {
           console.log('📋 Building template:', templateName);
-          const orderedEntries = templateParams
-            ? Object.entries(templateParams).sort(([a], [b]) => {
-                const numA = parseInt(a.replace(/\D/g, '')) || 0;
-                const numB = parseInt(b.replace(/\D/g, '')) || 0;
-                return numA - numB;
-              })
+
+          // Ordered list of supplied parameter values.
+          // Keys can be "{{1}}", "1", "var1" etc — sort numerically and keep the value.
+          const orderedValues: string[] = templateParams
+            ? Object.entries(templateParams)
+                .sort(([a], [b]) => (parseInt(String(a).replace(/\D/g, '')) || 0) - (parseInt(String(b).replace(/\D/g, '')) || 0))
+                .map(([, value]) => normalizeText(value) || ' ')
             : [];
 
-          const orderedParams = orderedEntries.map(([, value]) => ({
-            type: 'text',
-            text: normalizeText(value) || ' ',
-          }));
+          // Lookup by explicit placeholder number, e.g. {{2}} -> value
+          const valueByNumber = new Map<number, string>();
+          if (templateParams) {
+            for (const [key, value] of Object.entries(templateParams)) {
+              const n = parseInt(String(key).replace(/\D/g, ''));
+              if (n) valueByNumber.set(n, normalizeText(value) || ' ');
+            }
+          }
 
-          const components = Array.isArray(templateComponents) && templateComponents.length > 0
-            ? templateComponents
-                .map((component: any) => {
-                  const componentType = String(component?.type || '').toUpperCase();
+          const placeholderNumbers = (text: string): number[] => {
+            const found: number[] = [];
+            const re = /\{\{\s*(\d+)\s*\}\}/g;
+            let m: RegExpExecArray | null;
+            while ((m = re.exec(String(text || '')))) {
+              const n = parseInt(m[1]);
+              if (n && !found.includes(n)) found.push(n);
+            }
+            return found.sort((a, b) => a - b);
+          };
 
-                  if (componentType === 'BODY') {
-                    return {
-                      type: 'body',
-                      parameters: orderedParams,
-                    };
-                  }
+          const definition = Array.isArray(templateComponents) ? templateComponents : [];
+          const components: any[] = [];
+          let fallbackCursor = 0;
 
-                  if (componentType === 'HEADER') {
-                    if (component.format === 'TEXT') {
-                      return {
-                        type: 'header',
-                        parameters: orderedParams.slice(0, 1),
-                      };
-                    }
+          const paramsFor = (numbers: number[]) =>
+            numbers.map((n) => {
+              const value = valueByNumber.has(n)
+                ? valueByNumber.get(n)!
+                : (orderedValues[fallbackCursor++] ?? ' ');
+              return { type: 'text', text: value || ' ' };
+            });
 
-                    return {
-                      type: 'header',
-                      parameters: [],
-                    };
-                  }
+          if (definition.length > 0) {
+            // HEADER first (Meta requires header before body)
+            const header = definition.find((c: any) => String(c?.type || '').toUpperCase() === 'HEADER');
+            if (header && String(header.format || 'TEXT').toUpperCase() === 'TEXT') {
+              const numbers = placeholderNumbers(header.text);
+              if (numbers.length > 0) {
+                components.push({ type: 'header', parameters: paramsFor(numbers) });
+              }
+            }
 
-                  if (componentType === 'FOOTER') {
-                    return {
-                      type: 'footer',
-                      text: normalizeText(component.text || ''),
-                    };
-                  }
+            const body = definition.find((c: any) => String(c?.type || '').toUpperCase() === 'BODY');
+            if (body) {
+              const numbers = placeholderNumbers(body.text);
+              if (numbers.length > 0) {
+                components.push({ type: 'body', parameters: paramsFor(numbers) });
+              } else if (orderedValues.length > 0 && !definition.some((c: any) => String(c?.type || '').toUpperCase() === 'HEADER')) {
+                // Body text unavailable/no placeholders detected but values were supplied
+                components.push({ type: 'body', parameters: orderedValues.map((v) => ({ type: 'text', text: v })) });
+              }
+            }
 
-                  return {
-                    ...component,
-                    parameters: orderedParams,
-                  };
-                })
-                .filter(Boolean)
-            : [{ type: 'body', parameters: orderedParams }];
+            // Dynamic URL buttons only (static buttons and FOOTER must NOT be sent)
+            const buttonsDef = definition.find((c: any) => String(c?.type || '').toUpperCase() === 'BUTTONS');
+            const buttons = Array.isArray(buttonsDef?.buttons) ? buttonsDef.buttons : [];
+            buttons.forEach((btn: any, index: number) => {
+              const btnType = String(btn?.type || '').toUpperCase();
+              if (btnType === 'URL') {
+                const numbers = placeholderNumbers(btn.url);
+                if (numbers.length > 0) {
+                  components.push({
+                    type: 'button',
+                    sub_type: 'url',
+                    index: String(index),
+                    parameters: paramsFor(numbers),
+                  });
+                }
+              }
+            });
+          } else if (orderedValues.length > 0) {
+            // No definition supplied — assume all values belong to the body
+            components.push({ type: 'body', parameters: orderedValues.map((v) => ({ type: 'text', text: v })) });
+          }
 
           messageBody.type = 'template';
           messageBody.template = {
             name: templateName,
             language: { code: templateLanguage || 'en' },
-            components,
+            ...(components.length > 0 ? { components } : {}),
           };
         }
         else if (type === 'image') {
