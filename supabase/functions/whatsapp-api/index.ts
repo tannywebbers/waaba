@@ -75,6 +75,7 @@ serve(async (req) => {
           templateName,
           templateParams,
           templateLanguage,
+          templateComponents,
           mediaFileName,
           replyToWamid,        // ✨ NEW: WhatsApp message ID being replied to
           reactionEmoji,       // ✨ NEW: emoji for reaction; '' to remove
@@ -104,21 +105,65 @@ serve(async (req) => {
 
         if (type === 'template' && templateName) {
           console.log('📋 Building template:', templateName);
-          let orderedParams: any[] = [];
-          if (templateParams) {
-            orderedParams = Object.entries(templateParams)
-              .sort(([a], [b]) => {
+          const orderedEntries = templateParams
+            ? Object.entries(templateParams).sort(([a], [b]) => {
                 const numA = parseInt(a.replace(/\D/g, '')) || 0;
                 const numB = parseInt(b.replace(/\D/g, '')) || 0;
                 return numA - numB;
               })
-              .map(([, value]) => ({ type: 'text', text: normalizeText(value) || ' ' }));
-          }
+            : [];
+
+          const orderedParams = orderedEntries.map(([, value]) => ({
+            type: 'text',
+            text: normalizeText(value) || ' ',
+          }));
+
+          const components = Array.isArray(templateComponents) && templateComponents.length > 0
+            ? templateComponents
+                .map((component: any) => {
+                  const componentType = String(component?.type || '').toUpperCase();
+
+                  if (componentType === 'BODY') {
+                    return {
+                      type: 'body',
+                      parameters: orderedParams,
+                    };
+                  }
+
+                  if (componentType === 'HEADER') {
+                    if (component.format === 'TEXT') {
+                      return {
+                        type: 'header',
+                        parameters: orderedParams.slice(0, 1),
+                      };
+                    }
+
+                    return {
+                      type: 'header',
+                      parameters: [],
+                    };
+                  }
+
+                  if (componentType === 'FOOTER') {
+                    return {
+                      type: 'footer',
+                      text: normalizeText(component.text || ''),
+                    };
+                  }
+
+                  return {
+                    ...component,
+                    parameters: orderedParams,
+                  };
+                })
+                .filter(Boolean)
+            : [{ type: 'body', parameters: orderedParams }];
+
           messageBody.type = 'template';
           messageBody.template = {
             name: templateName,
             language: { code: templateLanguage || 'en' },
-            components: [{ type: 'body', parameters: orderedParams }],
+            components,
           };
         }
         else if (type === 'image') {
