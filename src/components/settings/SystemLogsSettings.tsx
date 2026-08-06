@@ -4,6 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import {
   clearSystemLogs,
   exportSystemLogs,
@@ -33,6 +36,108 @@ function pretty(details: unknown): string {
   } catch {
     return String(details);
   }
+}
+
+interface ServerLog {
+  id: string;
+  event_type: string;
+  direction: string;
+  phone_number?: string | null;
+  message_type?: string | null;
+  status?: string | null;
+  error?: string | null;
+  payload?: unknown;
+  created_at: string;
+}
+
+function ServerLogsPanel() {
+  const { user } = useAuth();
+  const [logs, setLogs] = useState<ServerLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+
+  const load = async () => {
+    if (!user) return;
+    setLoading(true);
+    const { data } = await supabase
+      .from('webhook_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(100);
+    setLogs((data as ServerLog[]) || []);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    load();
+    if (!user) return;
+    const channel = supabase
+      .channel('system-logs-webhook')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'webhook_logs' }, (payload) => {
+        setLogs((prev) => [payload.new as ServerLog, ...prev].slice(0, 100));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-[12px] text-muted-foreground">
+          Backend events: webhook hits, incoming messages, status callbacks and every send attempt with Meta's reply.
+        </p>
+        <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+          <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
+      </div>
+      <div className="space-y-2 max-h-[460px] overflow-y-auto rounded-lg border border-border bg-background/50 p-3 text-[12px]">
+        {logs.length === 0 ? (
+          <p className="py-8 text-center text-muted-foreground">
+            {loading ? 'Loading server events…' : 'No server events recorded yet.'}
+          </p>
+        ) : (
+          logs.map((log) => {
+            const failed = log.status === 'failed' || !!log.error;
+            const isOpen = !!open[log.id];
+            return (
+              <div key={log.id} className="rounded-md border border-border/60 bg-card px-2.5 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className={`font-semibold ${failed ? 'text-destructive' : 'text-sky-500'}`}>
+                    {log.event_type.replace(/_/g, ' ').toUpperCase()}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {new Date(log.created_at).toLocaleTimeString()}
+                  </span>
+                </div>
+                <p className="mt-1 break-words text-foreground/90">
+                  {log.direction} · {log.message_type || 'n/a'} · {log.phone_number || 'no number'}
+                  {log.status ? ` · ${log.status}` : ''}
+                </p>
+                {log.error && <p className="mt-1 break-words text-destructive">{log.error}</p>}
+                {log.payload !== undefined && log.payload !== null && (
+                  <button
+                    type="button"
+                    onClick={() => setOpen((prev) => ({ ...prev, [log.id]: !isOpen }))}
+                    className="mt-1 flex items-center gap-1 text-[11px] text-primary"
+                  >
+                    {isOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                    {isOpen ? 'Hide payload' : 'Payload'}
+                  </button>
+                )}
+                {isOpen && (
+                  <pre className="mt-2 max-h-64 overflow-auto rounded bg-muted/40 p-2 text-[11px] whitespace-pre-wrap break-words">
+                    {pretty(log.payload)}
+                  </pre>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
 }
 
 export function SystemLogsSettings() {
@@ -109,7 +214,14 @@ export function SystemLogsSettings() {
         </p>
       </CardHeader>
 
-      <CardContent className="space-y-3">
+      <CardContent>
+        <Tabs defaultValue="app">
+          <TabsList className="mb-3">
+            <TabsTrigger value="app">App logs</TabsTrigger>
+            <TabsTrigger value="server">Server &amp; send logs</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="app" className="space-y-3">
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -159,6 +271,12 @@ export function SystemLogsSettings() {
             })
           )}
         </div>
+          </TabsContent>
+
+          <TabsContent value="server">
+            <ServerLogsPanel />
+          </TabsContent>
+        </Tabs>
       </CardContent>
     </Card>
   );
