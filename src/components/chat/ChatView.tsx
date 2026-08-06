@@ -219,19 +219,35 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
 
     const normalizedPhone = activeChat.contact.phone.replace(/[^\d+]/g, '').replace(/^\+/, '');
 
-    const { data, error } = await supabase.functions.invoke('whatsapp-api', {
-      body: {
-        action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
-        to: normalizedPhone, type, content: mediaUrl || content,
-        mediaFileName: mediaMeta?.fileName, mediaMimeType: mediaMeta?.mimeType,
-        replyToWamid,
-      },
+    const requestBody = {
+      action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
+      to: normalizedPhone, type, content: mediaUrl || content,
+      mediaFileName: mediaMeta?.fileName, mediaMimeType: mediaMeta?.mimeType,
+      replyToWamid,
+    };
+
+    const { data, error } = await supabase.functions.invoke('whatsapp-api', { body: requestBody });
+
+    await logSendDiagnostics({
+      context: type === 'text' ? 'chat:text' : `chat:${type}`,
+      userId: user.id,
+      to: normalizedPhone,
+      messageType: type,
+      request: { ...requestBody, token: '«redacted»' },
+      response: data,
+      invokeError: error,
     });
 
     if (error || !data?.success) {
       const errMsg = data?.error || error?.message || 'Failed to send message';
       const details = getWhatsAppErrorExplanation(errMsg);
-      toast({ title: `❌ ${details.title}`, description: `${details.description}\n\n💡 ${details.action}`, variant: 'destructive', duration: 8000 });
+      const metaCode = data?.errorCode ? ` (Meta code ${data.errorCode}${data?.errorSubcode ? `/${data.errorSubcode}` : ''})` : '';
+      toast({
+        title: `❌ ${details.title}${metaCode}`,
+        description: `${data?.errorDetails || details.description}\n\n💡 ${details.action}\n\nSee Settings → System Logs for the full payload.`,
+        variant: 'destructive',
+        duration: 9000,
+      });
       return null;
     }
 
