@@ -22,6 +22,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { normalizePhoneNumber, parsePhoneNumbers } from '@/lib/utils/phone';
 import { useApps } from '@/hooks/useApps';
+import { logSendDiagnostics } from '@/lib/sendDiagnostics';
 
 type ChatFilter = 'all' | 'unread' | 'archived';
 type SortBy = 'recent' | 'name' | 'amount';
@@ -508,18 +509,31 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
               continue;
             }
 
-            const { data, error } = await supabase.functions.invoke('whatsapp-api', {
-              body: {
-                action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
-                to: normalizedPhone, type: 'template', templateName: metaTemplate.name,
-                templateParams, templateLanguage: (metaTemplate as any).language || 'en',
-                templateComponents: Array.isArray((metaTemplate as any).components) ? (metaTemplate as any).components : undefined,
-              },
+            const bulkRequest = {
+              action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
+              to: normalizedPhone, type: 'template', templateName: metaTemplate.name,
+              templateParams, templateLanguage: (metaTemplate as any).language || 'en',
+              templateComponents: Array.isArray((metaTemplate as any).components) ? (metaTemplate as any).components : undefined,
+            };
+
+            const { data, error } = await supabase.functions.invoke('whatsapp-api', { body: bulkRequest });
+
+            await logSendDiagnostics({
+              context: 'bulk:template',
+              userId: user.id,
+              to: normalizedPhone,
+              messageType: 'template',
+              templateName: metaTemplate.name,
+              templateLanguage: (metaTemplate as any).language || 'en',
+              templateParams,
+              request: { ...bulkRequest, token: '«redacted»' },
+              response: data,
+              invokeError: error,
             });
 
             const success = !error && data?.success;
             const status = success ? 'sent' : 'failed';
-            const failReason = data?.error || error?.message || '';
+            const failReason = [data?.error || error?.message || '', data?.errorCode ? `(Meta ${data.errorCode}${data?.errorSubcode ? `/${data.errorSubcode}` : ''})` : ''].filter(Boolean).join(' ');
 
             if (success) sentCount++;
             else {

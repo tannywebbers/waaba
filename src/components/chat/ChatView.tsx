@@ -27,6 +27,8 @@ import chatBg from '@/assets/chat-bg.png';
 import { format, isSameDay, isToday, isYesterday } from 'date-fns';
 import { getWhatsAppErrorExplanation } from '@/lib/whatsappErrors';
 import { getMessagePreview } from '@/lib/utils/messagePreview';
+import { logSendDiagnostics } from '@/lib/sendDiagnostics';
+import { logEvent } from '@/lib/systemLog';
 import type { Message } from '@/types';
 
 interface ChatViewProps { onBack?: () => void; showBackButton?: boolean }
