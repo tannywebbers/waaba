@@ -95,4 +95,4 @@ export interface Sticker {
 }
 
 export type ViewMode = 'chats' | 'contacts' | 'settings';
-export type SettingsTab = 'api' | 'theme' | 'account' | 'notifications' | 'business' | 'templates' | 'logs' | 'stickers' | 'apps';
+export type SettingsTab = 'api' | 'theme' | 'account' | 'notifications' | 'business' | 'templates' | 'logs' | 'system-logs' | 'stickers' | 'apps';
