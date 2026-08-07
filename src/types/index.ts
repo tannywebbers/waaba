@@ -62,6 +62,10 @@ export interface Message {
   replySnapshot?: ReplySnapshot;
   // Reactions
   reactions?: MessageReaction[];
+  // Delivery failure detail, populated from Meta's status webhook
+  errorCode?: number;
+  errorTitle?: string;
+  errorDetails?: string;
 }
 
 export interface Chat {
