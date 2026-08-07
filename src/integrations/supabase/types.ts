@@ -238,6 +238,9 @@ export type Database = {
           content: string
           created_at: string
           deleted_at: string | null
+          error_code: number | null
+          error_details: string | null
+          error_title: string | null
           id: string
           is_deleted: boolean | null
           is_outgoing: boolean
@@ -258,6 +261,9 @@ export type Database = {
           content: string
           created_at?: string
           deleted_at?: string | null
+          error_code?: number | null
+          error_details?: string | null
+          error_title?: string | null
           id?: string
           is_deleted?: boolean | null
           is_outgoing?: boolean
@@ -278,6 +284,9 @@ export type Database = {
           content?: string
           created_at?: string
           deleted_at?: string | null
+          error_code?: number | null
+          error_details?: string | null
+          error_title?: string | null
           id?: string
           is_deleted?: boolean | null
           is_outgoing?: boolean
