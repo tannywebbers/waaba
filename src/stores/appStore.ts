@@ -84,7 +84,7 @@ interface AppState {
   messages: Record<string, Message[]>;
   setMessages: (contactId: string, messages: Message[]) => void;
   addMessage: (contactId: string, message: Message) => void;
-  updateMessageStatus: (contactId: string, messageId: string, status: Message['status']) => void;
+  updateMessageStatus: (contactId: string, messageId: string, status: Message['status'], errorInfo?: { errorCode?: number; errorTitle?: string; errorDetails?: string }) => void;
 
   drafts: Record<string, string>;
   setDraft: (contactId: string, text: string) => void;
@@ -247,20 +247,20 @@ export const useAppStore = create<AppState>()((set, get) => ({
       unreadCounts: { ...state.unreadCounts, [contactId]: isCurrentChat ? 0 : newUnread },
     };
   }),
-  updateMessageStatus: (contactId, messageId, status) => set((state) => {
+  updateMessageStatus: (contactId, messageId, status, errorInfo) => set((state) => {
     const updatedMessages = (state.messages[contactId] || []).map(m =>
-      m.id === messageId ? { ...m, status } : m
+      m.id === messageId ? { ...m, status, ...(errorInfo || {}) } : m
     );
     // Update lastMessage in chats — check both by ID match and if it's the latest outgoing
     const updatedChats = state.chats.map(chat => {
       if (chat.id !== contactId) return chat;
       if (chat.lastMessage?.id === messageId) {
-        return { ...chat, lastMessage: { ...chat.lastMessage, status } };
+        return { ...chat, lastMessage: { ...chat.lastMessage, status, ...(errorInfo || {}) } };
       }
       // Also update if this is the most recent outgoing message (fallback)
       const lastOutgoing = [...updatedMessages].reverse().find(m => m.isOutgoing);
       if (lastOutgoing?.id === messageId && chat.lastMessage?.isOutgoing) {
-        return { ...chat, lastMessage: { ...chat.lastMessage, status } };
+        return { ...chat, lastMessage: { ...chat.lastMessage, status, ...(errorInfo || {}) } };
       }
       return chat;
     });
@@ -407,6 +407,9 @@ export const useAppStore = create<AppState>()((set, get) => ({
           replyToWamid: m.reply_to_wamid || undefined,
           replySnapshot: m.reply_snapshot || undefined,
           reactions: m.reactions || [],
+          errorCode: m.error_code ?? undefined,
+          errorTitle: m.error_title || undefined,
+          errorDetails: m.error_details || undefined,
         };
         if (!messagesMap[m.contact_id]) messagesMap[m.contact_id] = [];
         messagesMap[m.contact_id].push(message);
