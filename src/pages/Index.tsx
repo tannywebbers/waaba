@@ -273,12 +273,18 @@ const Index = () => {
           id: m.id,
           contactId: m.contact_id,
           status: m.status,
+          errorCode: m.error_code,
+          errorTitle: m.error_title,
         });
         
         if (m.status) {
           const { updateMessageStatus } = useAppStore.getState();
-          updateMessageStatus(m.contact_id, m.id, m.status);
-          console.log('✅ [Global RT] Status updated:', m.status);
+          updateMessageStatus(m.contact_id, m.id, m.status, {
+            errorCode: m.error_code ?? undefined,
+            errorTitle: m.error_title || undefined,
+            errorDetails: m.error_details || undefined,
+          });
+          console.log('✅ [Global RT] Status updated:', m.status, m.error_title ? `— ${m.error_title}` : '');
         }
       })
       // ── Contact online/last_seen updates ──
