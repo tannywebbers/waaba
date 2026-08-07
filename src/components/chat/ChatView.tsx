@@ -133,7 +133,11 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `contact_id=eq.${activeChat.id}` },
         (payload) => {
           const updated = payload.new as any;
-          updateMessageStatus(activeChat.id, updated.id, updated.status);
+          updateMessageStatus(activeChat.id, updated.id, updated.status, {
+            errorCode: updated.error_code ?? undefined,
+            errorTitle: updated.error_title || undefined,
+            errorDetails: updated.error_details || undefined,
+          });
           // Sync reactions/reply changes
           useAppStore.setState((state) => ({
             messages: {
@@ -1059,4 +1063,3 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
     </div>
   );
 }
-
