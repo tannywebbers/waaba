@@ -24,7 +24,7 @@ interface MessageBubbleProps {
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 
 export function MessageBubble({ message, onDelete, onReply, onReact }: MessageBubbleProps) {
-  const { content, isOutgoing, timestamp, status, type, mediaUrl, replySnapshot, reactions } = message;
+  const { content, isOutgoing, timestamp, status, type, mediaUrl, replySnapshot, reactions, errorCode, errorTitle, errorDetails } = message;
   const [mediaPreview, setMediaPreview] = useState(false);
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [audioDuration, setAudioDuration] = useState<string | null>(null);
@@ -319,9 +319,16 @@ export function MessageBubble({ message, onDelete, onReply, onReact }: MessageBu
               </div>
             )}
             {status === 'failed' && isOutgoing && (
-              <div className="flex items-center gap-1 mt-1 text-destructive">
-                <AlertCircle className="h-3 w-3" />
-                <span className="text-[11px] font-medium">Failed to send</span>
+              <div
+                className="flex items-start gap-1 mt-1 text-destructive"
+                title={errorDetails || undefined}
+              >
+                <AlertCircle className="h-3 w-3 mt-[1px] shrink-0" />
+                <span className="text-[11px] font-medium">
+                  {errorTitle
+                    ? `${errorTitle}${errorCode ? ` (${errorCode})` : ''}`
+                    : 'Failed to send'}
+                </span>
               </div>
             )}
           </div>
