@@ -238,9 +238,6 @@ export type Database = {
           content: string
           created_at: string
           deleted_at: string | null
-          error_code: number | null
-          error_details: string | null
-          error_title: string | null
           id: string
           is_deleted: boolean | null
           is_outgoing: boolean
@@ -250,6 +247,7 @@ export type Database = {
           reply_to_message_id: string | null
           reply_to_wamid: string | null
           status: string
+          status_details: Json | null
           template_name: string | null
           template_params: Json | null
           type: string
@@ -261,9 +259,6 @@ export type Database = {
           content: string
           created_at?: string
           deleted_at?: string | null
-          error_code?: number | null
-          error_details?: string | null
-          error_title?: string | null
           id?: string
           is_deleted?: boolean | null
           is_outgoing?: boolean
@@ -273,6 +268,7 @@ export type Database = {
           reply_to_message_id?: string | null
           reply_to_wamid?: string | null
           status?: string
+          status_details?: Json | null
           template_name?: string | null
           template_params?: Json | null
           type?: string
@@ -284,9 +280,6 @@ export type Database = {
           content?: string
           created_at?: string
           deleted_at?: string | null
-          error_code?: number | null
-          error_details?: string | null
-          error_title?: string | null
           id?: string
           is_deleted?: boolean | null
           is_outgoing?: boolean
@@ -296,6 +289,7 @@ export type Database = {
           reply_to_message_id?: string | null
           reply_to_wamid?: string | null
           status?: string
+          status_details?: Json | null
           template_name?: string | null
           template_params?: Json | null
           type?: string
