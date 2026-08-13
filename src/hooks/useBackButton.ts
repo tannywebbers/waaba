@@ -10,6 +10,13 @@ export function useBackButton(onBack: () => boolean) {
     window.history.pushState({ waba: true }, '');
 
     const handler = (e: PopStateEvent) => {
+      // Ignore synthetic pops emitted when a dialog/modal closes programmatically
+      const pending = (window as any).__wabaDialogSyntheticPop || 0;
+      if (pending > 0) {
+        (window as any).__wabaDialogSyntheticPop = pending - 1;
+        window.history.pushState({ waba: true }, '');
+        return;
+      }
       const handled = onBack();
       if (handled) {
         // Re-push so back button keeps working

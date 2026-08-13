@@ -14,6 +14,9 @@ export function useDialogBackButton(open: boolean, onClose: () => void) {
       // If we programmatically closed, pop our own entry so history stays clean.
       if (pushedRef.current && !closingRef.current) {
         closingRef.current = true;
+        // Tell the app-level back handler to ignore this synthetic pop, otherwise
+        // closing a dialog programmatically would also close the chat conversation.
+        (window as any).__wabaDialogSyntheticPop = ((window as any).__wabaDialogSyntheticPop || 0) + 1;
         try { window.history.back(); } catch {}
       }
       pushedRef.current = false;
