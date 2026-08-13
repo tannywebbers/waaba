@@ -191,7 +191,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         chatContainerRef.current.style.top = `${vv.offsetTop}px`;
       }
       // Scroll messages to bottom after keyboard animation
-      requestAnimationFrame(scrollToBottom);
+      requestAnimationFrame(() => scrollToBottom('auto'));
     };
 
     vv.addEventListener('resize', handleResize);

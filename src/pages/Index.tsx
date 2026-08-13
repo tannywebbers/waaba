@@ -359,7 +359,7 @@ const Index = () => {
 
     // Priority 4: At root - allow app exit
     return false; // not handled - let browser/OS handle
-  });
+  }, !isMobile);
 
   if (loading && !dataLoaded) {
     return (

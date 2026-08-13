@@ -4,8 +4,10 @@ import { useEffect } from 'react';
  * Handles Android hardware back button / browser popstate
  * for native-like navigation in the mobile app.
  */
-export function useBackButton(onBack: () => boolean) {
+export function useBackButton(onBack: () => boolean, enabled = true) {
   useEffect(() => {
+    if (!enabled) return;
+
     // Push a dummy state so popstate fires on back press
     window.history.pushState({ waba: true }, '');
 
@@ -26,6 +28,6 @@ export function useBackButton(onBack: () => boolean) {
 
     window.addEventListener('popstate', handler);
     return () => window.removeEventListener('popstate', handler);
-  }, [onBack]);
+  }, [onBack, enabled]);
 }
 
