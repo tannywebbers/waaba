@@ -19,7 +19,7 @@ interface MetaTemplate {
 
 interface UnifiedTemplateSelectorProps {
   contact: Contact;
-  onSelectMetaTemplate: (template: MetaTemplate, params: Record<string, string>) => void;
+  onSelectMetaTemplate: (template: MetaTemplate, params: Record<string, string>) => void | Promise<void>;
   onInsertAppTemplate: (text: string) => void;
 }
 
@@ -240,12 +240,12 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
     setAppVarNums(appVars);
   };
 
-  const handleMetaConfirm = () => {
+  const handleMetaConfirm = async () => {
     if (!selectedMeta) return;
     for (const [, value] of Object.entries(metaParams)) {
       if (value.startsWith('[Missing template:')) return;
     }
-    onSelectMetaTemplate(selectedMeta, metaParams);
+    await onSelectMetaTemplate(selectedMeta, metaParams);
     setOpen(false);
     setSelectedMeta(null);
   };
