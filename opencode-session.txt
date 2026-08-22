@@ -1,0 +1,87 @@
+# OpenCode Session Log
+Project: /workspaces/waaba
+Last updated: 2026-08-22
+
+## Session IDs (resume with `opencode --continue` or `opencode -s <id>`)
+- Current session: ses_fd65a0e2effeOOoDnQLLANEz2Z
+- Previous session (disconnected): ses_fd6666b27ffeRQV11rQtB2Deqs
+
+## Project Overview
+WhatsApp chat web application built with:
+- Vite + TypeScript + React 19
+- shadcn/ui + Tailwind CSS
+- Supabase (backend/auth/DB)
+- Capacitor (original native shell plan, superseded by mobile/)
+- Bun/npm package management
+
+Recent git history (main branch):
+- 92a4eba Fixed chat scroll and history
+- 92f1b3e Fixed Meta template close bug
+- a5cfbbc Add error handling fields to message types (errorCode, errorTitle, errorDetails)
+
+## Work In Progress: Expo Mobile App (mobile/, untracked in git)
+A new React Native app was scaffolded with create-expo-app:
+- Expo SDK 57 (expo ~57.0.15), React Native 0.86.2, React 19.2.3
+- Files: App.tsx (default template), app.json, index.ts, tsconfig.json,
+  assets/ (icon, splash, android adaptive icons)
+- NOTE from mobile/AGENTS.md: "Expo HAS CHANGED - Read the exact versioned
+  docs at https://docs.expo.dev/versions/v57.0.0/ before writing any code."
+
+Status at disconnect:
+- Scaffold complete, default template code untouched
+- Next steps (assumed): wire up Supabase client, port core chat UI/screens
+  from src/ (web app) to React Native, configure app.json branding
+  (name/slug currently "mobile"), install navigation libs
+
+## Current Session (2026-08-22)
+1. User asked to resume after disconnect; no conversation history available
+2. Reconstructed state from disk inspection (git status, mobile/ contents)
+3. Created this session log
+4. Added session IDs (above) so the session can be resumed
+5. Built the mobile version MVP:
+
+### Mobile build status (mobile/)
+DONE:
+- Deps: expo-router ~57, @supabase/supabase-js, expo-sqlite (session storage),
+  zustand 5, @expo/vector-icons, react-native-screens/safe-area-context
+- package.json main -> "expo-router/entry"; scheme "waaba"
+- app.json: name "Waaba", bundle ids com.waaba.mobile, plugins [expo-router, expo-sqlite]
+- mobile/.env.local with EXPO_PUBLIC_SUPABASE_URL/_PUBLISHABLE_KEY/_PROJECT_ID
+- lib/supabase.ts (expo-sqlite localStorage adapter per Expo v57 docs,
+  AppState-driven autoRefreshToken), lib/types.ts, lib/mappers.ts,
+  lib/effectiveUser.ts (get_effective_whatsapp_user_id RPC + fallback),
+  lib/format.ts
+- stores/appStore.ts: zustand store (contacts/chats/messages/unreadCounts/
+  activeChatId, loadData, markChatAsRead, addMessage w/ dedupe + auto-read,
+  updateMessage for realtime status updates)
+- hooks/useAuth.tsx (port of web auth context), hooks/useRealtime.ts
+  (`mobile-realtime` channel: contacts INSERT/UPDATE, messages INSERT/UPDATE
+  filtered user_id=eq.<uid> - port of web global-realtime)
+- Router: app/_layout.tsx (AuthProvider + AuthGate redirect),
+  app/index.tsx, app/auth/index.tsx (sign-in screen),
+  app/(app)/_layout.tsx (Tabs: Chats/Contacts/Settings; tab bar hidden on chat detail)
+- Screens: chats list (search, unread badges, pull-to-refresh, pinned sort),
+  chats/[id] (inverted bubbles, ticks sent/delivered/read/failed, reply quote,
+  send via whatsapp-api edge function + messages insert, mark-read on open),
+  contacts list, settings (profile card + sign out)
+- Verified: `npx tsc --noEmit` clean; `npx expo export --platform android` bundles OK
+
+NOT DONE / NEXT:
+- Media sending (image/document/audio/sticker) via expo-image-picker/document-picker
+  to chat-media bucket ({userId}/... path convention)
+- Push notifications (expo-notifications -> push_tokens table)
+- Voice notes (expo-audio/expo-video recording)
+- Template picker + broadcasts + scheduled messages screens
+- Presence refresh loop (contacts.last_seen polling every ~30s)
+- Dark theme (#0b141a palette already chosen in web css vars)
+- Run on device/emulator: cd mobile && npx expo start
+
+TROUBLESHOOTING (this codespace):
+- "libatk-1.0.so.0" error at expo start = CLI auto-installing standalone
+  React Native DevTools (GUI binary) in headless container.
+  Fix: EXPO_UNSTABLE_HEADLESS=1 (already added to mobile/package.json scripts).
+
+## How to Resume Next Time
+- Keep this file updated as work progresses
+- mobile/ is still untracked: git add when ready to commit
+- Check `git status` + diff between commits for latest web app changes
