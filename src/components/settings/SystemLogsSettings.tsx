@@ -40,6 +40,7 @@ function pretty(details: unknown): string {
 
 interface ServerLog {
   id: string;
+  user_id?: string | null;
   event_type: string;
   direction: string;
   phone_number?: string | null;
@@ -50,6 +51,21 @@ interface ServerLog {
   created_at: string;
 }
 
+/** Pulls the template name out of a server log, if this entry is a template send. */
+function templateNameOf(log: ServerLog): string | null {
+  const mt = log.message_type || '';
+  if (mt.startsWith('template:')) return mt.slice('template:'.length);
+  const p = log.payload as any;
+  return p?.template?.name ?? p?.templateName ?? null;
+}
+
+function withinRange(iso: string, from: string, to: string): boolean {
+  const t = new Date(iso).getTime();
+  if (from && t < new Date(`${from}T00:00:00`).getTime()) return false;
+  if (to && t > new Date(`${to}T23:59:59.999`).getTime()) return false;
+  return true;
+}
+
 function ServerLogsPanel() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -57,6 +73,13 @@ function ServerLogsPanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [search, setSearch] = useState('');
+  const [userFilter, setUserFilter] = useState('all');
+  const [templateFilter, setTemplateFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+
 
   const load = async () => {
     if (!user) { setLoading(false); setLogs([]); return; }
