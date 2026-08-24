@@ -391,7 +391,8 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
       let token = dbSettings?.api_token || settings.apiToken;
       let businessAccountId = dbSettings?.business_account_id || settings.businessAccountId;
 
-      // If shared user and still no credentials, copy from super user first
+      // Shared inbox users sync through the inbox owner's connection.
+      // RLS lets them read the super user's whatsapp_settings row, so use it directly.
       if (isSharedUser && (!token || !businessAccountId)) {
         const { data: membership } = await supabase
           .from('shared_inbox_users' as any)
@@ -402,21 +403,27 @@ export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsP
 
         const superUserId = (membership as any[])?.[0]?.super_user_id;
         if (superUserId) {
-          await supabase.rpc('copy_super_user_credentials', {
-            _super_user_id: superUserId,
-            _shared_user_id: user.id,
-          });
-
-          const { data: refreshed } = await supabase
+          const { data: ownerSettings } = await supabase
             .from('whatsapp_settings')
             .select('api_token, business_account_id')
-            .eq('user_id', user.id)
+            .eq('user_id', superUserId)
             .maybeSingle();
 
-          if (refreshed?.api_token) token = refreshed.api_token;
-          if (refreshed?.business_account_id) businessAccountId = refreshed.business_account_id;
+          if (ownerSettings?.api_token) token = ownerSettings.api_token;
+          if (ownerSettings?.business_account_id) businessAccountId = ownerSettings.business_account_id;
+        }
+
+        if (!token || !businessAccountId) {
+          toast({
+            title: 'Owner connection unavailable',
+            description: 'The shared inbox owner has not finished setting up their WhatsApp API connection yet.',
+            variant: 'destructive',
+          });
+          setSyncing(false);
+          return;
         }
       }
+
 
       if (!token) {
         toast({ title: 'Missing API token', description: 'Please save your API token first.', variant: 'destructive' });
