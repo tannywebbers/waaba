@@ -1,7 +1,9 @@
 // @ts-nocheck
 import { getEffectiveWhatsAppUserId } from '@/lib/effectiveUser';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Archive, CheckSquare, MessageCircle, Plus, RotateCcw, Search, Send, Settings2, SortAsc, SortDesc, SquarePen, Trash2, Users } from 'lucide-react';
+import { Archive, CheckSquare, MessageCircle, MoreVertical, Plus, RotateCcw, Search, Send, Settings2, SortAsc, SortDesc, SquarePen, Trash2, Users } from 'lucide-react';
+import { useIsMobile } from '@/hooks/use-mobile';
+
 import { Button } from '@/components/ui/button';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { Input } from '@/components/ui/input';
