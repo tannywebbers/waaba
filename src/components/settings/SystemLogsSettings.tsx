@@ -229,6 +229,21 @@ export function SystemLogsSettings() {
     }
   };
 
+  const copyEntry = async (entry: SystemLogEntry) => {
+    const text = [
+      `[${entry.timestamp}] ${entry.level.toUpperCase()} (${entry.source})`,
+      entry.message,
+      entry.details != null ? pretty(entry.details) : '',
+    ].filter(Boolean).join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title: '📋 Log entry copied' });
+    } catch {
+      toast({ title: '❌ Could not copy entry', variant: 'destructive' });
+    }
+  };
+
+
   return (
     <Card>
       <CardHeader className="pb-3">
