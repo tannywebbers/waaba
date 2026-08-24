@@ -52,46 +52,96 @@ interface ServerLog {
 
 function ServerLogsPanel() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [logs, setLogs] = useState<ServerLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<Record<string, boolean>>({});
 
   const load = async () => {
-    if (!user) return;
+    if (!user) { setLoading(false); setLogs([]); return; }
     setLoading(true);
-    const { data } = await supabase
-      .from('webhook_logs')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(100);
-    setLogs((data as ServerLog[]) || []);
-    setLoading(false);
+    setError(null);
+    try {
+      const { data, error: qErr } = await supabase
+        .from('webhook_logs')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(200);
+      if (qErr) throw qErr;
+      setLogs((data as ServerLog[]) || []);
+    } catch (e: any) {
+      setError(e?.message || 'Could not load server logs');
+      setLogs([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     load();
     if (!user) return;
     const channel = supabase
-      .channel('system-logs-webhook')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'webhook_logs' }, (payload) => {
-        setLogs((prev) => [payload.new as ServerLog, ...prev].slice(0, 100));
+      .channel(`system-logs-webhook-${user.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'webhook_logs', filter: `user_id=eq.${user.id}` }, (payload) => {
+        setLogs((prev) => [payload.new as ServerLog, ...prev].slice(0, 200));
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
+  const copyOne = async (log: ServerLog) => {
+    const text = [
+      `[${log.created_at}] ${log.event_type.toUpperCase()} (${log.direction})`,
+      `type: ${log.message_type || 'n/a'} · number: ${log.phone_number || 'n/a'} · status: ${log.status || 'n/a'}`,
+      log.error ? `error: ${log.error}` : '',
+      log.payload != null ? pretty(log.payload) : '',
+    ].filter(Boolean).join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title: '📋 Log entry copied' });
+    } catch {
+      toast({ title: '❌ Could not copy entry', variant: 'destructive' });
+    }
+  };
+
+  const copyAllServer = async () => {
+    const text = logs.slice().reverse().map((log) => [
+      `[${log.created_at}] ${log.event_type.toUpperCase()} (${log.direction})`,
+      `type: ${log.message_type || 'n/a'} · number: ${log.phone_number || 'n/a'} · status: ${log.status || 'n/a'}`,
+      log.error ? `error: ${log.error}` : '',
+      log.payload != null ? pretty(log.payload) : '',
+    ].filter(Boolean).join('\n')).join('\n\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title: '📋 Server logs copied' });
+    } catch {
+      toast({ title: '❌ Could not copy logs', variant: 'destructive' });
+    }
+  };
+
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-[12px] text-muted-foreground">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[12px] text-muted-foreground max-w-[380px]">
           Backend events: webhook hits, incoming messages, status callbacks and every send attempt with Meta's reply.
         </p>
-        <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-          <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={copyAllServer} disabled={logs.length === 0}>
+            <Copy className="h-4 w-4 mr-1" />
+            Copy
+          </Button>
+          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
+      {error && (
+        <p className="rounded-md bg-destructive/10 px-3 py-2 text-[12px] text-destructive">{error}</p>
+      )}
       <div className="space-y-2 max-h-[460px] overflow-y-auto rounded-lg border border-border bg-background/50 p-3 text-[12px]">
         {logs.length === 0 ? (
           <p className="py-8 text-center text-muted-foreground">
@@ -107,9 +157,14 @@ function ServerLogsPanel() {
                   <span className={`font-semibold ${failed ? 'text-destructive' : 'text-sky-500'}`}>
                     {log.event_type.replace(/_/g, ' ').toUpperCase()}
                   </span>
-                  <span className="text-[11px] text-muted-foreground">
-                    {new Date(log.created_at).toLocaleTimeString()}
-                  </span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[11px] text-muted-foreground">
+                      {new Date(log.created_at).toLocaleTimeString()}
+                    </span>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" title="Copy this log" onClick={() => copyOne(log)}>
+                      <Copy className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
                 <p className="mt-1 break-words text-foreground/90">
                   {log.direction} · {log.message_type || 'n/a'} · {log.phone_number || 'no number'}
@@ -139,6 +194,7 @@ function ServerLogsPanel() {
     </div>
   );
 }
+
 
 export function SystemLogsSettings() {
   const { toast } = useToast();
