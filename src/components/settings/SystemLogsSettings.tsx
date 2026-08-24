@@ -299,10 +299,16 @@ export function SystemLogsSettings() {
                 <div key={entry.id} className="rounded-md border border-border/60 bg-card px-2.5 py-2">
                   <div className="flex items-center justify-between gap-2">
                     <span className={`font-semibold ${levelStyle[entry.level]}`}>{levelLabel[entry.level]}</span>
-                    <span className="text-[11px] text-muted-foreground">
-                      {new Date(entry.timestamp).toLocaleTimeString()}
-                    </span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[11px] text-muted-foreground">
+                        {new Date(entry.timestamp).toLocaleTimeString()}
+                      </span>
+                      <Button variant="ghost" size="icon" className="h-6 w-6" title="Copy this log" onClick={() => copyEntry(entry)}>
+                        <Copy className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </div>
+
                   <p className="mt-1 break-words whitespace-pre-wrap text-foreground/90">{entry.message}</p>
                   <div className="mt-1 flex items-center justify-between gap-2">
                     <span className="text-[11px] text-muted-foreground">source: {entry.source}</span>
