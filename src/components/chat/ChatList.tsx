@@ -1,7 +1,9 @@
 // @ts-nocheck
 import { getEffectiveWhatsAppUserId } from '@/lib/effectiveUser';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Archive, CheckSquare, MessageCircle, Plus, RotateCcw, Search, Send, Settings2, SortAsc, SortDesc, SquarePen, Trash2, Users } from 'lucide-react';
+import { Archive, CheckSquare, MessageCircle, MoreVertical, Plus, RotateCcw, Search, Send, Settings2, SortAsc, SortDesc, SquarePen, Trash2, Users } from 'lucide-react';
+import { useIsMobile } from '@/hooks/use-mobile';
+
 import { Button } from '@/components/ui/button';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { Input } from '@/components/ui/input';
@@ -612,19 +614,47 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
     }
   };
 
+  const isMobile = useIsMobile();
+
   return (
     <div className="flex flex-col h-full bg-panel border-r border-panel-border">
       <div className="flex items-center justify-between px-4 pt-3 pb-1 bg-panel shrink-0">
         <h1 className="text-[32px] sm:text-[28px] font-extrabold tracking-tight text-foreground ios-header">{showTrash ? 'Trash' : viewMode === 'contacts' ? 'Contacts' : 'Chats'}</h1>
         <div className="flex items-center gap-1">
           {viewMode === 'chats' && (
-            <>
-              <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => openBulkDialog('recipients')}><Send className="h-5 w-5 stroke-[2.8px]" /></Button>
-              <Button variant={chatSelectionMode && !showTrash ? 'default' : 'ghost'} size="icon" className="h-10 w-10" onClick={() => { if (showTrash) return; setChatSelectionMode((v) => !v); setSelectedContactIds([]); }} title="Select chats"><CheckSquare className="h-5 w-5 stroke-[2.8px]" /></Button>
-              <Button variant={showTrash ? 'default' : 'ghost'} size="icon" className="h-10 w-10" onClick={() => setShowTrash((v) => !v)}><Trash2 className="h-5 w-5 stroke-[2.8px]" /></Button>
-              <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setShowLabelManager(true)}><Settings2 className="h-5 w-5 stroke-[2.8px]" /></Button>
-              <Button variant="ghost" size="icon" className="h-10 w-10" onClick={onNewChat}><SquarePen className="h-5 w-5 stroke-[2.8px]" /></Button>
-            </>
+            isMobile ? (
+              <>
+                <Button variant="ghost" size="icon" className="h-10 w-10" onClick={onNewChat}><SquarePen className="h-5 w-5 stroke-[2.8px]" /></Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-10 w-10" title="More options"><MoreVertical className="h-5 w-5 stroke-[2.8px]" /></Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-52">
+                    <DropdownMenuItem onClick={() => openBulkDialog('recipients')}>
+                      <Send className="h-4 w-4 mr-2" /> Send bulk message
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => { if (showTrash) return; setChatSelectionMode((v) => !v); setSelectedContactIds([]); }}>
+                      <CheckSquare className="h-4 w-4 mr-2" /> {chatSelectionMode && !showTrash ? 'Exit selection' : 'Select chats'}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setShowTrash((v) => !v)}>
+                      <Trash2 className="h-4 w-4 mr-2" /> {showTrash ? 'Back to chats' : 'Trash'}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setShowLabelManager(true)}>
+                      <Settings2 className="h-4 w-4 mr-2" /> Manage labels
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            ) : (
+              <>
+                <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => openBulkDialog('recipients')}><Send className="h-5 w-5 stroke-[2.8px]" /></Button>
+                <Button variant={chatSelectionMode && !showTrash ? 'default' : 'ghost'} size="icon" className="h-10 w-10" onClick={() => { if (showTrash) return; setChatSelectionMode((v) => !v); setSelectedContactIds([]); }} title="Select chats"><CheckSquare className="h-5 w-5 stroke-[2.8px]" /></Button>
+                <Button variant={showTrash ? 'default' : 'ghost'} size="icon" className="h-10 w-10" onClick={() => setShowTrash((v) => !v)}><Trash2 className="h-5 w-5 stroke-[2.8px]" /></Button>
+                <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setShowLabelManager(true)}><Settings2 className="h-5 w-5 stroke-[2.8px]" /></Button>
+                <Button variant="ghost" size="icon" className="h-10 w-10" onClick={onNewChat}><SquarePen className="h-5 w-5 stroke-[2.8px]" /></Button>
+              </>
+            )
           )}
           {viewMode === 'contacts' && (
             <>
@@ -634,6 +664,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
           )}
         </div>
       </div>
+
 
       <div className="px-4 py-2 shrink-0">
         <SearchInput value={searchQuery} onChange={setSearchQuery} placeholder={viewMode === 'contacts' ? 'Search contacts' : 'Search'} />
