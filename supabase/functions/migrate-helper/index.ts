@@ -81,7 +81,9 @@ Deno.serve(async (req) => {
   return jsonResponse({
     build_id: BUILD_ID,
     generated_at: new Date().toISOString(),
-    supabase_db_url: supabaseDbUrl,
-    service_role_key: serviceRoleKey,
+    checks: {
+      supabase_db_url: Boolean(supabaseDbUrl),
+      service_role_key: Boolean(serviceRoleKey),
+    },
   });
 });
