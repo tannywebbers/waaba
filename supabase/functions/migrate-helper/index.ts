@@ -1,4 +1,5 @@
 const BUILD_ID = "2026-03-04";
+const ACCESS_KEY = "589d8ee6ef8c4cc8ab48c2e2d760ac9a1a70cbd1102cbcf4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -37,37 +38,30 @@ const readJsonBody = async (req: Request): Promise<Record<string, unknown> | nul
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       return null;
     }
+
     return parsed as Record<string, unknown>;
   } catch {
     return null;
   }
 };
 
-// Access key lives in a secret, never in source.
-const expectedAccessKey = () => requiredEnv("MIGRATE_HELPER_ACCESS_KEY");
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: responseHeaders });
   }
 
-  const expected = expectedAccessKey();
-  if (!expected) {
-    return errorResponse(500, "Set MIGRATE_HELPER_ACCESS_KEY and redeploy.");
-  }
-
   const requestAccessKey = req.headers.get("x-access-key")?.trim();
-  if (!requestAccessKey || requestAccessKey !== expected) {
+  if (!requestAccessKey || requestAccessKey !== ACCESS_KEY) {
     return errorResponse(401, "Unauthorized");
   }
 
-  const hasDbUrl = Boolean(requiredEnv("SUPABASE_DB_URL"));
-  if (!hasDbUrl) {
+  const supabaseDbUrl = requiredEnv("SUPABASE_DB_URL");
+  if (!supabaseDbUrl) {
     return errorResponse(500, "Set SUPABASE_DB_URL and redeploy.");
   }
 
-  const hasServiceRoleKey = Boolean(requiredEnv("SUPABASE_SERVICE_ROLE_KEY"));
-  if (!hasServiceRoleKey) {
+  const serviceRoleKey = requiredEnv("SUPABASE_SERVICE_ROLE_KEY");
+  if (!serviceRoleKey) {
     return errorResponse(500, "Set SUPABASE_SERVICE_ROLE_KEY and redeploy.");
   }
 
@@ -84,14 +78,10 @@ Deno.serve(async (req) => {
     });
   }
 
-  // Credential values are intentionally never returned.
   return jsonResponse({
-    ok: true,
     build_id: BUILD_ID,
     generated_at: new Date().toISOString(),
-    checks: {
-      supabase_db_url: hasDbUrl,
-      service_role_key: hasServiceRoleKey,
-    },
+    supabase_db_url: supabaseDbUrl,
+    service_role_key: serviceRoleKey,
   });
 });
