@@ -1,1 +1,0 @@
-DROP POLICY IF EXISTS "Anon can insert webhook logs" ON public.webhook_logs;

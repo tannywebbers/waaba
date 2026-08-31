@@ -1,3 +1,0 @@
-ALTER TABLE public.contacts
-ALTER COLUMN loan_id DROP NOT NULL,
-ALTER COLUMN loan_id SET DEFAULT '';
