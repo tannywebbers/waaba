@@ -7,7 +7,7 @@ const corsHeaders = {
     'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-// ✅ CHANGE 1: v18.0 → v25.0
+// ✅ CHANGE 1: v18.0 → v26.0
 const WHATSAPP_API_URL = 'https://graph.facebook.com/v26.0';
 
 const normalizeRecipient = (value: string): string => value.replace(/\D/g, '');
@@ -255,7 +255,7 @@ serve(async (req) => {
         try { data = rawResponse ? JSON.parse(rawResponse) : null; } catch { data = { raw: rawResponse }; }
 
         const diagnostics = {
-          graphApiVersion: 'v25.0',
+          graphApiVersion: 'v26.0',
           endpoint: requestUrl,
           phoneNumberId,
           recipient: normalizedTo,
