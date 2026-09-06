@@ -8,7 +8,7 @@ const corsHeaders = {
 };
 
 // ✅ CHANGE 1: v18.0 → v25.0
-const WHATSAPP_API_URL = 'https://graph.facebook.com/v25.0';
+const WHATSAPP_API_URL = 'https://graph.facebook.com/v26.0';
 
 const normalizeRecipient = (value: string): string => value.replace(/\D/g, '');
 
