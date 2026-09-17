@@ -32,6 +32,7 @@ const STATIC_FIELDS = [
   { value: 'phone_number', label: 'Phone Number' },
   { value: 'day_type', label: 'Day Type' },
   { value: 'current_date', label: 'Current Date (auto)' },
+  { value: 'message_id', label: 'Message ID (auto · unique 16 characters)' },
 ];
 
 function extractVariables(text: string): number[] {

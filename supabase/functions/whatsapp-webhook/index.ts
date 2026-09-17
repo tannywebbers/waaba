@@ -834,6 +834,14 @@ const processIncomingMessages = async (
 
     console.log('Message Insert - Success:', { sender: from, messageId, contactId, targetUserId });
 
+    // 🤖 Auto reply — rules always belong to the inbox owner (superUserId)
+    try {
+      await runAutoReply(supabase, settings, superUserId, targetUserId, contactId, from, content, type);
+    } catch (autoReplyError) {
+      console.error('❌ Auto reply error:', getErrorMessage(autoReplyError));
+    }
+
+
     await updateWebhookDiagnostics(supabase, targetUserId, {
       last_real_message_at: new Date().toISOString(),
       last_matched_phone_number_id: value.metadata?.phone_number_id || settings.phone_number_id || null,

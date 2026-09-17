@@ -53,6 +53,9 @@ function resolveField(field: string, contact: Contact, appTemplatesMap: Record<s
     case 'phone_number': return contact.phone;
     case 'day_type': return contact.dayType?.toString() || '';
     case 'current_date': return format(new Date(), 'dd MMM yyyy');
+    // Unique 16-character reference generated per send, keeps identical
+    // template bodies unique so WhatsApp does not flag them as spam.
+    case 'message_id': return generateMessageId();
     default: return '';
   }
 }
