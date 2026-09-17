@@ -6,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const WHATSAPP_API_URL = 'https://graph.facebook.com/v25.0';
+const WHATSAPP_API_URL = 'https://graph.facebook.com/v26.0';
 
 const okResponse = () => new Response('OK', { status: 200, headers: corsHeaders });
 
