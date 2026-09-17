@@ -793,3 +793,65 @@ CREATE POLICY "Authenticated users can delete their own chat media" ON storage.o
 -- ============================================================================
 -- DONE
 -- ============================================================================
+
+-- ============================================================================
+-- 9. AUTO REPLIES (idempotent)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.auto_replies (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    UUID NOT NULL,
+  name       TEXT NOT NULL,
+  is_active  BOOLEAN NOT NULL DEFAULT true,
+  steps      JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Bring an existing table up to date without failing
+ALTER TABLE public.auto_replies ADD COLUMN IF NOT EXISTS user_id    UUID;
+ALTER TABLE public.auto_replies ADD COLUMN IF NOT EXISTS name       TEXT;
+ALTER TABLE public.auto_replies ADD COLUMN IF NOT EXISTS is_active  BOOLEAN DEFAULT true;
+ALTER TABLE public.auto_replies ADD COLUMN IF NOT EXISTS steps      JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.auto_replies ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now();
+ALTER TABLE public.auto_replies ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+
+CREATE INDEX IF NOT EXISTS idx_auto_replies_user_id ON public.auto_replies (user_id);
+CREATE INDEX IF NOT EXISTS idx_auto_replies_active  ON public.auto_replies (user_id, is_active);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.auto_replies TO authenticated;
+GRANT ALL ON public.auto_replies TO service_role;
+
+ALTER TABLE public.auto_replies ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can view their own auto replies"   ON public.auto_replies;
+CREATE POLICY "Users can view their own auto replies"   ON public.auto_replies FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can insert their own auto replies" ON public.auto_replies;
+CREATE POLICY "Users can insert their own auto replies" ON public.auto_replies FOR INSERT WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can update their own auto replies" ON public.auto_replies;
+CREATE POLICY "Users can update their own auto replies" ON public.auto_replies FOR UPDATE USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can delete their own auto replies" ON public.auto_replies;
+CREATE POLICY "Users can delete their own auto replies" ON public.auto_replies FOR DELETE USING (auth.uid() = user_id);
+
+DROP TRIGGER IF EXISTS update_auto_replies_updated_at ON public.auto_replies;
+CREATE TRIGGER update_auto_replies_updated_at
+  BEFORE UPDATE ON public.auto_replies
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+ALTER TABLE public.auto_replies REPLICA IDENTITY FULL;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    CREATE PUBLICATION supabase_realtime;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'auto_replies'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.auto_replies;
+  END IF;
+END $$;
+
+-- ============================================================================
+-- DONE
+-- ============================================================================

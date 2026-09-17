@@ -12,6 +12,7 @@ import { useApps } from '@/hooks/useApps';
 import { useDialogBackButton } from '@/hooks/useDialogBackButton';
 import { Contact } from '@/types';
 import { format } from 'date-fns';
+import { generateMessageId } from '@/lib/utils/messageId';
 
 interface MetaTemplate {
   id: string; template_id: string; name: string; language: string; category: string; status: string; components: any;
@@ -53,6 +54,9 @@ function resolveField(field: string, contact: Contact, appTemplatesMap: Record<s
     case 'phone_number': return contact.phone;
     case 'day_type': return contact.dayType?.toString() || '';
     case 'current_date': return format(new Date(), 'dd MMM yyyy');
+    // Unique 16-character reference generated per send, keeps identical
+    // template bodies unique so WhatsApp does not flag them as spam.
+    case 'message_id': return generateMessageId();
     default: return '';
   }
 }
@@ -70,7 +74,8 @@ function mapNamedVariables(text: string, contact: Contact): string {
     .replace(/\{\{due_date\}\}/gi, calculateDueDate(contact.dayType))
     .replace(/\{\{day_type\}\}/gi, contact.dayType?.toString() || '')
     .replace(/\{\{current_date\}\}/gi, format(new Date(), 'dd MMM yyyy'))
-    .replace(/\{\{phone_number\}\}/gi, contact.phone);
+    .replace(/\{\{phone_number\}\}/gi, contact.phone)
+    .replace(/\{\{message_id\}\}/gi, () => generateMessageId());
 }
 
 const APP_VARIABLE_MAP: Record<string, (c: Contact) => string> = {
@@ -85,6 +90,7 @@ const APP_VARIABLE_MAP: Record<string, (c: Contact) => string> = {
   payment_details: (c) => c.accountDetails?.map(a => `${a.bank} - ${a.accountNumber} (${a.accountName})`).join('; ') || '',
   current_date: () => format(new Date(), 'dd MMM yyyy'),
   current_time: () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  message_id: () => generateMessageId(),
 };
 
 function resolveAppTemplate(body: string, contact: Contact): string {
