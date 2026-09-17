@@ -12,6 +12,7 @@ import { useApps } from '@/hooks/useApps';
 import { useDialogBackButton } from '@/hooks/useDialogBackButton';
 import { Contact } from '@/types';
 import { format } from 'date-fns';
+import { generateMessageId } from '@/lib/utils/messageId';
 
 interface MetaTemplate {
   id: string; template_id: string; name: string; language: string; category: string; status: string; components: any;
