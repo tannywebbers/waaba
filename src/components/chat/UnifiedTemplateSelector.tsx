@@ -74,7 +74,8 @@ function mapNamedVariables(text: string, contact: Contact): string {
     .replace(/\{\{due_date\}\}/gi, calculateDueDate(contact.dayType))
     .replace(/\{\{day_type\}\}/gi, contact.dayType?.toString() || '')
     .replace(/\{\{current_date\}\}/gi, format(new Date(), 'dd MMM yyyy'))
-    .replace(/\{\{phone_number\}\}/gi, contact.phone);
+    .replace(/\{\{phone_number\}\}/gi, contact.phone)
+    .replace(/\{\{message_id\}\}/gi, () => generateMessageId());
 }
 
 const APP_VARIABLE_MAP: Record<string, (c: Contact) => string> = {
@@ -89,6 +90,7 @@ const APP_VARIABLE_MAP: Record<string, (c: Contact) => string> = {
   payment_details: (c) => c.accountDetails?.map(a => `${a.bank} - ${a.accountNumber} (${a.accountName})`).join('; ') || '',
   current_date: () => format(new Date(), 'dd MMM yyyy'),
   current_time: () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  message_id: () => generateMessageId(),
 };
 
 function resolveAppTemplate(body: string, contact: Contact): string {
