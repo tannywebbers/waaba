@@ -78,6 +78,137 @@ const sendBlockedReply = async (settings: any, to: string) => {
   return response.ok;
 };
 
+// ─── AUTO REPLY ───────────────────────────────────────────────────────────────
+const normalizeText = (value: string) => (value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+const stepMatches = (step: any, incoming: string) => {
+  const text = normalizeText(incoming);
+  if (!text) return false;
+  const raw = Array.isArray(step?.keywords)
+    ? step.keywords
+    : typeof step?.keywords === 'string'
+      ? step.keywords.split(',')
+      : [];
+  const keywords = raw.map((k: string) => normalizeText(String(k))).filter(Boolean);
+  if (!keywords.length) return false;
+  if (step?.matchType === 'exact') return keywords.some((k: string) => text === k);
+  return keywords.some((k: string) => text.includes(k));
+};
+
+const findAutoReplyMatch = (replies: any[], incoming: string) => {
+  for (const reply of replies || []) {
+    if (reply?.is_active === false) continue;
+    const steps = Array.isArray(reply?.steps) ? reply.steps : [];
+    for (const step of steps) {
+      if (stepMatches(step, incoming)) return { reply, step };
+    }
+  }
+  return null;
+};
+
+const sendWhatsAppText = async (settings: any, to: string, body: string) => {
+  const response = await fetch(`${WHATSAPP_API_URL}/${settings.phone_number_id}/messages`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${settings.api_token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to, type: 'text', text: { preview_url: false, body } }),
+  });
+  const raw = await response.text();
+  let parsed: any = null;
+  try { parsed = JSON.parse(raw); } catch { /* non-JSON response */ }
+  return {
+    ok: response.ok,
+    wamid: parsed?.messages?.[0]?.id || null,
+    error: parsed?.error?.message || (response.ok ? null : raw?.slice(0, 300)),
+  };
+};
+
+/**
+ * Runs the user's auto replies against an incoming text message.
+ * Sends the first matching reply through the Cloud API and stores it as an
+ * outgoing message so it shows up in the conversation immediately.
+ */
+const runAutoReply = async (
+  supabase: any,
+  settings: any,
+  ownerUserId: string,
+  targetUserId: string,
+  contactId: string,
+  from: string,
+  incomingText: string,
+  incomingType: string,
+) => {
+  if (incomingType !== 'text' || !incomingText) return;
+
+  const { data: replies, error: repliesError } = await supabase
+    .from('auto_replies')
+    .select('id, name, is_active, steps')
+    .eq('user_id', ownerUserId)
+    .eq('is_active', true)
+    .order('created_at', { ascending: true });
+
+  if (repliesError) {
+    console.error('❌ Auto reply lookup failed:', repliesError.message);
+    await logWebhookEvent(supabase, {
+      user_id: targetUserId,
+      event_type: 'auto_reply_error',
+      direction: 'outgoing',
+      phone_number: from,
+      message_type: 'text',
+      error: repliesError.message,
+      payload: { contactId, ownerUserId },
+    });
+    return;
+  }
+
+  const match = findAutoReplyMatch(replies || [], incomingText);
+  if (!match) {
+    console.log('ℹ️ No auto reply matched:', { incomingText: incomingText.slice(0, 60), rules: (replies || []).length });
+    return;
+  }
+
+  const delaySeconds = Math.min(30, Math.max(0, Number(match.step?.delaySeconds) || 0));
+  if (delaySeconds > 0) await new Promise((r) => setTimeout(r, delaySeconds * 1000));
+
+  const replyBody = String(match.step?.message || '').trim();
+  if (!replyBody) return;
+
+  const result = await sendWhatsAppText(settings, from, replyBody);
+
+  const { error: insertError } = await supabase.from('messages').insert({
+    user_id: targetUserId,
+    contact_id: contactId,
+    content: replyBody,
+    type: 'text',
+    status: result.ok ? 'sent' : 'failed',
+    is_outgoing: true,
+    whatsapp_message_id: result.wamid,
+  });
+
+  if (insertError) console.error('❌ Auto reply message insert failed:', insertError.message);
+
+  await logWebhookEvent(supabase, {
+    user_id: targetUserId,
+    event_type: 'auto_reply_sent',
+    direction: 'outgoing',
+    phone_number: from,
+    message_type: 'text',
+    status: result.ok ? 'sent' : 'failed',
+    error: result.error,
+    payload: {
+      contactId,
+      autoReplyId: match.reply?.id,
+      autoReplyName: match.reply?.name,
+      matchType: match.step?.matchType || 'contains',
+      keywords: match.step?.keywords,
+      trigger: incomingText.slice(0, 120),
+      wamid: result.wamid,
+      delaySeconds,
+    },
+  });
+
+  console.log(result.ok ? '🤖 Auto reply sent' : '🤖 Auto reply failed', { contactId, rule: match.reply?.name, error: result.error });
+};
+
 const getSettingsByUserId = async (supabase: any, userId: string) => {
   const { data, error } = await supabase
     .from('whatsapp_settings')
