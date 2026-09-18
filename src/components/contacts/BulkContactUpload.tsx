@@ -102,8 +102,8 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
       if (contact.appType && typeof contact.appType !== 'string') {
         rowErrors.push('appType must be a string');
       }
-      if (contact.dayType !== undefined && ![-1, 0].includes(contact.dayType)) {
-        rowErrors.push('dayType must be -1 or 0');
+      if (contact.dayType !== undefined && Number.isNaN(Number(contact.dayType))) {
+        rowErrors.push('dayType must be a number (e.g. 0, -1, -7)');
       }
 
       if (rowErrors.length > 0) {
