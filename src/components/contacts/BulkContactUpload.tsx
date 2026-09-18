@@ -28,39 +28,36 @@ interface BulkContactUploadProps {
 
 const DEMO_JSON: ContactJSON[] = [
   {
-    loanId: "LOAN001",
-    name: "John Doe",
-    phone: "2348012345678",
+    loanId: "LN-100241",
+    name: "Chinedu Okafor",
+    phone: "08031234567",
     amount: 50000,
     appType: "",
     dayType: 0,
     accountDetails: [
-      {
-        bank: "Zenith Bank",
-        accountNumber: "1234567890",
-        accountName: "John Doe"
-      }
+      { bank: "Zenith Bank", accountNumber: "2088341170", accountName: "Chinedu Okafor" }
     ]
   },
   {
-    loanId: "LOAN002",
-    name: "Jane Smith",
+    loanId: "LN-100242",
+    name: "Aisha Bello",
     phone: "2348098765432",
     amount: 75000,
     appType: "",
     dayType: -1,
     accountDetails: [
-      {
-        bank: "GTBank",
-        accountNumber: "0987654321",
-        accountName: "Jane Smith"
-      },
-      {
-        bank: "First Bank",
-        accountNumber: "1122334455",
-        accountName: "Jane Smith"
-      }
+      { bank: "GTBank", accountNumber: "0123456789", accountName: "Aisha Bello" },
+      { bank: "First Bank", accountNumber: "3112233445", accountName: "Aisha Bello" }
     ]
+  },
+  {
+    loanId: "LN-100243",
+    name: "Tunde Adeyemi",
+    phone: "+234 802 555 0134",
+    amount: 120000,
+    appType: "",
+    dayType: -7,
+    accountDetails: []
   }
 ];
 
