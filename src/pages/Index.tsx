@@ -38,18 +38,15 @@ const Index = () => {
   // Triggers: ?chat=<id> URL, postMessage from service worker, or in-app
   // 'open-chat' CustomEvent fallback (used by direct Notification API).
   useEffect(() => {
-    const openChatById = (contactId: string | null | undefined) => {
-      if (!contactId) return;
+    const openChatById = (key: string | null | undefined) => {
+      if (!key) return;
       const tryOpen = (attempt = 0) => {
         const state = useAppStore.getState();
-        const chat = state.chats.find((c) => c.id === contactId);
+        // Match by chat/contact id OR by phone number, so the URL stays readable
+        const chat = state.chats.find((c) => c.id === key)
+          || state.chats.find((c) => (c.contact?.phone || c.phone) === key);
         if (chat) {
           state.setActiveChat(chat);
-          // Clean the URL after opening so refresh doesn't re-trigger
-          if (window.location.search.includes('chat=')) {
-            const cleanUrl = window.location.pathname + window.location.hash;
-            window.history.replaceState({}, '', cleanUrl);
-          }
           return;
         }
         if (attempt < 20) setTimeout(() => tryOpen(attempt + 1), 250);
@@ -57,10 +54,21 @@ const Index = () => {
       tryOpen();
     };
 
-    // 1. URL param on initial load
+    // 1. URL param on initial load / refresh (chat stays open)
     const params = new URLSearchParams(window.location.search);
     const initialChat = params.get('chat');
     if (initialChat) openChatById(initialChat);
+
+    // 4. Browser back/forward between chat + list
+    const onPop = () => {
+      const chatParam = new URLSearchParams(window.location.search).get('chat');
+      if (chatParam) openChatById(chatParam);
+      else useAppStore.getState().setActiveChat(null);
+    };
+    window.addEventListener('popstate', onPop);
+    window.addEventListener('beforeunload', () => {
+      window.removeEventListener('popstate', onPop);
+    });
 
     // 2. Service worker → page postMessage (notification click while app open or PWA wakes)
     const onSwMessage = (event: MessageEvent) => {
