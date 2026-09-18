@@ -89,14 +89,16 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
     contacts.forEach((contact, index) => {
       const rowErrors: string[] = [];
 
-      if (!contact.loanId || typeof contact.loanId !== 'string') {
-        rowErrors.push('loanId is required');
+      if (contact.loanId !== undefined && contact.loanId !== null && typeof contact.loanId !== 'string') {
+        rowErrors.push('loanId must be text');
       }
       if (!contact.name || typeof contact.name !== 'string') {
         rowErrors.push('name is required');
       }
-      if (!contact.phone || typeof contact.phone !== 'string') {
+      if (contact.phone === undefined || contact.phone === null || `${contact.phone}`.trim() === '') {
         rowErrors.push('phone is required');
+      } else if (!normalizePhoneNumber(`${contact.phone}`)) {
+        rowErrors.push('phone is not a valid number');
       }
       // appType is free-form now (managed in Settings › Apps)
       if (contact.appType && typeof contact.appType !== 'string') {
