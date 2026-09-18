@@ -163,15 +163,39 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
     messagesContainerRef.current.scrollTo({ top: messagesContainerRef.current.scrollHeight, behavior });
   }, []);
 
-  // Scroll to last message when chat opens
+  // Restore the reading position for this chat (or jump to the last message)
   useEffect(() => {
     if (!activeChat) return;
-    // Run twice: once now, once after layout settles, to handle async message render
-    scrollToBottom('auto');
-    const id = requestAnimationFrame(() => scrollToBottom('auto'));
-    const t = setTimeout(() => scrollToBottom('auto'), 80);
+    const key = `chat-scroll-${activeChat.id}`;
+    const restore = () => {
+      const el = messagesContainerRef.current;
+      if (!el) return;
+      const saved = Number(sessionStorage.getItem(key) || 'NaN');
+      if (!Number.isNaN(saved) && saved > 0 && saved <= el.scrollHeight) {
+        el.scrollTo({ top: saved, behavior: 'auto' });
+      } else {
+        scrollToBottom('auto');
+      }
+    };
+    restore();
+    const id = requestAnimationFrame(restore);
+    const t = setTimeout(restore, 120);
     return () => { cancelAnimationFrame(id); clearTimeout(t); };
   }, [activeChat?.id, scrollToBottom]);
+
+  // Remember the reading position while scrolling
+  useEffect(() => {
+    const el = messagesContainerRef.current;
+    if (!el || !activeChat) return;
+    const key = `chat-scroll-${activeChat.id}`;
+    const onScroll = () => {
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+      if (atBottom) sessionStorage.removeItem(key);
+      else sessionStorage.setItem(key, String(el.scrollTop));
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [activeChat?.id]);
 
   // Scroll to bottom when message count grows (new send/receive while open)
   useEffect(() => { scrollToBottom('smooth'); }, [chatMessages.length, scrollToBottom]);
