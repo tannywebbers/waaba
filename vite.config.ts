@@ -48,6 +48,8 @@ export default defineConfig(({ mode }) => ({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        // FCM push + notification-click handling lives in one service worker
+        importScripts: ["/fcm-sw.js"],
         cleanupOutdatedCaches: true,
         // skipWaiting: false means the SW won't auto-activate — prompt handles it
         skipWaiting: false,

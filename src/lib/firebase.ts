@@ -12,13 +12,19 @@
 
 import { supabase } from '@/integrations/supabase/client';
 
+// Full web app id — a valid value has 4 segments: 1:<sender>:web:<hash>
+const FULL_APP_ID = "1:155860257722:web:ad45d28788226c1ec12b83";
+const envAppId = import.meta.env.VITE_FIREBASE_APP_ID as string | undefined;
+// Env values that are truncated (e.g. "1:155860257722:web") break getToken()
+const APP_ID = envAppId && envAppId.split(':').length >= 4 ? envAppId : FULL_APP_ID;
+
 const FIREBASE_CONFIG = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyBbM4_1d7wcKy7fRDTWJAmNLSFHSYw3Df8",
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "waba4all.firebaseapp.com",
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "waba4all",
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "waba4all.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "155860257722",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:155860257722:web",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || APP_ID.split(':')[1],
+  appId: APP_ID,
 };
 
 const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || "BN76YKCyiWRL9qGFqWnwq4muGnpVsiDEW5Zat8Uyca0ljGYavlL0FUyRti9JZX-sKl6RLSWgzAlWrZsB-Cwy2iw";
