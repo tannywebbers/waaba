@@ -84,8 +84,24 @@ const Index = () => {
     return () => {
       navigator.serviceWorker?.removeEventListener('message', onSwMessage);
       window.removeEventListener('open-chat', onCustom);
+      window.removeEventListener('popstate', onPop);
     };
   }, []);
+
+  // 🔗 Keep the open chat in the address bar so a refresh reopens it
+  useEffect(() => {
+    const current = new URLSearchParams(window.location.search).get('chat');
+    const target = activeChat?.id || null;
+    if (current === target) return;
+
+    const params = new URLSearchParams(window.location.search);
+    if (target) params.set('chat', target);
+    else params.delete('chat');
+
+    const query = params.toString();
+    const url = `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`;
+    window.history.replaceState({}, '', url);
+  }, [activeChat?.id]);
 
   // Load data from server on auth + initialize FCM
   useEffect(() => {
