@@ -112,9 +112,9 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
         errors.push(`Row ${index + 1}: ${rowErrors.join(', ')}`);
       } else {
         valid.push({
-          loanId: contact.loanId,
+          loanId: contact.loanId || '',
           name: contact.name,
-          phone: contact.phone,
+          phone: `${contact.phone}`.trim(),
           amount: contact.amount ? Number(contact.amount) : undefined,
           appType: contact.appType || '',
           dayType: contact.dayType ?? 0,
