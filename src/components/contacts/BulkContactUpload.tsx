@@ -28,39 +28,36 @@ interface BulkContactUploadProps {
 
 const DEMO_JSON: ContactJSON[] = [
   {
-    loanId: "LOAN001",
-    name: "John Doe",
-    phone: "2348012345678",
+    loanId: "LN-100241",
+    name: "Chinedu Okafor",
+    phone: "08031234567",
     amount: 50000,
     appType: "",
     dayType: 0,
     accountDetails: [
-      {
-        bank: "Zenith Bank",
-        accountNumber: "1234567890",
-        accountName: "John Doe"
-      }
+      { bank: "Zenith Bank", accountNumber: "2088341170", accountName: "Chinedu Okafor" }
     ]
   },
   {
-    loanId: "LOAN002",
-    name: "Jane Smith",
+    loanId: "LN-100242",
+    name: "Aisha Bello",
     phone: "2348098765432",
     amount: 75000,
     appType: "",
     dayType: -1,
     accountDetails: [
-      {
-        bank: "GTBank",
-        accountNumber: "0987654321",
-        accountName: "Jane Smith"
-      },
-      {
-        bank: "First Bank",
-        accountNumber: "1122334455",
-        accountName: "Jane Smith"
-      }
+      { bank: "GTBank", accountNumber: "0123456789", accountName: "Aisha Bello" },
+      { bank: "First Bank", accountNumber: "3112233445", accountName: "Aisha Bello" }
     ]
+  },
+  {
+    loanId: "LN-100243",
+    name: "Tunde Adeyemi",
+    phone: "+234 802 555 0134",
+    amount: 120000,
+    appType: "",
+    dayType: -7,
+    accountDetails: []
   }
 ];
 
@@ -92,30 +89,32 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
     contacts.forEach((contact, index) => {
       const rowErrors: string[] = [];
 
-      if (!contact.loanId || typeof contact.loanId !== 'string') {
-        rowErrors.push('loanId is required');
+      if (contact.loanId !== undefined && contact.loanId !== null && typeof contact.loanId !== 'string') {
+        rowErrors.push('loanId must be text');
       }
       if (!contact.name || typeof contact.name !== 'string') {
         rowErrors.push('name is required');
       }
-      if (!contact.phone || typeof contact.phone !== 'string') {
+      if (contact.phone === undefined || contact.phone === null || `${contact.phone}`.trim() === '') {
         rowErrors.push('phone is required');
+      } else if (!normalizePhoneNumber(`${contact.phone}`)) {
+        rowErrors.push('phone is not a valid number');
       }
       // appType is free-form now (managed in Settings › Apps)
       if (contact.appType && typeof contact.appType !== 'string') {
         rowErrors.push('appType must be a string');
       }
-      if (contact.dayType !== undefined && ![-1, 0].includes(contact.dayType)) {
-        rowErrors.push('dayType must be -1 or 0');
+      if (contact.dayType !== undefined && Number.isNaN(Number(contact.dayType))) {
+        rowErrors.push('dayType must be a number (e.g. 0, -1, -7)');
       }
 
       if (rowErrors.length > 0) {
         errors.push(`Row ${index + 1}: ${rowErrors.join(', ')}`);
       } else {
         valid.push({
-          loanId: contact.loanId,
+          loanId: contact.loanId || '',
           name: contact.name,
-          phone: contact.phone,
+          phone: `${contact.phone}`.trim(),
           amount: contact.amount ? Number(contact.amount) : undefined,
           appType: contact.appType || '',
           dayType: contact.dayType ?? 0,
@@ -257,6 +256,21 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
           <Upload className="h-4 w-4 mr-2" />
           Upload JSON
         </Button>
+      </div>
+
+      <div className="rounded-lg border border-input bg-muted/40 p-3">
+        <div className="flex items-center gap-2 mb-2">
+          <FileJson className="h-4 w-4 text-primary" />
+          <p className="text-xs font-medium">How the file should look</p>
+        </div>
+        <p className="text-[11px] text-muted-foreground mb-2">
+          A list of contacts. Only <span className="font-medium text-foreground">name</span> and{' '}
+          <span className="font-medium text-foreground">phone</span> are required — everything else is optional.
+          Numbers can be written as 0803…, 234803… or +234 803…
+        </p>
+        <pre className="max-h-40 overflow-auto rounded bg-background p-2 text-[10px] leading-relaxed">
+{JSON.stringify(DEMO_JSON, null, 2)}
+        </pre>
       </div>
 
       {errors.length > 0 && (

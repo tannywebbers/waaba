@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { useState, useEffect, useCallback } from 'react';
-import { X, User, Phone, CreditCard, Banknote, Users, Plus, Calendar, Smartphone, Trash2, Tag } from 'lucide-react';
+import { X, User, Phone, CreditCard, Banknote, Users, Plus, Calendar, Smartphone, Trash2, Tag, FileJson } from 'lucide-react';
+import { BulkContactUpload } from '@/components/contacts/BulkContactUpload';
 import { useAppStore } from '@/stores/appStore';
 import { useAuth } from '@/hooks/useAuth';
 import { useSharedInbox } from '@/hooks/useSharedInbox';
@@ -311,10 +312,15 @@ export function AddContactModal() {
         </DialogHeader>
 
         <Tabs defaultValue="single" className="mt-4">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="single" className="gap-2"><User className="h-4 w-4" /> Single Contact</TabsTrigger>
-            <TabsTrigger value="bulk" className="gap-2"><Users className="h-4 w-4" /> Bulk Import</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="single" className="gap-2"><User className="h-4 w-4" /> Single</TabsTrigger>
+            <TabsTrigger value="bulk" className="gap-2"><Users className="h-4 w-4" /> Bulk Paste</TabsTrigger>
+            <TabsTrigger value="file" className="gap-2"><FileJson className="h-4 w-4" /> Import File</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="file" className="mt-4">
+            <BulkContactUpload onSuccess={handleClose} />
+          </TabsContent>
 
           <TabsContent value="single" className="mt-4">
             <form onSubmit={handleSingleSubmit} className="space-y-4">
