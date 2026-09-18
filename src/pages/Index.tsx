@@ -66,9 +66,6 @@ const Index = () => {
       else useAppStore.getState().setActiveChat(null);
     };
     window.addEventListener('popstate', onPop);
-    window.addEventListener('beforeunload', () => {
-      window.removeEventListener('popstate', onPop);
-    });
 
     // 2. Service worker → page postMessage (notification click while app open or PWA wakes)
     const onSwMessage = (event: MessageEvent) => {
