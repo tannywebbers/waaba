@@ -258,6 +258,21 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
         </Button>
       </div>
 
+      <div className="rounded-lg border border-input bg-muted/40 p-3">
+        <div className="flex items-center gap-2 mb-2">
+          <FileJson className="h-4 w-4 text-primary" />
+          <p className="text-xs font-medium">How the file should look</p>
+        </div>
+        <p className="text-[11px] text-muted-foreground mb-2">
+          A list of contacts. Only <span className="font-medium text-foreground">name</span> and{' '}
+          <span className="font-medium text-foreground">phone</span> are required — everything else is optional.
+          Numbers can be written as 0803…, 234803… or +234 803…
+        </p>
+        <pre className="max-h-40 overflow-auto rounded bg-background p-2 text-[10px] leading-relaxed">
+{JSON.stringify(DEMO_JSON, null, 2)}
+        </pre>
+      </div>
+
       {errors.length > 0 && (
         <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
           <p className="text-sm font-medium text-destructive mb-2">Validation Errors:</p>
