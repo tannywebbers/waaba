@@ -75,11 +75,12 @@ export async function requestPushPermission(): Promise<string | null> {
 
     const { getToken } = await import('firebase/messaging');
     
-    // Register service worker for FCM
+    // Use the single app service worker (/sw.js) — it imports the FCM handlers,
+    // so push works while the site is closed and clicks open the exact chat.
     let sw: ServiceWorkerRegistration;
     try {
-      sw = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-      // Wait for the service worker to be ready
+      sw = await navigator.serviceWorker.getRegistration('/')
+        || await navigator.serviceWorker.register('/sw.js', { scope: '/' });
       await navigator.serviceWorker.ready;
     } catch (swErr) {
       console.error('Service worker registration failed:', swErr);
