@@ -38,6 +38,57 @@ export function AutoReplySettings() {
   const [draftSteps, setDraftSteps] = useState<AutoReplyStep[]>([newStep()]);
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const { user } = useAuth();
+  const [appTemplates, setAppTemplates] = useState<any[]>([]);
+  const messageRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
+  const templateFileRef = useRef<HTMLInputElement>(null);
+  const templateTargetIndex = useRef<number>(0);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('app_templates' as any)
+      .select('id, name, body')
+      .eq('user_id', user.id)
+      .order('name')
+      .then(({ data }) => setAppTemplates((data as any[]) || []));
+  }, [user]);
+
+  /** Inserts text into a step's reply message at the caret. */
+  const insertIntoMessage = (index: number, text: string) => {
+    const step = draftSteps[index];
+    if (!step) return;
+    const el = messageRefs.current[step.id] || null;
+    const { value, caret } = insertAtCursor(el, step.message || '', text);
+    updateStep(index, { message: value });
+    requestAnimationFrame(() => {
+      if (el) {
+        el.focus();
+        el.setSelectionRange(caret, caret);
+      }
+    });
+  };
+
+  const importTemplateFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const index = templateTargetIndex.current;
+    try {
+      const text = await file.text();
+      let body = text;
+      if (file.name.toLowerCase().endsWith('.json')) {
+        const parsed = JSON.parse(text);
+        const first = Array.isArray(parsed) ? parsed[0] : parsed;
+        body = first?.body || first?.message || '';
+        if (!body) throw new Error('No "body" found in that file');
+      }
+      insertIntoMessage(index, String(body).trim());
+      toast({ title: 'Template added to the reply message' });
+    } catch (err: any) {
+      toast({ title: 'Could not read that file', description: err?.message, variant: 'destructive' });
+    }
+  };
 
   const startNew = () => {
     setEditing({ id: '', userId: '', name: '', isActive: true, steps: [] });
