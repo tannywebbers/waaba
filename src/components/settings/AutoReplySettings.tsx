@@ -305,13 +305,51 @@ export function AutoReplySettings() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Reply message</Label>
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <Label>Reply message</Label>
+                    <div className="flex items-center gap-2">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" size="sm" className="gap-1 h-8">
+                            <FileText className="h-3.5 w-3.5" /> Use app template
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="max-h-64 overflow-y-auto">
+                          {appTemplates.length === 0 ? (
+                            <DropdownMenuItem disabled>No app templates yet</DropdownMenuItem>
+                          ) : (
+                            appTemplates.map((t) => (
+                              <DropdownMenuItem
+                                key={t.id}
+                                onClick={() => insertIntoMessage(index, t.body || '')}
+                              >
+                                {t.name}
+                              </DropdownMenuItem>
+                            ))
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1 h-8"
+                        onClick={() => {
+                          templateTargetIndex.current = index;
+                          templateFileRef.current?.click();
+                        }}
+                      >
+                        <Upload className="h-3.5 w-3.5" /> Import
+                      </Button>
+                    </div>
+                  </div>
                   <Textarea
+                    ref={(el) => { messageRefs.current[step.id] = el; }}
                     value={step.message}
                     onChange={(e) => updateStep(index, { message: e.target.value })}
-                    placeholder="Type the message to send back..."
+                    placeholder="Hello {{customer_name}}, your loan {{loan_id}} is due on {{due_date}}..."
                     rows={3}
                   />
+                  <VariablePills onInsert={(v) => insertIntoMessage(index, `{{${v}}}`)} />
                 </div>
 
                 <div className="space-y-2">
