@@ -35,6 +35,62 @@ function normalize(value: string): string {
   return (value || '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
+/** Formats a due date as dd/mm/yyyy, dayType days before today. Mirrors the webhook's calcDueDate. */
+function calcDueDate(dayType: unknown): string {
+  if (dayType === null || dayType === undefined || dayType === '') return '';
+  const d = new Date();
+  d.setDate(d.getDate() - Number(dayType || 0));
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${dd}/${mm}/${d.getFullYear()}`;
+}
+
+/**
+ * Replaces {{variable}} placeholders in an auto reply message with the contact's
+ * real details. Mirrors supabase/functions/whatsapp-webhook/index.ts so client-side
+ * previews/sends match what the live webhook path produces.
+ */
+export async function resolveAutoReplyVariables(contactId: string, body: string): Promise<string> {
+  if (!body || !/\{\{\s*\w+\s*\}\}/.test(body)) return body;
+
+  const { data: contact } = await supabase
+    .from('contacts')
+    .select('name, phone, loan_id, amount, app_type, day_type')
+    .eq('id', contactId)
+    .maybeSingle();
+
+  let accounts: any[] = [];
+  if (/account_number|payment_details/.test(body)) {
+    const { data } = await supabase
+      .from('account_details')
+      .select('bank, account_number, account_name')
+      .eq('contact_id', contactId);
+    accounts = data || [];
+  }
+
+  const now = new Date();
+  const map: Record<string, string> = {
+    customer_name: contact?.name || '',
+    loan_id: contact?.loan_id || '',
+    amount: contact?.amount !== null && contact?.amount !== undefined ? String(contact.amount) : '',
+    phone_number: contact?.phone || '',
+    app_name: contact?.app_type || '',
+    day_type: contact?.day_type !== null && contact?.day_type !== undefined ? String(contact.day_type) : '',
+    due_date: calcDueDate(contact?.day_type),
+    account_number: accounts[0]?.account_number || '',
+    payment_details: accounts
+      .map((a) => `${a.bank} - ${a.account_number} (${a.account_name})`)
+      .join('; '),
+    current_date: now.toLocaleDateString('en-NG', { year: 'numeric', month: 'long', day: 'numeric' }),
+    current_time: now.toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' }),
+  };
+
+  return body.replace(/\{\{\s*(\w+)\s*\}\}/g, (match, name) => {
+    const key = String(name).toLowerCase();
+    return key in map ? map[key] : match;
+  });
+}
+
 /** Returns true when the incoming text matches a step's keywords. */
 export function stepMatches(step: AutoReplyStep, incoming: string): boolean {
   const text = normalize(incoming);
@@ -222,7 +278,7 @@ export async function runAutoReply(params: {
         phoneNumberId: settings.phone_number_id,
         to,
         type: 'text',
-        content: match.step.message,
+        content: messageBody,
       },
     });
 
@@ -231,7 +287,7 @@ export async function runAutoReply(params: {
     await supabase.from('messages').insert({
       user_id: userId,
       contact_id: contactId,
-      content: match.step.message,
+      content: messageBody,
       type: 'text',
       status: data?.success ? 'sent' : 'failed',
       is_outgoing: true,
