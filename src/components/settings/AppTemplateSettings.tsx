@@ -21,7 +21,8 @@ interface AppTemplate {
   updated_at: string;
 }
 
-import { APP_VARIABLES, insertAtCursor } from '@/lib/templateVariables';
+import { insertAtCursor } from '@/lib/templateVariables';
+import { VariablePills } from '@/components/settings/VariablePills';
 
 export function AppTemplateSettings() {
   const { user } = useAuth();
@@ -227,21 +228,7 @@ export function AppTemplateSettings() {
             </div>
 
             {/* Variable Chips */}
-            <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">Click to insert variable:</Label>
-              <div className="flex flex-wrap gap-1.5">
-                {APP_VARIABLES.map(v => (
-                  <button
-                    key={v.value}
-                    type="button"
-                    onClick={() => insertVariable(v.value)}
-                    className="px-2.5 py-1 text-xs rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-                  >
-                    {`{{${v.value}}}`}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <VariablePills onInsert={insertVariable} />
 
             {/* Preview */}
             {body && (
