@@ -209,6 +209,8 @@ export async function runAutoReply(params: {
 
     if (!settings?.api_token || !settings?.phone_number_id) return false;
 
+    const messageBody = await resolveAutoReplyVariables(contactId, match.step.message);
+
     const delay = Math.max(0, Number(match.step.delaySeconds) || 0);
     if (delay > 0) await new Promise((r) => setTimeout(r, delay * 1000));
 

@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Plus, Pencil, Trash2, Save, X, Eye, Download, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,19 +21,8 @@ interface AppTemplate {
   updated_at: string;
 }
 
-const APP_VARIABLES = [
-  { value: 'customer_name', label: 'Customer Name' },
-  { value: 'loan_id', label: 'Loan ID' },
-  { value: 'amount', label: 'Amount' },
-  { value: 'due_date', label: 'Due Date' },
-  { value: 'account_number', label: 'Account Number' },
-  { value: 'phone_number', label: 'Phone Number' },
-  { value: 'app_name', label: 'App Name' },
-  { value: 'day_type', label: 'Day Type' },
-  { value: 'current_date', label: 'Current Date' },
-  { value: 'current_time', label: 'Current Time' },
-  { value: 'payment_details', label: 'Payment Details' },
-];
+import { insertAtCursor } from '@/lib/templateVariables';
+import { VariablePills } from '@/components/settings/VariablePills';
 
 export function AppTemplateSettings() {
   const { user } = useAuth();
@@ -46,6 +35,7 @@ export function AppTemplateSettings() {
   const [body, setBody] = useState('');
   const [saving, setSaving] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState<AppTemplate | null>(null);
+  const bodyRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     if (user) fetchTemplates();
@@ -78,7 +68,15 @@ export function AppTemplateSettings() {
   };
 
   const insertVariable = (varName: string) => {
-    setBody(prev => prev + `{{${varName}}}`);
+    const el = bodyRef.current;
+    const { value, caret } = insertAtCursor(el, body, `{{${varName}}}`);
+    setBody(value);
+    requestAnimationFrame(() => {
+      if (el) {
+        el.focus();
+        el.setSelectionRange(caret, caret);
+      }
+    });
   };
 
   const handleSave = async () => {
@@ -221,6 +219,7 @@ export function AppTemplateSettings() {
             <div className="space-y-2">
               <Label>Template Body</Label>
               <Textarea
+                ref={bodyRef}
                 value={body}
                 onChange={e => setBody(e.target.value)}
                 placeholder="Hello {{customer_name}}, your loan {{loan_id}} is due..."
@@ -229,21 +228,7 @@ export function AppTemplateSettings() {
             </div>
 
             {/* Variable Chips */}
-            <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">Click to insert variable:</Label>
-              <div className="flex flex-wrap gap-1.5">
-                {APP_VARIABLES.map(v => (
-                  <button
-                    key={v.value}
-                    type="button"
-                    onClick={() => insertVariable(v.value)}
-                    className="px-2.5 py-1 text-xs rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-                  >
-                    {`{{${v.value}}}`}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <VariablePills onInsert={insertVariable} />
 
             {/* Preview */}
             {body && (

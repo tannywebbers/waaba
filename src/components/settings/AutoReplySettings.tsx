@@ -1,6 +1,14 @@
 // @ts-nocheck
-import { useRef, useState } from 'react';
-import { Plus, Trash2, Pencil, Download, Upload, MessageSquareReply, X, Save } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Plus, Trash2, Pencil, Download, Upload, MessageSquareReply, X, Save, FileText } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { insertAtCursor } from '@/lib/templateVariables';
+import { VariablePills } from '@/components/settings/VariablePills';
+import { KeywordPillInput } from '@/components/settings/KeywordPillInput';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -30,6 +38,57 @@ export function AutoReplySettings() {
   const [draftSteps, setDraftSteps] = useState<AutoReplyStep[]>([newStep()]);
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const { user } = useAuth();
+  const [appTemplates, setAppTemplates] = useState<any[]>([]);
+  const messageRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
+  const templateFileRef = useRef<HTMLInputElement>(null);
+  const templateTargetIndex = useRef<number>(0);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('app_templates' as any)
+      .select('id, name, body')
+      .eq('user_id', user.id)
+      .order('name')
+      .then(({ data }) => setAppTemplates((data as any[]) || []));
+  }, [user]);
+
+  /** Inserts text into a step's reply message at the caret. */
+  const insertIntoMessage = (index: number, text: string) => {
+    const step = draftSteps[index];
+    if (!step) return;
+    const el = messageRefs.current[step.id] || null;
+    const { value, caret } = insertAtCursor(el, step.message || '', text);
+    updateStep(index, { message: value });
+    requestAnimationFrame(() => {
+      if (el) {
+        el.focus();
+        el.setSelectionRange(caret, caret);
+      }
+    });
+  };
+
+  const importTemplateFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const index = templateTargetIndex.current;
+    try {
+      const text = await file.text();
+      let body = text;
+      if (file.name.toLowerCase().endsWith('.json')) {
+        const parsed = JSON.parse(text);
+        const first = Array.isArray(parsed) ? parsed[0] : parsed;
+        body = first?.body || first?.message || '';
+        if (!body) throw new Error('No "body" found in that file');
+      }
+      insertIntoMessage(index, String(body).trim());
+      toast({ title: 'Template added to the reply message' });
+    } catch (err: any) {
+      toast({ title: 'Could not read that file', description: err?.message, variant: 'destructive' });
+    }
+  };
 
   const startNew = () => {
     setEditing({ id: '', userId: '', name: '', isActive: true, steps: [] });
@@ -160,6 +219,7 @@ export function AutoReplySettings() {
       </div>
 
       <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
+      <input ref={templateFileRef} type="file" accept=".json,.txt" className="hidden" onChange={importTemplateFile} />
 
       <div className="flex flex-wrap gap-2">
         <Button onClick={startNew} className="gap-2">
@@ -216,12 +276,12 @@ export function AutoReplySettings() {
 
                 <div className="space-y-2">
                   <Label>Trigger words / keywords</Label>
-                  <Input
-                    value={Array.isArray(step.keywords) ? step.keywords.join(', ') : step.keywords}
-                    onChange={(e) => updateStep(index, { keywords: e.target.value.split(',') })}
-                    placeholder="hi, hello, good morning"
+                  <KeywordPillInput
+                    keywords={Array.isArray(step.keywords)
+                      ? step.keywords
+                      : String(step.keywords || '').split(',').map((k) => k.trim()).filter(Boolean)}
+                    onChange={(keywords) => updateStep(index, { keywords })}
                   />
-                  <p className="text-xs text-muted-foreground">Separate several keywords with commas.</p>
                 </div>
 
                 <div className="space-y-2">
@@ -246,13 +306,51 @@ export function AutoReplySettings() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Reply message</Label>
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <Label>Reply message</Label>
+                    <div className="flex items-center gap-2">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" size="sm" className="gap-1 h-8">
+                            <FileText className="h-3.5 w-3.5" /> Use app template
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="max-h-64 overflow-y-auto">
+                          {appTemplates.length === 0 ? (
+                            <DropdownMenuItem disabled>No app templates yet</DropdownMenuItem>
+                          ) : (
+                            appTemplates.map((t) => (
+                              <DropdownMenuItem
+                                key={t.id}
+                                onClick={() => insertIntoMessage(index, t.body || '')}
+                              >
+                                {t.name}
+                              </DropdownMenuItem>
+                            ))
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1 h-8"
+                        onClick={() => {
+                          templateTargetIndex.current = index;
+                          templateFileRef.current?.click();
+                        }}
+                      >
+                        <Upload className="h-3.5 w-3.5" /> Import
+                      </Button>
+                    </div>
+                  </div>
                   <Textarea
+                    ref={(el) => { messageRefs.current[step.id] = el; }}
                     value={step.message}
                     onChange={(e) => updateStep(index, { message: e.target.value })}
-                    placeholder="Type the message to send back..."
+                    placeholder="Hello {{customer_name}}, your loan {{loan_id}} is due on {{due_date}}..."
                     rows={3}
                   />
+                  <VariablePills onInsert={(v) => insertIntoMessage(index, `{{${v}}}`)} />
                 </div>
 
                 <div className="space-y-2">
