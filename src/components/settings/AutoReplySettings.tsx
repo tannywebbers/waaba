@@ -1,6 +1,14 @@
 // @ts-nocheck
-import { useRef, useState } from 'react';
-import { Plus, Trash2, Pencil, Download, Upload, MessageSquareReply, X, Save } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Plus, Trash2, Pencil, Download, Upload, MessageSquareReply, X, Save, FileText } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { insertAtCursor } from '@/lib/templateVariables';
+import { VariablePills } from '@/components/settings/VariablePills';
+import { KeywordPillInput } from '@/components/settings/KeywordPillInput';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
