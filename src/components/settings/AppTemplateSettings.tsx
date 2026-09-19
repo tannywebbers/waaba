@@ -218,6 +218,7 @@ export function AppTemplateSettings() {
             <div className="space-y-2">
               <Label>Template Body</Label>
               <Textarea
+                ref={bodyRef}
                 value={body}
                 onChange={e => setBody(e.target.value)}
                 placeholder="Hello {{customer_name}}, your loan {{loan_id}} is due..."
