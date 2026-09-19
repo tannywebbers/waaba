@@ -34,6 +34,7 @@ export function AppTemplateSettings() {
   const [body, setBody] = useState('');
   const [saving, setSaving] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState<AppTemplate | null>(null);
+  const bodyRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     if (user) fetchTemplates();
@@ -66,7 +67,15 @@ export function AppTemplateSettings() {
   };
 
   const insertVariable = (varName: string) => {
-    setBody(prev => prev + `{{${varName}}}`);
+    const el = bodyRef.current;
+    const { value, caret } = insertAtCursor(el, body, `{{${varName}}}`);
+    setBody(value);
+    requestAnimationFrame(() => {
+      if (el) {
+        el.focus();
+        el.setSelectionRange(caret, caret);
+      }
+    });
   };
 
   const handleSave = async () => {
