@@ -275,12 +275,12 @@ export function AutoReplySettings() {
 
                 <div className="space-y-2">
                   <Label>Trigger words / keywords</Label>
-                  <Input
-                    value={Array.isArray(step.keywords) ? step.keywords.join(', ') : step.keywords}
-                    onChange={(e) => updateStep(index, { keywords: e.target.value.split(',') })}
-                    placeholder="hi, hello, good morning"
+                  <KeywordPillInput
+                    keywords={Array.isArray(step.keywords)
+                      ? step.keywords
+                      : String(step.keywords || '').split(',').map((k) => k.trim()).filter(Boolean)}
+                    onChange={(keywords) => updateStep(index, { keywords })}
                   />
-                  <p className="text-xs text-muted-foreground">Separate several keywords with commas.</p>
                 </div>
 
                 <div className="space-y-2">
