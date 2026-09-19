@@ -219,6 +219,7 @@ export function AutoReplySettings() {
       </div>
 
       <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
+      <input ref={templateFileRef} type="file" accept=".json,.txt" className="hidden" onChange={importTemplateFile} />
 
       <div className="flex flex-wrap gap-2">
         <Button onClick={startNew} className="gap-2">
