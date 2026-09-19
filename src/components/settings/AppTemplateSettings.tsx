@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Plus, Pencil, Trash2, Save, X, Eye, Download, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,19 +21,7 @@ interface AppTemplate {
   updated_at: string;
 }
 
-const APP_VARIABLES = [
-  { value: 'customer_name', label: 'Customer Name' },
-  { value: 'loan_id', label: 'Loan ID' },
-  { value: 'amount', label: 'Amount' },
-  { value: 'due_date', label: 'Due Date' },
-  { value: 'account_number', label: 'Account Number' },
-  { value: 'phone_number', label: 'Phone Number' },
-  { value: 'app_name', label: 'App Name' },
-  { value: 'day_type', label: 'Day Type' },
-  { value: 'current_date', label: 'Current Date' },
-  { value: 'current_time', label: 'Current Time' },
-  { value: 'payment_details', label: 'Payment Details' },
-];
+import { APP_VARIABLES, insertAtCursor } from '@/lib/templateVariables';
 
 export function AppTemplateSettings() {
   const { user } = useAuth();
