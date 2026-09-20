@@ -802,9 +802,9 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
 
       <LabelManagerPanel open={showLabelManager} onOpenChange={setShowLabelManager} onLabelsChanged={fetchLabels} />
 
-      <Dialog open={showBulkDialog} onOpenChange={(open) => { setShowBulkDialog(open); if (!open) setBulkStep('recipients'); }}>
+      <Dialog open={showBulkDialog} onOpenChange={(open) => { if (sendingBulk) return; setShowBulkDialog(open); if (!open) { setBulkStep('recipients'); setBulkPrepared([]); } }}>
         <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
-          <DialogHeader><DialogTitle>{bulkStep === 'recipients' ? 'Bulk message recipients' : 'Bulk message templates'}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{bulkStep === 'recipients' ? 'Bulk message recipients' : bulkStep === 'templates' ? 'Bulk message templates' : 'Review & send'}</DialogTitle></DialogHeader>
           {bulkStep === 'recipients' ? (
             <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1">
               <Textarea
@@ -872,7 +872,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
                 {sendingBulk ? 'Creating contacts...' : userApps.length === 0 ? 'Add an App in Settings → Apps first' : `Next: create ${bulkRecipientCount} contact(s)`}
               </Button>
             </div>
-          ) : (
+          ) : bulkStep === 'templates' ? (
           <div className="flex-1 min-h-0 overflow-y-auto">
             <Tabs value={bulkSource} onValueChange={(v) => { setBulkSource(v as 'app' | 'meta'); setSelectedTemplateId(''); }}>
               <TabsList className="grid w-full grid-cols-2">
@@ -924,6 +924,48 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
               </TabsContent>
             </Tabs>
           </div>
+          ) : (
+          <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+            <div className="flex items-center gap-2 flex-wrap text-xs mb-3">
+              <span className="text-muted-foreground">{bulkPrepared.length} recipient(s) prepared</span>
+              {bulkPreparedCounts.ready > 0 && <Badge variant="secondary">{bulkPreparedCounts.ready} ready</Badge>}
+              {bulkPreparedCounts.sent > 0 && <Badge className="bg-primary text-primary-foreground">{bulkPreparedCounts.sent} sent</Badge>}
+              {bulkPreparedCounts.scheduled > 0 && <Badge variant="secondary">{bulkPreparedCounts.scheduled} scheduled</Badge>}
+              {bulkPreparedCounts.failed > 0 && <Badge variant="destructive">{bulkPreparedCounts.failed} failed</Badge>}
+              {bulkPreparedCounts.blocked > 0 && <Badge variant="destructive">{bulkPreparedCounts.blocked} incomplete</Badge>}
+            </div>
+            <div className="space-y-2">
+              {bulkPrepared.map((row, index) => (
+                <div key={`${row.contact.id}-${index}`} className={cn(
+                  'rounded-lg border p-3 text-sm',
+                  row.status === 'sent' || row.status === 'scheduled' ? 'border-primary/50 bg-primary/5'
+                    : row.status === 'failed' || row.status === 'blocked' ? 'border-destructive/50 bg-destructive/5'
+                    : 'border-border',
+                )}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{row.contact.name}</p>
+                      <p className="text-xs text-muted-foreground">{row.phone}</p>
+                    </div>
+                    <Badge variant={row.status === 'sent' || row.status === 'scheduled' ? 'default' : row.status === 'failed' || row.status === 'blocked' ? 'destructive' : 'secondary'}>
+                      {row.status === 'sending' ? 'Sending…' : row.status === 'blocked' ? 'Incomplete' : row.status}
+                    </Badge>
+                  </div>
+                  <p className="mt-2 whitespace-pre-wrap text-xs text-foreground/90">{row.text}</p>
+                  {row.params && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {Object.entries(row.params).map(([key, value]) => (
+                        <span key={key} className={cn('px-2 py-0.5 rounded-full text-[11px]', value ? 'bg-primary/10 text-primary' : 'bg-destructive/10 text-destructive')}>
+                          {key} = {value || 'empty'}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {row.error && <p className="mt-2 text-xs text-destructive">{row.error}</p>}
+                </div>
+              ))}
+            </div>
+          </div>
           )}
           {bulkStep === 'templates' && (
           <div className="shrink-0 pt-2 border-t border-border">
@@ -936,10 +978,22 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
             />
             <div className="grid grid-cols-[auto_1fr] gap-2">
               <Button variant="outline" onClick={() => setBulkStep('recipients')}>Back</Button>
-              <Button onClick={handleBulkTemplateSend} disabled={sendingBulk || !selectedTemplateId || bulkRecipientCount === 0}>
-                {sendingBulk ? 'Sending...' : bulkScheduleAt ? `Schedule for ${bulkRecipientCount} contact(s)` : `Send to ${bulkRecipientCount} contact(s)`}
+              <Button onClick={prepareBulkPreview} disabled={bulkPreparing || !selectedTemplateId || bulkRecipientCount === 0}>
+                {bulkPreparing ? 'Preparing…' : `Preview ${bulkRecipientCount} message(s)`}
               </Button>
             </div>
+          </div>
+          )}
+          {bulkStep === 'preview' && (
+          <div className="shrink-0 pt-2 border-t border-border grid grid-cols-[auto_1fr] gap-2">
+            <Button variant="outline" onClick={() => setBulkStep('templates')} disabled={sendingBulk}>Back</Button>
+            <Button onClick={handleBulkTemplateSend} disabled={sendingBulk || bulkPreparedCounts.ready + bulkPreparedCounts.failed === 0}>
+              {sendingBulk
+                ? `Sending… ${bulkPreparedCounts.sent + bulkPreparedCounts.scheduled}/${bulkPrepared.length}`
+                : bulkScheduleAt
+                  ? `Schedule ${bulkPreparedCounts.ready + bulkPreparedCounts.failed} message(s)`
+                  : `Send ${bulkPreparedCounts.ready + bulkPreparedCounts.failed} message(s)`}
+            </Button>
           </div>
           )}
         </DialogContent>
