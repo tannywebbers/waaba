@@ -369,12 +369,10 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
     return contactModels;
   };
 
-  const handleBulkTemplateSend = async () => {
+  /** Builds the fully-resolved recipient list (values already mapped) for the preview step. */
+  const prepareBulkPreview = async () => {
     if (!user || !selectedTemplateId || bulkRecipientCount === 0) return;
-    setSendingBulk(true);
-    let sentCount = 0;
-    let failedCount = 0;
-    const failReasons: string[] = [];
+    setBulkPreparing(true);
     try {
       const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', await getEffectiveWhatsAppUserId(user.id)).maybeSingle();
       if (!settings?.api_token || !settings?.phone_number_id) {
@@ -385,68 +383,24 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
       const selectedContacts = await createOrUpdateBulkContacts();
       const appTemplate = appTemplates.find((t) => t.id === selectedTemplateId);
       const metaTemplate = metaTemplates.find((t) => t.id === selectedTemplateId);
-      const scheduledAtIso = bulkScheduleAt ? toUtcIsoFromLocalInput(bulkScheduleAt) : null;
-      if (bulkScheduleAt && !scheduledAtIso) {
-        toast({ title: 'Invalid schedule time', variant: 'destructive' });
-        return;
-      }
+      const rows: PreparedRow[] = [];
 
       if (bulkSource === 'app' && appTemplate) {
         for (const contact of selectedContacts) {
-          const normalizedPhone = normalizePhoneNumber(contact.phone);
-          const content = resolveTemplate(appTemplate.body, contact);
-          try {
-            if (scheduledAtIso) {
-              const { error: scheduleError } = await supabase.from('scheduled_messages' as any).insert({
-                user_id: user.id, contact_id: contact.id, content, type: 'text', scheduled_at: scheduledAtIso, status: 'pending',
-              } as any);
-              if (scheduleError) throw scheduleError;
-              sentCount++;
-              continue;
-            }
-
-            const { data, error } = await supabase.functions.invoke('whatsapp-api', {
-              body: {
-                action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
-                to: normalizedPhone, type: 'text', content,
-              },
-            });
-
-            const success = !error && data?.success;
-            const status = success ? 'sent' : 'failed';
-            const failReason = data?.error || error?.message || '';
-
-            if (success) sentCount++;
-            else {
-              failedCount++;
-              console.error('Bulk app template send failed', { contactId: contact.id, phone: normalizedPhone, error: failReason, response: data });
-              if (failReason) failReasons.push(`${contact.name}: ${failReason}`);
-            }
-
-            const { data: msgData } = await supabase.from('messages').insert({
-              user_id: user.id, contact_id: contact.id, content, type: 'text',
-              status, is_outgoing: true, whatsapp_message_id: data?.messageId || null,
-            }).select().maybeSingle();
-
-            if (msgData) {
-              addMessage(contact.id, {
-                id: msgData.id, contactId: msgData.contact_id, content, type: 'text', status,
-                isOutgoing: true, timestamp: new Date(msgData.created_at), whatsappMessageId: data?.messageId,
-              });
-            }
-          } catch (err: any) {
-            failedCount++;
-            console.error('Bulk app template send exception', { contactId: contact.id, phone: normalizedPhone, error: err });
-            failReasons.push(`${contact.name}: ${err.message}`);
-          }
+          const { text, missing } = resolveTemplateBody(appTemplate.body, contact);
+          rows.push({
+            contact, phone: normalizePhoneNumber(contact.phone), text, missing,
+            status: missing.length > 0 ? 'blocked' : 'ready',
+            error: missing.length > 0 ? `Missing: ${missing.join(', ')}` : undefined,
+          });
         }
       }
 
       if (bulkSource === 'meta' && metaTemplate) {
         const body = (metaTemplate as any).components?.find?.((c: any) => c.type === 'BODY');
         const previewText = body?.text || metaTemplate.name;
+        const varNumbers = Array.from(new Set(((previewText || '').match(/\{\{(\d+)\}\}/g) || []).map((m: string) => Number(m.replace(/\D/g, '')))));
 
-        // Fetch template mappings ONCE
         const { data: mappings } = await supabase
           .from('template_mappings')
           .select('*')
@@ -454,135 +408,161 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
           .eq('template_name', metaTemplate.name)
           .order('variable_number', { ascending: true });
 
-        const varMatches = (previewText || '').match(/\{\{\d+\}\}/g) || [];
-        const requiredVarCount = varMatches.length;
+        const mappingByNumber = new Map<number, string>(((mappings || []) as any[]).map((m) => [Number(m.variable_number), m.mapped_field]));
+        const unmapped = varNumbers.filter((n) => !mappingByNumber.get(n));
 
-        if (requiredVarCount > 0 && (!mappings || mappings.length < requiredVarCount)) {
+        if (unmapped.length > 0) {
           toast({
             title: 'Template mapping incomplete',
-            description: `Please configure parameter mapping for "${metaTemplate.name}" before sending.`,
+            description: `Map variable(s) ${unmapped.map((n) => `{{${n}}}`).join(', ')} for "${metaTemplate.name}" in Settings → Template Mapping first.`,
             variant: 'destructive',
+            duration: 9000,
           });
-          setSendingBulk(false);
           return;
         }
 
         for (const contact of selectedContacts) {
-          const normalizedPhone = normalizePhoneNumber(contact.phone);
-
-          const templateParams: Record<string, string> = {};
-          let hasEmptyParam = false;
-
-          for (const m of (mappings || [])) {
-            const fieldKey = (m as any).mapped_field;
-            const value = resolveMappedField(fieldKey, contact, appTemplatesMap);
-            if (!value) {
-              failedCount++;
-              failReasons.push(`${contact.name}: Missing field "${fieldKey}"`);
-              hasEmptyParam = true;
-              break;
-            }
-            templateParams[`{{${(m as any).variable_number}}}`] = value;
+          const params: Record<string, string> = {};
+          const missing: string[] = [];
+          for (const n of varNumbers) {
+            const field = mappingByNumber.get(n) as string;
+            const value = resolveMappedField(field, contact, appTemplatesMap);
+            if (!value) missing.push(`{{${n}}} → ${field}`);
+            params[`{{${n}}}`] = value;
           }
-
-          if (hasEmptyParam) continue;
-
-          try {
-            if (scheduledAtIso) {
-              let resolvedText = previewText;
-              Object.entries(templateParams).forEach(([key, value]) => { resolvedText = resolvedText.replace(key, value || key); });
-              const { error: scheduleError } = await supabase.from('scheduled_messages' as any).insert({
-                user_id: user.id, contact_id: contact.id, content: resolvedText,
-                type: 'template', template_name: metaTemplate.name, template_language: (metaTemplate as any).language || 'en',
-                template_params: templateParams, scheduled_at: scheduledAtIso, status: 'pending',
-              } as any);
-              if (scheduleError) throw scheduleError;
-              sentCount++;
-              continue;
-            }
-
-            const bulkRequest = {
-              action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
-              to: normalizedPhone, type: 'template', templateName: metaTemplate.name,
-              templateParams, templateLanguage: (metaTemplate as any).language || 'en',
-              templateComponents: Array.isArray((metaTemplate as any).components) ? (metaTemplate as any).components : undefined,
-            };
-
-            const { data, error } = await supabase.functions.invoke('whatsapp-api', { body: bulkRequest });
-
-            await logSendDiagnostics({
-              context: 'bulk:template',
-              userId: user.id,
-              to: normalizedPhone,
-              messageType: 'template',
-              templateName: metaTemplate.name,
-              templateLanguage: (metaTemplate as any).language || 'en',
-              templateParams,
-              request: { ...bulkRequest, token: '«redacted»' },
-              response: data,
-              invokeError: error,
-            });
-
-            const success = !error && data?.success;
-            const status = success ? 'sent' : 'failed';
-            const failReason = [data?.error || error?.message || '', data?.errorCode ? `(Meta ${data.errorCode}${data?.errorSubcode ? `/${data.errorSubcode}` : ''})` : ''].filter(Boolean).join(' ');
-
-            if (success) sentCount++;
-            else {
-              failedCount++;
-              console.error('Bulk meta template send failed', { contactId: contact.id, phone: normalizedPhone, template: metaTemplate.name, error: failReason, response: data });
-              if (failReason) failReasons.push(`${contact.name}: ${failReason}`);
-            }
-
-            // Resolve template text with actual values
-            let resolvedText = previewText;
-            Object.entries(templateParams).forEach(([key, value]) => {
-              resolvedText = resolvedText.replace(key, value || key);
-            });
-
-            const { data: msgData } = await supabase.from('messages').insert({
-              user_id: user.id, contact_id: contact.id, content: resolvedText,
-              type: 'template', status, is_outgoing: true,
-              whatsapp_message_id: data?.messageId || null, template_name: metaTemplate.name,
-              template_params: templateParams,
-            }).select().maybeSingle();
-
-            if (msgData) {
-              addMessage(contact.id, {
-                id: msgData.id, contactId: msgData.contact_id, content: resolvedText,
-                type: 'template', status, isOutgoing: true,
-                timestamp: new Date(msgData.created_at), whatsappMessageId: data?.messageId,
-              });
-            }
-          } catch (err: any) {
-            failedCount++;
-            console.error('Bulk meta template send exception', { contactId: contact.id, phone: normalizedPhone, template: metaTemplate.name, error: err });
-            failReasons.push(`${contact.name}: ${err.message}`);
-          }
+          let text = previewText;
+          Object.entries(params).forEach(([key, value]) => { text = text.split(key).join(value || key); });
+          rows.push({
+            contact, phone: normalizePhoneNumber(contact.phone), text, params, missing,
+            status: missing.length > 0 ? 'blocked' : 'ready',
+            error: missing.length > 0 ? `Missing: ${missing.join(', ')}` : undefined,
+          });
         }
       }
 
-      // Show detailed results
-      if (failedCount === 0) {
-        toast({ title: scheduledAtIso ? `✅ Scheduled for ${sentCount} contact(s)` : `✅ Sent to ${sentCount} contact(s)`, duration: 4000 });
-      } else {
-        toast({
-          title: `⚠️ ${sentCount} sent, ${failedCount} failed`,
-          description: failReasons.slice(0, 3).join('\n') + (failReasons.length > 3 ? `\n...and ${failReasons.length - 3} more` : ''),
-          variant: 'destructive',
-          duration: 10000,
-        });
+      setBulkPrepared(rows);
+      setBulkStep('preview');
+    } catch (error: any) {
+      toast({ title: 'Could not prepare recipients', description: error.message, variant: 'destructive' });
+    } finally {
+      setBulkPreparing(false);
+    }
+  };
+
+  const updatePreparedRow = (index: number, patch: Partial<PreparedRow>) => {
+    setBulkPrepared((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  };
+
+  const handleBulkTemplateSend = async () => {
+    if (!user || bulkPrepared.length === 0) return;
+    const sendable = bulkPrepared.filter((r) => r.status === 'ready' || r.status === 'failed');
+    if (sendable.length === 0) return;
+    setSendingBulk(true);
+    let sentCount = 0;
+    let failedCount = 0;
+    try {
+      const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', await getEffectiveWhatsAppUserId(user.id)).maybeSingle();
+      if (!settings?.api_token || !settings?.phone_number_id) {
+        toast({ title: 'WhatsApp not configured', variant: 'destructive' });
+        return;
+      }
+      const metaTemplate = metaTemplates.find((t) => t.id === selectedTemplateId);
+      const scheduledAtIso = bulkScheduleAt ? toUtcIsoFromLocalInput(bulkScheduleAt) : null;
+      if (bulkScheduleAt && !scheduledAtIso) {
+        toast({ title: 'Invalid schedule time', variant: 'destructive' });
+        return;
       }
 
-      setSelectedContactIds([]);
-      setBulkNumbers('');
-      setBulkSelectedLabelIds([]);
-      // reset day type after send
-      setBulkDayType('0');
-      setContactSelectionMode(false);
-      setShowBulkDialog(false);
-      setBulkStep('recipients');
-      setBulkScheduleAt('');
+      for (let index = 0; index < bulkPrepared.length; index++) {
+        const row = bulkPrepared[index];
+        if (row.status !== 'ready' && row.status !== 'failed') continue;
+        updatePreparedRow(index, { status: 'sending', error: undefined });
+
+        try {
+          if (scheduledAtIso) {
+            const insertPayload: any = row.params
+              ? {
+                  user_id: user.id, contact_id: row.contact.id, content: row.text, type: 'template',
+                  template_name: metaTemplate?.name, template_language: (metaTemplate as any)?.language || 'en',
+                  template_params: row.params, scheduled_at: scheduledAtIso, status: 'pending',
+                }
+              : { user_id: user.id, contact_id: row.contact.id, content: row.text, type: 'text', scheduled_at: scheduledAtIso, status: 'pending' };
+            const { error: scheduleError } = await supabase.from('scheduled_messages' as any).insert(insertPayload);
+            if (scheduleError) throw scheduleError;
+            sentCount++;
+            updatePreparedRow(index, { status: 'scheduled' });
+            continue;
+          }
+
+          const request: any = row.params
+            ? {
+                action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
+                to: row.phone, type: 'template', templateName: metaTemplate?.name,
+                templateParams: row.params, templateLanguage: (metaTemplate as any)?.language || 'en',
+                templateComponents: Array.isArray((metaTemplate as any)?.components) ? (metaTemplate as any).components : undefined,
+              }
+            : {
+                action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
+                to: row.phone, type: 'text', content: row.text,
+              };
+
+          const { data, error } = await supabase.functions.invoke('whatsapp-api', { body: request });
+
+          await logSendDiagnostics({
+            context: row.params ? 'bulk:template' : 'bulk:text',
+            userId: user.id,
+            to: row.phone,
+            messageType: row.params ? 'template' : 'text',
+            templateName: metaTemplate?.name,
+            templateLanguage: (metaTemplate as any)?.language || 'en',
+            templateParams: row.params,
+            request: { ...request, token: '«redacted»' },
+            response: data,
+            invokeError: error,
+          });
+
+          const success = !error && data?.success;
+          const status = success ? 'sent' : 'failed';
+          const failReason = [data?.error || error?.message || 'Send failed', data?.errorCode ? `(Meta ${data.errorCode}${data?.errorSubcode ? `/${data.errorSubcode}` : ''})` : ''].filter(Boolean).join(' ');
+
+          if (success) sentCount++; else failedCount++;
+
+          const { data: msgData } = await supabase.from('messages').insert({
+            user_id: user.id, contact_id: row.contact.id, content: row.text,
+            type: row.params ? 'template' : 'text', status, is_outgoing: true,
+            whatsapp_message_id: data?.messageId || null,
+            ...(row.params ? { template_name: metaTemplate?.name, template_params: row.params } : {}),
+          } as any).select().maybeSingle();
+
+          if (msgData) {
+            addMessage(row.contact.id, {
+              id: msgData.id, contactId: msgData.contact_id, content: row.text,
+              type: row.params ? 'template' : 'text', status, isOutgoing: true,
+              timestamp: new Date(msgData.created_at), whatsappMessageId: data?.messageId,
+            } as any);
+          }
+
+          updatePreparedRow(index, { status, error: success ? undefined : failReason });
+        } catch (err: any) {
+          failedCount++;
+          updatePreparedRow(index, { status: 'failed', error: err.message });
+        }
+      }
+
+      if (failedCount === 0) {
+        toast({ title: scheduledAtIso ? `✅ Scheduled for ${sentCount} contact(s)` : `✅ Sent to ${sentCount} contact(s)`, duration: 4000 });
+        setSelectedContactIds([]);
+        setBulkNumbers('');
+        setBulkSelectedLabelIds([]);
+        setBulkDayType('0');
+        setContactSelectionMode(false);
+        setShowBulkDialog(false);
+        setBulkStep('recipients');
+        setBulkPrepared([]);
+        setBulkScheduleAt('');
+      } else {
+        toast({ title: `⚠️ ${sentCount} sent, ${failedCount} failed`, description: 'Check the list for the exact reason, then retry the failed ones.', variant: 'destructive', duration: 9000 });
+      }
     } catch (error: any) {
       toast({ title: 'Bulk send failed', description: error.message, variant: 'destructive' });
     } finally {
