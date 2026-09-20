@@ -109,7 +109,9 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
 
   const [showBulkDialog, setShowBulkDialog] = useState(false);
-  const [bulkStep, setBulkStep] = useState<'recipients' | 'templates'>('recipients');
+  const [bulkStep, setBulkStep] = useState<'recipients' | 'templates' | 'preview'>('recipients');
+  const [bulkPrepared, setBulkPrepared] = useState<PreparedRow[]>([]);
+  const [bulkPreparing, setBulkPreparing] = useState(false);
   const [bulkSource, setBulkSource] = useState<'app' | 'meta'>('app');
   const [appTemplates, setAppTemplates] = useState<AppTemplate[]>([]);
   const [metaTemplates, setMetaTemplates] = useState<MetaTemplate[]>([]);
