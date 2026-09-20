@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { normalizePhoneNumber, parsePhoneNumbers } from '@/lib/utils/phone';
 import { useApps } from '@/hooks/useApps';
 import { logSendDiagnostics } from '@/lib/sendDiagnostics';
+import { resolveTemplateBody, resolveVariable } from '@/lib/templateVariables';
 
 type ChatFilter = 'all' | 'unread' | 'archived';
 type SortBy = 'recent' | 'name' | 'amount';
@@ -40,37 +41,24 @@ interface ChatListProps {
   onNewChat?: () => void;
 }
 
-const VARIABLE_MAP: Record<string, (c: any) => string> = {
-  customer_name: (c) => c.name || '',
-  loan_id: (c) => c.loanId || '',
-  amount: (c) => c.amount?.toString() || '',
-  phone_number: (c) => c.phone || '',
-  app_name: (c) => c.appType || '',
-  day_type: (c) => c.dayType?.toString() || '',
-  payment_details: (c) => {
-    const ad = c.accountDetails?.[0];
-    if (!ad) return '';
-    return `${ad.bank} - ${ad.accountNumber} (${ad.accountName})`;
-  },
-  // FIX: correctly calculate due_date from dayType (dayType 0 = due today, positive = overdue by N days)
-  due_date: (c) => {
-    if (c.dayType === undefined || c.dayType === null) return '';
-    const today = new Date();
-    const due = new Date(today);
-    due.setDate(today.getDate() - Number(c.dayType));
-    return due.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  },
-};
+interface PreparedRow {
+  contact: any;
+  phone: string;
+  text: string;
+  params?: Record<string, string>;
+  missing: string[];
+  status: 'ready' | 'blocked' | 'sending' | 'sent' | 'failed' | 'scheduled';
+  error?: string;
+}
 
-const resolveTemplate = (body: string, contact: any): string =>
-  body.replace(/\{\{(\w+)\}\}/g, (match, variableName) => VARIABLE_MAP[variableName]?.(contact) || match);
+const resolveTemplate = (body: string, contact: any): string => resolveTemplateBody(body, contact).text;
 
 const resolveMappedField = (field: string, contact: any, appTemplatesMap: Record<string, string>) => {
   if (field.startsWith('app_template:')) {
     const templateName = field.replace('app_template:', '');
-    return appTemplatesMap[templateName] || '';
+    return resolveTemplateBody(appTemplatesMap[templateName] || '', contact).text;
   }
-  return VARIABLE_MAP[field]?.(contact) || '';
+  return resolveVariable(field, contact);
 };
 
 const toUtcIsoFromLocalInput = (value: string) => {
