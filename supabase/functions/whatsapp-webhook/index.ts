@@ -95,15 +95,18 @@ const stepMatches = (step: any, incoming: string) => {
   return keywords.some((k: string) => text.includes(k));
 };
 
-const findAutoReplyMatch = (replies: any[], incoming: string) => {
+const findAutoReplyMatches = (replies: any[], incoming: string) => {
+  const matches = [];
   for (const reply of replies || []) {
     if (reply?.is_active === false) continue;
     const steps = Array.isArray(reply?.steps) ? reply.steps : [];
     for (const step of steps) {
-      if (stepMatches(step, incoming)) return { reply, step };
+      if (stepMatches(step, incoming)) {
+        matches.push({ reply, step });
+      }
     }
   }
-  return null;
+  return matches;
 };
 
 const sendWhatsAppText = async (settings: any, to: string, body: string) => {
@@ -176,7 +179,7 @@ const resolveAutoReplyVariables = async (supabase: any, contactId: string, body:
 
 /**
  * Runs the user's auto replies against an incoming text message.
- * Sends the first matching reply through the Cloud API and stores it as an
+ * Sends all matching replies through the Cloud API and stores it as an
  * outgoing message so it shows up in the conversation immediately.
  */
 const runAutoReply = async (
@@ -212,55 +215,57 @@ const runAutoReply = async (
     return;
   }
 
-  const match = findAutoReplyMatch(replies || [], incomingText);
-  if (!match) {
+  const matches = findAutoReplyMatches(replies || [], incomingText);
+  if (matches.length === 0) {
     console.log('ℹ️ No auto reply matched:', { incomingText: incomingText.slice(0, 60), rules: (replies || []).length });
     return;
   }
 
-  const delaySeconds = Math.min(30, Math.max(0, Number(match.step?.delaySeconds) || 0));
-  if (delaySeconds > 0) await new Promise((r) => setTimeout(r, delaySeconds * 1000));
+  for (const match of matches) {
+    const delaySeconds = Math.min(30, Math.max(0, Number(match.step?.delaySeconds) || 0));
+    if (delaySeconds > 0) await new Promise((r) => setTimeout(r, delaySeconds * 1000));
 
-  const rawBody = String(match.step?.message || '').trim();
-  if (!rawBody) return;
-  const replyBody = await resolveAutoReplyVariables(supabase, contactId, rawBody);
-  if (!replyBody) return;
+    const rawBody = String(match.step?.message || '').trim();
+    if (!rawBody) continue;
+    const replyBody = await resolveAutoReplyVariables(supabase, contactId, rawBody);
+    if (!replyBody) continue;
 
-  const result = await sendWhatsAppText(settings, from, replyBody);
+    const result = await sendWhatsAppText(settings, from, replyBody);
 
-  const { error: insertError } = await supabase.from('messages').insert({
-    user_id: targetUserId,
-    contact_id: contactId,
-    content: replyBody,
-    type: 'text',
-    status: result.ok ? 'sent' : 'failed',
-    is_outgoing: true,
-    whatsapp_message_id: result.wamid,
-  });
+    const { error: insertError } = await supabase.from('messages').insert({
+      user_id: targetUserId,
+      contact_id: contactId,
+      content: replyBody,
+      type: 'text',
+      status: result.ok ? 'sent' : 'failed',
+      is_outgoing: true,
+      whatsapp_message_id: result.wamid,
+    });
 
-  if (insertError) console.error('❌ Auto reply message insert failed:', insertError.message);
+    if (insertError) console.error('❌ Auto reply message insert failed:', insertError.message);
 
-  await logWebhookEvent(supabase, {
-    user_id: targetUserId,
-    event_type: 'auto_reply_sent',
-    direction: 'outgoing',
-    phone_number: from,
-    message_type: 'text',
-    status: result.ok ? 'sent' : 'failed',
-    error: result.error,
-    payload: {
-      contactId,
-      autoReplyId: match.reply?.id,
-      autoReplyName: match.reply?.name,
-      matchType: match.step?.matchType || 'contains',
-      keywords: match.step?.keywords,
-      trigger: incomingText.slice(0, 120),
-      wamid: result.wamid,
-      delaySeconds,
-    },
-  });
+    await logWebhookEvent(supabase, {
+      user_id: targetUserId,
+      event_type: 'auto_reply_sent',
+      direction: 'outgoing',
+      phone_number: from,
+      message_type: 'text',
+      status: result.ok ? 'sent' : 'failed',
+      error: result.error,
+      payload: {
+        contactId,
+        autoReplyId: match.reply?.id,
+        autoReplyName: match.reply?.name,
+        matchType: match.step?.matchType || 'contains',
+        keywords: match.step?.keywords,
+        trigger: incomingText.slice(0, 120),
+        wamid: result.wamid,
+        delaySeconds,
+      },
+    });
 
-  console.log(result.ok ? '🤖 Auto reply sent' : '🤖 Auto reply failed', { contactId, rule: match.reply?.name, error: result.error });
+    console.log(result.ok ? '🤖 Auto reply sent' : '🤖 Auto reply failed', { contactId, rule: match.reply?.name, error: result.error });
+  }
 };
 
 const getSettingsByUserId = async (supabase: any, userId: string) => {
