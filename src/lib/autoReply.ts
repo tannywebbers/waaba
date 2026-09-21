@@ -104,18 +104,21 @@ export function stepMatches(step: AutoReplyStep, incoming: string): boolean {
   return keywords.some((k) => text.includes(k));
 }
 
-/** Finds the first matching step across all active auto replies (in order). */
-export function findAutoReplyMatch(
+/** Finds all matching steps across all active auto replies (in order). */
+export function findAutoReplyMatches(
   replies: AutoReply[],
   incoming: string
-): { reply: AutoReply; step: AutoReplyStep } | null {
+): { reply: AutoReply; step: AutoReplyStep }[] {
+  const matches: { reply: AutoReply; step: AutoReplyStep }[] = [];
   for (const reply of replies) {
     if (!reply.isActive) continue;
     for (const step of reply.steps || []) {
-      if (stepMatches(step, incoming)) return { reply, step };
+      if (stepMatches(step, incoming)) {
+        matches.push({ reply, step });
+      }
     }
   }
-  return null;
+  return matches;
 }
 
 export function rowToAutoReply(row: any): AutoReply {
@@ -254,8 +257,8 @@ export async function runAutoReply(params: {
       .order('created_at', { ascending: true });
 
     const replies = (rows || []).map(rowToAutoReply);
-    const match = findAutoReplyMatch(replies, incomingText);
-    if (!match) return false;
+    const matches = findAutoReplyMatches(replies, incomingText);
+    if (matches.length === 0) return false;
 
     const { data: settings } = await supabase
       .from('whatsapp_settings')
@@ -265,34 +268,36 @@ export async function runAutoReply(params: {
 
     if (!settings?.api_token || !settings?.phone_number_id) return false;
 
-    const messageBody = await resolveAutoReplyVariables(contactId, match.step.message);
+    for (const match of matches) {
+      const messageBody = await resolveAutoReplyVariables(contactId, match.step.message);
 
-    const delay = Math.max(0, Number(match.step.delaySeconds) || 0);
-    if (delay > 0) await new Promise((r) => setTimeout(r, delay * 1000));
+      const delay = Math.max(0, Number(match.step.delaySeconds) || 0);
+      if (delay > 0) await new Promise((r) => setTimeout(r, delay * 1000));
 
-    const to = (contactPhone || '').replace(/[^\d+]/g, '').replace(/^\+/, '');
-    const { data } = await supabase.functions.invoke('whatsapp-api', {
-      body: {
-        action: 'send_message',
-        token: settings.api_token,
-        phoneNumberId: settings.phone_number_id,
-        to,
-        type: 'text',
+      const to = (contactPhone || '').replace(/[^\d+]/g, '').replace(/^\+/, '');
+      const { data } = await supabase.functions.invoke('whatsapp-api', {
+        body: {
+          action: 'send_message',
+          token: settings.api_token,
+          phoneNumberId: settings.phone_number_id,
+          to,
+          type: 'text',
+          content: messageBody,
+        },
+      });
+
+      const wamid = data?.messageId || data?.wamid || null;
+
+      await supabase.from('messages').insert({
+        user_id: userId,
+        contact_id: contactId,
         content: messageBody,
-      },
-    });
-
-    const wamid = data?.messageId || data?.wamid || null;
-
-    await supabase.from('messages').insert({
-      user_id: userId,
-      contact_id: contactId,
-      content: messageBody,
-      type: 'text',
-      status: data?.success ? 'sent' : 'failed',
-      is_outgoing: true,
-      whatsapp_message_id: wamid,
-    } as any);
+        type: 'text',
+        status: data?.success ? 'sent' : 'failed',
+        is_outgoing: true,
+        whatsapp_message_id: wamid,
+      } as any);
+    }
 
     return true;
   } catch (err) {
