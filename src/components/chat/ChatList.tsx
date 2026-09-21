@@ -398,6 +398,16 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
       const selectedContacts = await createOrUpdateBulkContacts();
       const appTemplate = appTemplates.find((t) => t.id === selectedTemplateId);
       const metaTemplate = metaTemplates.find((t) => t.id === selectedTemplateId);
+
+      if (bulkSource === 'app' && !appTemplate) {
+        toast({ title: 'App template not found', variant: 'destructive' });
+        return;
+      }
+      if (bulkSource === 'meta' && !metaTemplate) {
+        toast({ title: 'Meta template not found', variant: 'destructive' });
+        return;
+      }
+
       const rows: PreparedRow[] = [];
 
       if (bulkSource === 'app' && appTemplate) {
@@ -424,23 +434,19 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
           .order('variable_number', { ascending: true });
 
         const mappingByNumber = new Map<number, string>(((mappings || []) as any[]).map((m) => [Number(m.variable_number), m.mapped_field]));
-        const unmapped = varNumbers.filter((n) => !mappingByNumber.get(n));
 
-        if (unmapped.length > 0) {
-          toast({
-            title: 'Template mapping incomplete',
-            description: `Map variable(s) ${unmapped.map((n) => `{{${n}}}`).join(', ')} for "${metaTemplate.name}" in Settings → Template Mapping first.`,
-            variant: 'destructive',
-            duration: 9000,
-          });
-          return;
-        }
-
+        // Always advance to the preview: unmapped variables are shown as blocked
+        // rows instead of silently refusing to continue.
         for (const contact of selectedContacts) {
           const params: Record<string, string> = {};
           const missing: string[] = [];
           for (const n of varNumbers) {
-            const field = mappingByNumber.get(n) as string;
+            const field = mappingByNumber.get(n) as string | undefined;
+            if (!field) {
+              missing.push(`{{${n}}} → not mapped`);
+              params[`{{${n}}}`] = '';
+              continue;
+            }
             const value = resolveMappedField(field, contact, appTemplatesMap);
             if (!value || value.includes('{{')) missing.push(`{{${n}}} → ${field}`);
             params[`{{${n}}}`] = value;
