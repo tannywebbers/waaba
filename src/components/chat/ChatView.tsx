@@ -951,7 +951,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       style={{ backgroundImage: `url(${chatBg})`, backgroundAttachment: 'fixed', backgroundSize: 'cover' }}
     >
       {/* Header - ALWAYS at top, never moves */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-panel-border bg-panel-header/95 shrink-0 z-20" style={{ position: 'sticky', top: 0 }}>
+      <div className="flex items-center gap-2 px-3 pb-2 safe-top border-b border-panel-border bg-panel-header/95 shrink-0 z-20" style={{ position: 'sticky', top: 0 }}>
         {showBackButton && (
           <Button variant="ghost" size="icon" className="h-[45px] w-[45px] text-[hsl(var(--chat-control-icon))]" onClick={onBack}>
             <ArrowLeft className="h-[29px] w-[29px]" strokeWidth={2.75} />

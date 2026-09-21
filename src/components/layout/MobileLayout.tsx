@@ -64,7 +64,7 @@ export function MobileLayout() {
   if (showContactPanel && activeChat) {
     return (
       <div className="h-[100dvh] flex flex-col bg-background">
-        <div className="flex items-center gap-2 px-4 py-3 bg-panel-header border-b border-panel-border shrink-0">
+        <div className="flex items-center gap-2 px-4 pb-3 safe-top bg-panel-header border-b border-panel-border shrink-0">
           <Button variant="ghost" size="icon" onClick={() => setShowContactPanel(false)} className="h-9 w-9">
             <ArrowLeft className="h-6 w-6" />
           </Button>

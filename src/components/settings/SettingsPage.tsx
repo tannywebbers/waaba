@@ -68,7 +68,7 @@ export function SettingsPage() {
     const currentTab = settingsTabs.find(t => t.id === activeTab);
     return (
       <div className="flex flex-col h-full bg-background">
-        <div className="flex items-center gap-1 px-2 pt-2 pb-1 bg-panel shrink-0">
+        <div className="flex items-center gap-1 px-2 pb-1 safe-top bg-panel shrink-0">
           <Button variant="ghost" size="icon" onClick={() => setActiveTab(null)} className="h-9 w-9 text-primary">
             <ArrowLeft className="h-6 w-6" />
           </Button>
@@ -96,7 +96,7 @@ export function SettingsPage() {
 
   return (
     <div className="flex flex-col h-full bg-background">
-      <div className="px-4 pt-3 pb-1 bg-panel shrink-0">
+      <div className="px-4 pb-1 safe-top bg-panel shrink-0">
         <h1 className="text-[34px] font-bold tracking-tight text-foreground">Settings</h1>
       </div>
 

@@ -111,12 +111,41 @@
   * {
     @apply border-border;
   }
+  html, body {
+    /* Never let stray fixed widths cause horizontal scroll on small screens */
+    max-width: 100%;
+    overflow-x: clip;
+  }
   body {
     @apply bg-background text-foreground;
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', 'Segoe UI', Roboto, sans-serif;
     font-weight: 500;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  #root {
+    max-width: 100vw;
+    overflow-x: clip;
+  }
+  /* Media never overflows its container on small screens */
+  img, video, canvas, svg, iframe {
+    max-width: 100%;
+  }
+  input, textarea, select, button {
+    max-width: 100%;
+  }
+  /* Remove tap highlight flash on mobile */
+  button, [role='button'], a {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  /* Lock scroll chaining like a native app */
+  @media (max-width: 767px) {
+    html, body {
+      overscroll-behavior-y: none;
+    }
   }
 }
 
@@ -220,6 +249,13 @@
 /* iOS header style */
 .ios-header {
   letter-spacing: -0.02em;
+}
+
+/* Safe-area top padding for notched phones (works with viewport-fit=cover) */
+@media (max-width: 767px) {
+  .safe-top {
+    padding-top: max(env(safe-area-inset-top, 0px), 12px);
+  }
 }
 
 /* Sticker style */
