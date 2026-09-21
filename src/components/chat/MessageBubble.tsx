@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { useEffect, useRef, useState } from 'react';
-import { AlertCircle, Copy, FileText, Forward, Image as ImageIcon, Music, MoreVertical, Pause, Play, Trash2, Video as VideoIcon, Play as PlayIcon, Reply, Smile, Sticker as StickerIcon, BookmarkPlus } from 'lucide-react';
+import { AlertCircle, Copy, FileText, Forward, Image as ImageIcon, Music, MoreVertical, Pause, Play, Plus, Trash2, Video as VideoIcon, Play as PlayIcon, Reply, Smile, Sticker as StickerIcon, BookmarkPlus } from 'lucide-react';
+import EmojiPicker, { Theme } from 'emoji-picker-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Message } from '@/types';
@@ -32,6 +33,7 @@ export function MessageBubble({ message, onDelete, onReply, onReact, onForward }
   const [audioProgress, setAudioProgress] = useState(0);
   const [audioError, setAudioError] = useState(false);
   const [reactOpen, setReactOpen] = useState(false);
+  const [showMoreEmojis, setShowMoreEmojis] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
   const { toast } = useToast();
   const { user } = useAuth();
@@ -240,7 +242,7 @@ export function MessageBubble({ message, onDelete, onReply, onReact, onForward }
           {/* Action buttons (reply, react, menu) */}
           <div className={cn('absolute -top-1 z-10 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity', isOutgoing ? '-left-20' : '-right-20')}>
             {onReact && (
-              <Popover open={reactOpen} onOpenChange={setReactOpen}>
+              <Popover open={reactOpen} onOpenChange={(open) => { setReactOpen(open); if (!open) setShowMoreEmojis(false); }}>
                 <PopoverTrigger asChild>
                   <button className="h-7 w-7 rounded-full bg-card border border-border shadow-sm flex items-center justify-center hover:bg-accent" title="React">
                     <Smile className="h-3.5 w-3.5" />
@@ -252,12 +254,32 @@ export function MessageBubble({ message, onDelete, onReply, onReact, onForward }
                       <button
                         key={emoji}
                         className="h-9 w-9 rounded-full hover:bg-accent text-xl flex items-center justify-center"
-                        onClick={() => { onReact(message, emoji); setReactOpen(false); }}
+                        onClick={() => { onReact(message, emoji); setReactOpen(false); setShowMoreEmojis(false); }}
                       >
                         {emoji}
                       </button>
                     ))}
+                    <button
+                      key="more"
+                      className="h-9 w-9 rounded-full hover:bg-accent flex items-center justify-center text-muted-foreground"
+                      onClick={() => setShowMoreEmojis(v => !v)}
+                      title="More emojis"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
                   </div>
+                  {showMoreEmojis && (
+                    <div className="mt-1.5 border-t border-border pt-1.5">
+                      <EmojiPicker
+                        theme={Theme.AUTO}
+                        width={300}
+                        height={320}
+                        onEmojiClick={(emojiData) => { onReact(message, emojiData.emoji); setReactOpen(false); setShowMoreEmojis(false); }}
+                        skinTonesDisabled
+                        previewConfig={{ showPreview: false }}
+                      />
+                    </div>
+                  )}
                 </PopoverContent>
               </Popover>
             )}
