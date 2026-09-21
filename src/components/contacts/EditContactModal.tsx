@@ -15,6 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { normalizePhoneNumber } from '@/lib/utils/phone';
 import { useApps } from '@/hooks/useApps';
+import { ensureAppRegistered } from '@/lib/registerApp';
 import { useDialogBackButton } from '@/hooks/useDialogBackButton';
 
 interface AccountDetail {
@@ -85,9 +86,10 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
     if (!contact) return;
     setLoading(true);
 
-    const resolvedAppType = formData.appType;
-
     try {
+      // Ensure the chosen app stays registered (protects free-typed/synced values)
+      const registeredApp = await ensureAppRegistered(user.id, formData.appType);
+      const resolvedAppType = registeredApp || formData.appType;
       const parsedDayType = parseInt(formData.dayType);
       const normalizedPhone = normalizePhoneNumber(formData.phone);
       const updatePayload: Record<string, any> = {

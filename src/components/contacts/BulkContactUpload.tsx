@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { normalizePhoneNumber } from '@/lib/utils/phone';
+import { ensureAppRegistered } from '@/lib/registerApp';
 
 interface ContactJSON {
   loanId: string;
@@ -156,16 +157,26 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
     setLoading(true);
 
     try {
+      // Register every distinct app name in the file so the imported appType always
+      // exists in the user's Apps (case-insensitive) and auto-selects in the senders.
+      const distinctAppKeys = Array.from(new Set(preview.map(c => String(c.appType || '').trim().toLowerCase()).filter(Boolean)));
+      const appNameByKey: Record<string, string> = {};
+      for (const key of distinctAppKeys) {
+        const canonical = await ensureAppRegistered(user.id, key);
+        if (canonical) appNameByKey[key] = canonical;
+      }
+
       const contactsData = await Promise.all(preview.map(async (c) => {
         const phone = normalizePhoneNumber(c.phone);
         const { data: existing } = await supabase.from('contacts').select('id,loan_id').eq('user_id', user.id).eq('phone', phone).maybeSingle();
+        const appKey = String(c.appType || '').trim().toLowerCase();
         const payload = {
           user_id: user.id,
           loan_id: c.loanId || existing?.loan_id || '',
           name: c.name,
           phone,
           amount: c.amount,
-          app_type: c.appType,
+          app_type: appNameByKey[appKey] || c.appType || '',
           day_type: c.dayType,
           is_deleted: false,
           deleted_at: null,

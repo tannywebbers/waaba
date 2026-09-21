@@ -16,6 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { normalizePhoneNumber } from '@/lib/utils/phone';
 import { useApps } from '@/hooks/useApps';
+import { ensureAppRegistered } from '@/lib/registerApp';
 import { useDialogBackButton } from '@/hooks/useDialogBackButton';
 
 interface AccountDetail {
@@ -117,10 +118,12 @@ export function AddContactModal() {
       toast({ title: 'No apps found', description: 'Go to Settings → Apps to create your first App.', variant: 'destructive' });
       return;
     }
-    const resolvedAppType = singleForm.appType;
     const formattedPhone = autoFormatPhone(singleForm.phone);
     setLoading(true);
     try {
+      // Ensure the chosen app is registered so it exists in Settings → Apps
+      const registeredApp = await ensureAppRegistered(user.id, singleForm.appType);
+      const resolvedAppType = registeredApp || singleForm.appType;
       // Shared users create contacts under their own user_id
       const contactOwnerId = user.id;
       const assignedUserId = isSharedUser ? user.id : null;
@@ -240,6 +243,9 @@ export function AddContactModal() {
 
     setLoading(true);
     try {
+      // Ensure the chosen app is registered so it exists in Settings → Apps
+      const registeredBulkApp = await ensureAppRegistered(user.id, bulkForm.appType);
+      const resolvedBulkApp = registeredBulkApp || bulkForm.appType;
       const contactOwnerId = isSharedUser && superUserId ? superUserId : user.id;
       const assignedUserId = isSharedUser ? user.id : null;
 
@@ -258,7 +264,7 @@ export function AddContactModal() {
           loan_id: ids[i]?.trim() || existingContact?.loan_id || '',
         name: names[i].trim(),
           phone: phones[i],
-        app_type: bulkForm.appType,
+        app_type: resolvedBulkApp,
         day_type: isNaN(parseInt(bulkForm.dayType)) ? 0 : parseInt(bulkForm.dayType),
           is_deleted: false,
           deleted_at: null,

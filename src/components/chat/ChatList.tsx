@@ -26,6 +26,7 @@ import { normalizePhoneNumber, parsePhoneNumbers } from '@/lib/utils/phone';
 import { useApps } from '@/hooks/useApps';
 import { logSendDiagnostics } from '@/lib/sendDiagnostics';
 import { resolveTemplateBody, resolveVariable } from '@/lib/templateVariables';
+import { ensureAppRegistered } from '@/lib/registerApp';
 
 type ChatFilter = 'all' | 'unread' | 'archived';
 type SortBy = 'recent' | 'name' | 'amount';
@@ -137,6 +138,13 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const { apps: userApps } = useApps();
   const appChoices = useMemo(() => userApps.map((a) => a.name.toLowerCase()), [userApps]);
   const appTemplatesMap = useMemo(() => Object.fromEntries(appTemplates.map((template) => [template.name, template.body])), [appTemplates]);
+
+  // Counts by status for the preview step header + send button (was crashing the app — undefined before)
+  const bulkPreparedCounts = useMemo(() => {
+    const counts: Record<PreparedRow['status'], number> = { ready: 0, blocked: 0, sending: 0, sent: 0, failed: 0, scheduled: 0 };
+    bulkPrepared.forEach((row) => { counts[row.status] += 1; });
+    return counts;
+  }, [bulkPrepared]);
 
   const fetchLabels = useCallback(async () => {
     if (!user) return;
@@ -329,13 +337,20 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
         .maybeSingle();
       if (findError) throw findError;
 
+      const finalAppType = (bulkAppType || selected?.appType || existingContact?.app_type || '').trim();
+      let savedAppType = finalAppType;
+      if (finalAppType) {
+        const registered = await ensureAppRegistered(user.id, finalAppType);
+        if (registered) savedAppType = registered;
+      }
+
       const payload = {
         user_id: user.id,
         phone,
         name: selected?.name || existingContact?.name || phone,
         loan_id: selected?.loanId || existingContact?.loan_id || '',
         amount: selected?.amount ?? existingContact?.amount ?? null,
-        app_type: bulkAppType || selected?.appType || existingContact?.app_type || '',
+        app_type: savedAppType,
         // apply bulkDayType — always a number, defaults to 0 for new contacts, keeps existing for pre-existing ones when user hasn't changed it
         day_type: bulkDayType !== '' ? Number(bulkDayType) : (selected?.dayType ?? existingContact?.day_type ?? 0),
         is_deleted: false,
@@ -427,7 +442,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
           for (const n of varNumbers) {
             const field = mappingByNumber.get(n) as string;
             const value = resolveMappedField(field, contact, appTemplatesMap);
-            if (!value) missing.push(`{{${n}}} → ${field}`);
+            if (!value || value.includes('{{')) missing.push(`{{${n}}} → ${field}`);
             params[`{{${n}}}`] = value;
           }
           let text = previewText;

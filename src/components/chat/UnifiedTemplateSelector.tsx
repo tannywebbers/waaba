@@ -13,6 +13,8 @@ import { useDialogBackButton } from '@/hooks/useDialogBackButton';
 import { Contact } from '@/types';
 import { format } from 'date-fns';
 import { generateMessageId } from '@/lib/utils/messageId';
+import { resolveTemplateBody } from '@/lib/templateVariables';
+import { ensureAppRegistered } from '@/lib/registerApp';
 
 interface MetaTemplate {
   id: string; template_id: string; name: string; language: string; category: string; status: string; components: any;
@@ -37,7 +39,9 @@ function resolveField(field: string, contact: Contact, appTemplatesMap: Record<s
     const templateName = field.replace('app_template:', '');
     const content = appTemplatesMap[templateName];
     if (!content) return `[Missing template: ${templateName}]`;
-    return content;
+    // Fully resolve any {{customer_name}}, {{loan_id}}, {{app_name}} etc. embedded in the
+    // app template so the Meta template is sent with real values — not raw variable names.
+    return resolveTemplateBody(content, contact).text;
   }
 
   const paymentDetails = contact.accountDetails?.length
@@ -93,10 +97,13 @@ const APP_VARIABLE_MAP: Record<string, (c: Contact) => string> = {
   message_id: () => generateMessageId(),
 };
 
-function resolveAppTemplate(body: string, contact: Contact): string {
+function resolveAppTemplate(body: string, contact: Contact, fallbackApp = ''): string {
   return body.replace(/\{\{(\w+)\}\}/g, (match, varName) => {
     const resolver = APP_VARIABLE_MAP[varName];
-    return resolver ? resolver(contact) || match : match;
+    if (!resolver) return match;
+    let value = resolver(contact) || '';
+    if (varName === 'app_name' && !value) value = fallbackApp || match;
+    return value || match;
   });
 }
 
@@ -128,6 +135,8 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
     if (open && user) {
       fetchMetaTemplates();
       fetchAppTemplates();
+      // Re-seed on every open so the App dropdown auto-selects this contact's app
+      setSelectedApp('');
     }
     if (!open) {
       setSelectedMeta(null);
@@ -137,14 +146,22 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
     }
   }, [open, user]);
 
-  // Seed selectedApp from contact.appType or first user app
+  // Seed selectedApp from contact.appType (registering it if needed) or the user's first app,
+  // so the App dropdown always auto-selects the user's app no matter where sending happens.
   useEffect(() => {
     if (selectedApp) return;
-    const contactApp = (contact.appType || '').toLowerCase();
-    const match = userApps.find((a) => a.name.toLowerCase() === contactApp);
-    if (match) setSelectedApp(match.name);
-    else if (userApps[0]) setSelectedApp(userApps[0].name);
-  }, [userApps, contact.appType, selectedApp]);
+    const contactApp = (contact.appType || '').trim();
+    const contactAppLower = contactApp.toLowerCase();
+    const match = userApps.find((a) => a.name.toLowerCase() === contactAppLower);
+    if (match) { setSelectedApp(match.name); return; }
+    if (contactAppLower && user) {
+      ensureAppRegistered(user.id, contactApp)
+        .then((registered) => { setSelectedApp(registered || userApps[0]?.name || ''); })
+        .catch(() => { if (userApps[0]) setSelectedApp(userApps[0].name); });
+      return;
+    }
+    if (userApps[0]) setSelectedApp(userApps[0].name);
+  }, [userApps, contact.appType, selectedApp, user]);
 
   // Whenever selectedApp changes, propagate to app-var params
   useEffect(() => {
@@ -249,7 +266,8 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
   const handleMetaConfirm = async () => {
     if (!selectedMeta) return;
     for (const [, value] of Object.entries(metaParams)) {
-      if (value.startsWith('[Missing template:')) return;
+      // Block if a mapped field could not be resolved (missing app template or leftover variable)
+      if (value.startsWith('[Missing template:') || value.includes('{{')) return;
     }
     await onSelectMetaTemplate(selectedMeta, metaParams);
     setOpen(false);
@@ -257,7 +275,7 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
   };
 
   const handleAppSelect = (template: any) => {
-    const resolved = resolveAppTemplate(template.body, contact);
+    const resolved = resolveAppTemplate(template.body, contact, selectedApp);
     onInsertAppTemplate(resolved);
     setOpen(false);
   };
@@ -421,6 +439,25 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
               </TabsContent>
 
               <TabsContent value="app" className="mt-3 flex-1 min-h-0 flex flex-col overflow-hidden">
+                {/* App selector (auto-selected — also drives {{app_name}} in app templates) */}
+                <div className="shrink-0 mb-3 space-y-2">
+                  <label className="text-sm font-medium">App</label>
+                  {userApps.length === 0 ? (
+                    <div className="rounded-md border border-dashed border-input p-2 text-xs text-muted-foreground">
+                      No apps available. Add one in <span className="font-medium text-foreground">Settings → Apps</span>.
+                    </div>
+                  ) : (
+                    <select
+                      value={selectedApp}
+                      onChange={(e) => setSelectedApp(e.target.value)}
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    >
+                      {userApps.map((a) => (
+                        <option key={a.id} value={a.name}>{a.name}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
                 <div className="relative shrink-0 mb-3">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input value={appSearch} onChange={(e) => setAppSearch(e.target.value)} placeholder="Search app templates..." className="pl-9" />

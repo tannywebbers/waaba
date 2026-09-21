@@ -17,6 +17,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { normalizePhoneNumber } from '@/lib/utils/phone';
 import { useDialogBackButton } from '@/hooks/useDialogBackButton';
+import { ensureAppRegistered } from '@/lib/registerApp';
 
 interface NewChatModalProps {
   open: boolean;
@@ -89,13 +90,16 @@ export function NewChatModal({ open, onClose, onSelectContact }: NewChatModalPro
         .eq('phone', phone)
         .maybeSingle();
 
+      // Ensure the quick-chat app is registered so it always exists in Settings → Apps
+      const registeredApp = await ensureAppRegistered(user.id, quickAppType);
+
       const payload = {
         user_id: contactOwnerId,
         assigned_user_id: assignedUserId,
         name: existingContact?.name || phone,
         phone,
         loan_id: existingContact?.loan_id || '',
-        app_type: quickAppType || existingContact?.app_type || '',
+        app_type: registeredApp || quickAppType || existingContact?.app_type || '',
         is_deleted: false,
         deleted_at: null,
         created_at: new Date().toISOString(),

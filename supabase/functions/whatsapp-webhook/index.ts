@@ -222,49 +222,63 @@ const runAutoReply = async (
   }
 
   for (const match of matches) {
-    const delaySeconds = Math.min(30, Math.max(0, Number(match.step?.delaySeconds) || 0));
-    if (delaySeconds > 0) await new Promise((r) => setTimeout(r, delaySeconds * 1000));
+    try {
+      const delaySeconds = Math.min(30, Math.max(0, Number(match.step?.delaySeconds) || 0));
+      if (delaySeconds > 0) await new Promise((r) => setTimeout(r, delaySeconds * 1000));
 
-    const rawBody = String(match.step?.message || '').trim();
-    if (!rawBody) continue;
-    const replyBody = await resolveAutoReplyVariables(supabase, contactId, rawBody);
-    if (!replyBody) continue;
+      const rawBody = String(match.step?.message || '').trim();
+      if (!rawBody) continue;
+      const replyBody = await resolveAutoReplyVariables(supabase, contactId, rawBody);
+      if (!replyBody) continue;
 
-    const result = await sendWhatsAppText(settings, from, replyBody);
+      const result = await sendWhatsAppText(settings, from, replyBody);
 
-    const { error: insertError } = await supabase.from('messages').insert({
-      user_id: targetUserId,
-      contact_id: contactId,
-      content: replyBody,
-      type: 'text',
-      status: result.ok ? 'sent' : 'failed',
-      is_outgoing: true,
-      whatsapp_message_id: result.wamid,
-    });
+      const { error: insertError } = await supabase.from('messages').insert({
+        user_id: targetUserId,
+        contact_id: contactId,
+        content: replyBody,
+        type: 'text',
+        status: result.ok ? 'sent' : 'failed',
+        is_outgoing: true,
+        whatsapp_message_id: result.wamid,
+      });
 
-    if (insertError) console.error('❌ Auto reply message insert failed:', insertError.message);
+      if (insertError) console.error('❌ Auto reply message insert failed:', insertError.message);
 
-    await logWebhookEvent(supabase, {
-      user_id: targetUserId,
-      event_type: 'auto_reply_sent',
-      direction: 'outgoing',
-      phone_number: from,
-      message_type: 'text',
-      status: result.ok ? 'sent' : 'failed',
-      error: result.error,
-      payload: {
-        contactId,
-        autoReplyId: match.reply?.id,
-        autoReplyName: match.reply?.name,
-        matchType: match.step?.matchType || 'contains',
-        keywords: match.step?.keywords,
-        trigger: incomingText.slice(0, 120),
-        wamid: result.wamid,
-        delaySeconds,
-      },
-    });
+      await logWebhookEvent(supabase, {
+        user_id: targetUserId,
+        event_type: 'auto_reply_sent',
+        direction: 'outgoing',
+        phone_number: from,
+        message_type: 'text',
+        status: result.ok ? 'sent' : 'failed',
+        error: result.error,
+        payload: {
+          contactId,
+          autoReplyId: match.reply?.id,
+          autoReplyName: match.reply?.name,
+          matchType: match.step?.matchType || 'contains',
+          keywords: match.step?.keywords,
+          trigger: incomingText.slice(0, 120),
+          wamid: result.wamid,
+          delaySeconds,
+        },
+      });
 
-    console.log(result.ok ? '🤖 Auto reply sent' : '🤖 Auto reply failed', { contactId, rule: match.reply?.name, error: result.error });
+      console.log(result.ok ? '🤖 Auto reply sent' : '🤖 Auto reply failed', { contactId, rule: match.reply?.name, error: result.error });
+    } catch (autoReplyStepError) {
+      // Keep sending the OTHER matching replies — one failure must not drop the rest.
+      console.error('🤖 Auto reply step failed (continuing to next match):', getErrorMessage(autoReplyStepError));
+      await logWebhookEvent(supabase, {
+        user_id: targetUserId,
+        event_type: 'auto_reply_error',
+        direction: 'outgoing',
+        phone_number: from,
+        message_type: 'text',
+        error: getErrorMessage(autoReplyStepError),
+        payload: { contactId, autoReplyId: match.reply?.id, autoReplyName: match.reply?.name },
+      });
+    }
   }
 };
 
