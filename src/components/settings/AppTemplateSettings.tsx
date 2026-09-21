@@ -200,17 +200,20 @@ export function AppTemplateSettings() {
             </Button>
           </label>
           {!creating && (
-            <Button onClick={() => setCreating(true)} size="sm">
+            <Button onClick={() => { setEditing(null); setName(''); setBody(''); setCreating(true); }} size="sm">
               <Plus className="h-4 w-4 mr-1" /> New Template
             </Button>
           )}
         </div>
       </div>
 
-      {/* Create / Edit Form */}
-      {creating && (
-        <Card>
-          <CardContent className="pt-6 space-y-4">
+      {/* Create / Edit Dialog */}
+      <Dialog open={creating} onOpenChange={(open) => { if (!open) resetForm(); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editing ? 'Edit App Template' : 'New App Template'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
             <div className="space-y-2">
               <Label>Template Name</Label>
               <Input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Payment Reminder" />
@@ -253,9 +256,9 @@ export function AppTemplateSettings() {
                 <X className="h-4 w-4 mr-1" /> Cancel
               </Button>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Template List */}
       {loading ? (

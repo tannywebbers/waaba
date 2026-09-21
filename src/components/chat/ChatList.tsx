@@ -113,6 +113,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const [bulkStep, setBulkStep] = useState<'recipients' | 'templates' | 'preview'>('recipients');
   const [bulkPrepared, setBulkPrepared] = useState<PreparedRow[]>([]);
   const [bulkPreparing, setBulkPreparing] = useState(false);
+  const [bulkPrepareProgress, setBulkPrepareProgress] = useState(0);
   const [bulkSource, setBulkSource] = useState<'app' | 'meta'>('app');
   const [appTemplates, setAppTemplates] = useState<AppTemplate[]>([]);
   const [metaTemplates, setMetaTemplates] = useState<MetaTemplate[]>([]);
@@ -318,7 +319,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
     toast({ title: `Moved ${ids.length} chat(s) to trash` });
   };
 
-  const createOrUpdateBulkContacts = async () => {
+  const createOrUpdateBulkContacts = async (onProgress?: (prepared: number) => void) => {
     if (!user) return [];
     const manualNumbers = bulkParsedNumbers;
     const selectedContacts = contacts.filter((contact) => selectedContactIds.includes(contact.id));
@@ -365,6 +366,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
         savedContacts.push(savedContact);
         bulkSelectedLabelIds.forEach((labelId) => labelInserts.push({ user_id: user.id, chat_id: savedContact.id, label_id: labelId }));
       }
+      onProgress?.(savedContacts.length);
     }
 
     if (labelInserts.length > 0) {
@@ -389,6 +391,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
     if (!user || !selectedTemplateId || bulkRecipientCount === 0) return;
     setBulkPreparing(true);
     setBulkPrepared([]);
+    setBulkPrepareProgress(0);
     const yieldToUi = () => new Promise((resolve) => setTimeout(resolve, 0));
     try {
       const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', await getEffectiveWhatsAppUserId(user.id)).maybeSingle();
@@ -397,7 +400,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
         return;
       }
 
-      const selectedContacts = await createOrUpdateBulkContacts();
+      const selectedContacts = await createOrUpdateBulkContacts((done) => setBulkPrepareProgress(done));
       const appTemplate = appTemplates.find((t) => t.id === selectedTemplateId);
       const metaTemplate = metaTemplates.find((t) => t.id === selectedTemplateId);
 
@@ -422,6 +425,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
           };
           rows.push(row);
           setBulkPrepared([...rows]);
+          setBulkPrepareProgress(rows.length);
           await yieldToUi();
         }
       }
@@ -464,6 +468,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
             error: missing.length > 0 ? `Missing: ${missing.join(', ')}` : undefined,
           });
           setBulkPrepared([...rows]);
+          setBulkPrepareProgress(rows.length);
           await yieldToUi();
         }
       }
@@ -829,7 +834,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
 
       <LabelManagerPanel open={showLabelManager} onOpenChange={setShowLabelManager} onLabelsChanged={fetchLabels} />
 
-      <Dialog open={showBulkDialog} onOpenChange={(open) => { if (sendingBulk) return; setShowBulkDialog(open); if (!open) { setBulkStep('recipients'); setBulkPrepared([]); } }}>
+      <Dialog open={showBulkDialog} onOpenChange={(open) => { if (sendingBulk) return; setShowBulkDialog(open); if (!open) { setBulkStep('recipients'); setBulkPrepared([]); setBulkPrepareProgress(0); } }}>
         <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
           <DialogHeader><DialogTitle>{bulkStep === 'recipients' ? 'Bulk message recipients' : bulkStep === 'templates' ? 'Bulk message templates' : 'Review & send'}</DialogTitle></DialogHeader>
           {bulkStep === 'recipients' ? (
@@ -1006,7 +1011,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
             <div className="grid grid-cols-[auto_1fr] gap-2">
               <Button variant="outline" onClick={() => setBulkStep('recipients')}>Back</Button>
               <Button onClick={prepareBulkPreview} disabled={bulkPreparing || !selectedTemplateId || bulkRecipientCount === 0}>
-                {bulkPreparing ? `Prepared ${bulkPrepared.length}/${bulkRecipientCount}` : `Preview ${bulkRecipientCount} message(s)`}
+                {bulkPreparing ? `Prepared ${bulkPrepareProgress}/${bulkRecipientCount}` : `Preview ${bulkRecipientCount} message(s)`}
               </Button>
             </div>
           </div>
