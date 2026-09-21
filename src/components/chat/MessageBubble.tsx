@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useEffect, useRef, useState } from 'react';
-import { AlertCircle, Copy, FileText, Image as ImageIcon, Music, MoreVertical, Pause, Play, Trash2, Video as VideoIcon, Play as PlayIcon, Reply, Smile, Sticker as StickerIcon, BookmarkPlus } from 'lucide-react';
+import { AlertCircle, Copy, FileText, Forward, Image as ImageIcon, Music, MoreVertical, Pause, Play, Trash2, Video as VideoIcon, Play as PlayIcon, Reply, Smile, Sticker as StickerIcon, BookmarkPlus } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Message } from '@/types';
@@ -19,11 +19,12 @@ interface MessageBubbleProps {
   onDelete?: () => void;
   onReply?: (message: Message) => void;
   onReact?: (message: Message, emoji: string) => void;
+  onForward?: (message: Message) => void;
 }
 
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 
-export function MessageBubble({ message, onDelete, onReply, onReact }: MessageBubbleProps) {
+export function MessageBubble({ message, onDelete, onReply, onReact, onForward }: MessageBubbleProps) {
   const { content, isOutgoing, timestamp, status, type, mediaUrl, replySnapshot, reactions, errorCode, errorTitle, errorDetails } = message;
   const [mediaPreview, setMediaPreview] = useState(false);
   const [audioPlaying, setAudioPlaying] = useState(false);
@@ -293,6 +294,11 @@ export function MessageBubble({ message, onDelete, onReply, onReact }: MessageBu
                   }}>
                     <Copy className="h-4 w-4 mr-2" />Copy message
                   </DropdownMenuItem>
+                  {onForward && (
+                    <DropdownMenuItem onClick={() => onForward(message)}>
+                      <Forward className="h-4 w-4 mr-2" />Forward
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
                     <Trash2 className="h-4 w-4 mr-2" />Delete message

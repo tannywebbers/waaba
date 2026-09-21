@@ -2,7 +2,7 @@
 import { getEffectiveWhatsAppUserId } from '@/lib/effectiveUser';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, Clock, MessageCircle, Send, X, Reply as ReplyIcon } from 'lucide-react';
+import { ArrowLeft, Clock, Forward, MessageCircle, Search, Send, X, Reply as ReplyIcon } from 'lucide-react';
 import { EmojiPickerButton, MobileEmojiPanel } from '@/components/chat/EmojiPickerButton';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -19,6 +19,8 @@ import { FileUploadButton } from '@/components/chat/FileUploadButton';
 import { UnifiedTemplateSelector } from '@/components/chat/UnifiedTemplateSelector';
 import { VoiceRecorderButton } from '@/components/chat/VoiceRecorderButton';
 import { ImagePastePreview } from '@/components/chat/ImagePastePreview';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 import { globalVoiceRecorder } from '@/lib/globalVoiceRecorder';
 import { formatPresenceStatus } from '@/lib/utils/presence';
@@ -38,6 +40,18 @@ const toDateTimeLocalValue = (date = new Date()) => {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 };
 
+const toContactModel = (c: any) => ({
+  id: c.id, name: c.name, phone: c.phone, loanId: c.loan_id || '',
+  amount: c.amount ? Number(c.amount) : undefined,
+  appType: c.app_type || '', dayType: c.day_type ?? 0,
+  isDeleted: c.is_deleted || false,
+  deletedAt: c.deleted_at ? new Date(c.deleted_at) : undefined,
+  createdAt: new Date(c.created_at), updatedAt: new Date(c.updated_at),
+  accountDetails: (c.account_details || []).map((ad: any) => ({
+    id: ad.id, bank: ad.bank, accountNumber: ad.account_number, accountName: ad.account_name,
+  })),
+});
+
 export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
   const { activeChat, messages, addMessage, setMessages, setShowContactPanel, setDraft, updateMessageStatus } = useAppStore();
   const { user } = useAuth();
@@ -54,6 +68,13 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
   const [showScheduleDialog, setShowScheduleDialog] = useState(false);
   const [scheduleAt, setScheduleAt] = useState('');
   const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [forwardDialogOpen, setForwardDialogOpen] = useState(false);
+  const [forwardMessage, setForwardMessage] = useState<Message | null>(null);
+  const [forwardContacts, setForwardContacts] = useState<any[]>([]);
+  const [forwardSelected, setForwardSelected] = useState<Set<string>>(new Set());
+  const [forwardSearch, setForwardSearch] = useState('');
+  const [forwardSending, setForwardSending] = useState(false);
+  const [forwardProgress, setForwardProgress] = useState(0);
   const schedulePressTimer = useRef<NodeJS.Timeout | null>(null);
 
   // Check if the phone number is assigned to another user in the shared inbox (uses SECURITY DEFINER to bypass RLS)
@@ -626,6 +647,107 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
     }
   };
 
+  const openForwardDialog = async (message: Message) => {
+    if (!user || !activeChat) return;
+    setForwardMessage(message);
+    setForwardSelected(new Set());
+    setForwardProgress(0);
+    setForwardSearch('');
+    setForwardContacts([]);
+    setForwardDialogOpen(true);
+    const { data } = await supabase
+      .from('contacts')
+      .select('*')
+      .or(`user_id.eq.${user.id},assigned_user_id.eq.${user.id}`)
+      .eq('is_deleted', false)
+      .order('name', { ascending: true });
+    setForwardContacts(((data || []) as any[]).filter((c) => c.id !== activeChat.id));
+  };
+
+  const toggleForwardContact = (id: string) => {
+    setForwardSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleForward = async () => {
+    const message = forwardMessage;
+    if (!user || !message || forwardSelected.size === 0) return;
+    setForwardSending(true);
+    setForwardProgress(0);
+    try {
+      const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', await getEffectiveWhatsAppUserId(user.id)).maybeSingle();
+      if (!settings?.api_token || !settings?.phone_number_id) {
+        toast({ title: '❌ WhatsApp not configured', description: 'Go to Settings > WhatsApp API to configure your credentials.', variant: 'destructive', duration: 5000 });
+        return;
+      }
+
+      const targets = forwardContacts.filter((c) => forwardSelected.has(c.id));
+      const mediaTypes = ['image', 'video', 'document', 'audio', 'sticker'];
+      const msgType = mediaTypes.includes(message.type as string) ? message.type : 'text';
+      const payloadContent = message.type === 'text' ? message.content : (message.mediaUrl || message.content);
+
+      let okCount = 0;
+      let failCount = 0;
+      for (let i = 0; i < targets.length; i++) {
+        const contact = targets[i];
+        const normalizedPhone = (contact.phone || '').replace(/[^\d+]/g, '').replace(/^\+/, '');
+        const requestBody = {
+          action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
+          to: normalizedPhone, type: msgType, content: payloadContent,
+        };
+
+        const { data, error } = await supabase.functions.invoke('whatsapp-api', { body: requestBody });
+
+        if (error || !data?.success) {
+          failCount++;
+          toast({ title: `❌ Failed to forward`, description: `To ${contact.name || contact.phone}: ${data?.error || error?.message || 'Send failed'}`, variant: 'destructive', duration: 5000 });
+        } else {
+          okCount++;
+          const { data: msgData } = await supabase.from('messages').insert({
+            user_id: user.id, contact_id: contact.id, content: message.content,
+            type: message.type, is_outgoing: true, status: 'sent',
+            media_url: message.mediaUrl || null, whatsapp_message_id: data.messageId || null,
+          } as any).select().maybeSingle();
+
+          // Make sure the target contact/chat exists in the store so the forwarded message shows up
+          if (!useAppStore.getState().contacts.some((c) => c.id === contact.id)) {
+            useAppStore.getState().addContact(toContactModel(contact));
+          }
+
+          if (msgData) {
+            addMessage(contact.id, {
+              id: msgData.id, contactId: msgData.contact_id, content: msgData.content, type: msgData.type,
+              status: 'sent', isOutgoing: true, timestamp: new Date(msgData.created_at),
+              mediaUrl: message.mediaUrl || undefined, whatsappMessageId: data.messageId || undefined,
+            });
+          }
+        }
+
+        setForwardProgress(i + 1);
+      }
+
+      toast({
+        title: `✅ Forwarded to ${okCount} contact(s)`,
+        description: failCount > 0 ? `${failCount} failed` : undefined,
+      });
+      setForwardDialogOpen(false);
+    } catch (err: any) {
+      toast({ title: 'Forward failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setForwardSending(false);
+    }
+  };
+
+  const filteredForwardContacts = forwardContacts.filter((c) => {
+    const q = forwardSearch.trim().toLowerCase();
+    if (!q) return true;
+    return (c.name || '').toLowerCase().includes(q) || (c.phone || '').toLowerCase().includes(q);
+  });
+
   // Meta-supported audio MIME types for WhatsApp Cloud API
   const SUPPORTED_AUDIO_MIMES = [
     'audio/aac', 'audio/amr', 'audio/mpeg', 'audio/mp4', 'audio/ogg',
@@ -869,6 +991,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
                 onDelete={() => handleDeleteMessage(message.id)}
                 onReply={(m) => { setReplyTo(m); setTimeout(() => inputRef.current?.focus(), 50); }}
                 onReact={handleReact}
+                onForward={openForwardDialog}
               />
             </div>
           );
@@ -1080,6 +1203,48 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
             <Input type="datetime-local" min={toDateTimeLocalValue()} value={scheduleAt} onChange={(e) => setScheduleAt(e.target.value)} />
             <Button className="w-full" onClick={handleScheduleText} disabled={!scheduleAt || !inputValue.trim()}>
               <Clock className="h-4 w-4 mr-2" />Schedule
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={forwardDialogOpen} onOpenChange={(open) => { if (!open && !forwardSending) setForwardDialogOpen(false); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Forward className="h-4 w-4" />Forward message</DialogTitle>
+          </DialogHeader>
+          <div className="rounded-lg bg-muted px-3 py-2 mb-3">
+            <p className="text-xs text-muted-foreground truncate">{getMessagePreview(forwardMessage)}</p>
+          </div>
+          <div className="relative mb-3">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input value={forwardSearch} onChange={(e) => setForwardSearch(e.target.value)} placeholder="Search contacts..." className="pl-9" />
+          </div>
+          <ScrollArea className="h-[300px]">
+            <div className="space-y-1 pr-1">
+              {filteredForwardContacts.length === 0 ? (
+                <p className="text-center py-8 text-muted-foreground text-sm">
+                  {forwardContacts.length === 0 ? 'Loading contacts…' : 'No contacts found'}
+                </p>
+              ) : filteredForwardContacts.map((c) => (
+                <label key={c.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent cursor-pointer">
+                  <Checkbox checked={forwardSelected.has(c.id)} onCheckedChange={() => toggleForwardContact(c.id)} />
+                  <ContactAvatar name={c.name || c.phone} avatar={c.avatar_url} size="sm" />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-sm truncate">{c.name || c.phone}</p>
+                    <p className="text-xs text-muted-foreground truncate">{c.phone}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </ScrollArea>
+          <div className="flex items-center gap-2 pt-3 border-t border-border">
+            <div className="flex-1 text-xs text-muted-foreground">
+              {forwardSending ? `Forwarding ${forwardProgress}/${forwardSelected.size}…` : `${forwardSelected.size} selected`}
+            </div>
+            <Button variant="outline" onClick={() => setForwardDialogOpen(false)} disabled={forwardSending}>Cancel</Button>
+            <Button onClick={handleForward} disabled={forwardSending || forwardSelected.size === 0}>
+              <Send className="h-4 w-4 mr-1" />{forwardSending ? 'Forwarding…' : 'Forward'}
             </Button>
           </div>
         </DialogContent>
