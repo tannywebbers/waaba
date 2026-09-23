@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { normalizePhoneNumber } from '@/lib/utils/phone';
 import { ensureAppRegistered } from '@/lib/registerApp';
+import { useApps } from '@/hooks/useApps';
 
 interface ContactJSON {
   loanId: string;
