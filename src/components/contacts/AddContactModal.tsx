@@ -35,7 +35,7 @@ export function AddContactModal() {
   const { showAddContactModal, setShowAddContactModal, addContact, addContacts } = useAppStore();
   const { user } = useAuth();
   const { isSharedUser, superUserId } = useSharedInbox();
-  const { apps: userApps } = useApps();
+  const { apps: userApps, reload: reloadApps } = useApps();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   
@@ -123,6 +123,7 @@ export function AddContactModal() {
     try {
       // Ensure the chosen app is registered so it exists in Settings → Apps
       const registeredApp = await ensureAppRegistered(user.id, singleForm.appType);
+      reloadApps();
       const resolvedAppType = registeredApp || singleForm.appType;
       // Shared users create contacts under their own user_id
       const contactOwnerId = user.id;
@@ -245,6 +246,7 @@ export function AddContactModal() {
     try {
       // Ensure the chosen app is registered so it exists in Settings → Apps
       const registeredBulkApp = await ensureAppRegistered(user.id, bulkForm.appType);
+      reloadApps();
       const resolvedBulkApp = registeredBulkApp || bulkForm.appType;
       const contactOwnerId = isSharedUser && superUserId ? superUserId : user.id;
       const assignedUserId = isSharedUser ? user.id : null;

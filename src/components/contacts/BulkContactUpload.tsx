@@ -65,6 +65,7 @@ const DEMO_JSON: ContactJSON[] = [
 export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
   const { user } = useAuth();
   const { addContacts } = useAppStore();
+  const { apps: _userApps, reload: reloadApps } = useApps();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
@@ -159,12 +160,19 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
     try {
       // Register every distinct app name in the file so the imported appType always
       // exists in the user's Apps (case-insensitive) and auto-selects in the senders.
-      const distinctAppKeys = Array.from(new Set(preview.map(c => String(c.appType || '').trim().toLowerCase()).filter(Boolean)));
-      const appNameByKey: Record<string, string> = {};
-      for (const key of distinctAppKeys) {
-        const canonical = await ensureAppRegistered(user.id, key);
-        if (canonical) appNameByKey[key] = canonical;
+      // Preserve the app name's original casing for display (e.g. "SapaClear", "PixKudi").
+      const appNameByLower: Record<string, string> = {};
+      preview.forEach((c) => {
+        const name = String(c.appType || '').trim();
+        if (name && !appNameByLower[name.toLowerCase()]) appNameByLower[name.toLowerCase()] = name;
+      });
+      const canonicalByLower: Record<string, string> = {};
+      for (const name of Object.values(appNameByLower)) {
+        if (!name) continue;
+        const canonical = await ensureAppRegistered(user.id, name);
+        if (canonical) canonicalByLower[name.toLowerCase()] = canonical;
       }
+      reloadApps();
 
       const contactsData = await Promise.all(preview.map(async (c) => {
         const phone = normalizePhoneNumber(c.phone);
@@ -176,7 +184,7 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
           name: c.name,
           phone,
           amount: c.amount,
-          app_type: appNameByKey[appKey] || c.appType || '',
+          app_type: canonicalByLower[appKey] || c.appType || '',
           day_type: c.dayType,
           is_deleted: false,
           deleted_at: null,

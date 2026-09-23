@@ -136,7 +136,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const bulkFilteredApp = appTemplates.filter(t => t.name.toLowerCase().includes(bulkAppSearch.toLowerCase()));
   const bulkParsedNumbers = parsePhoneNumbers(bulkNumbers);
   const bulkRecipientCount = Array.from(new Set([...selectedContactIds, ...bulkParsedNumbers])).length;
-  const { apps: userApps } = useApps();
+  const { apps: userApps, reload: reloadApps } = useApps();
   const appChoices = useMemo(() => userApps.map((a) => a.name.toLowerCase()), [userApps]);
   const appTemplatesMap = useMemo(() => Object.fromEntries(appTemplates.map((template) => [template.name, template.body])), [appTemplates]);
 
@@ -368,6 +368,8 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
       }
       onProgress?.(savedContacts.length);
     }
+
+    reloadApps();
 
     if (labelInserts.length > 0) {
       const { data: existingLabels } = await supabase

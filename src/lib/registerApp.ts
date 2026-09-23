@@ -17,6 +17,8 @@ export async function ensureAppRegistered(userId: string, appName: string): Prom
     .select('name')
     .eq('user_id', userId)
     .ilike('name', escapeLike(name))
+    .order('name', { ascending: true })
+    .limit(1)
     .maybeSingle();
   if (findError) {
     console.error('[ensureAppRegistered] lookup failed:', findError.message);
@@ -37,6 +39,8 @@ export async function ensureAppRegistered(userId: string, appName: string): Prom
         .select('name')
         .eq('user_id', userId)
         .ilike('name', escapeLike(name))
+        .order('name', { ascending: true })
+        .limit(1)
         .maybeSingle();
       return raced?.name || null;
     }

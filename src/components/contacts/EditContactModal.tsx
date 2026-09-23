@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { useAppStore } from '@/stores/appStore';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { normalizePhoneNumber } from '@/lib/utils/phone';
 import { useApps } from '@/hooks/useApps';
@@ -33,7 +34,8 @@ interface EditContactModalProps {
 
 export function EditContactModal({ open, onOpenChange, contactId }: EditContactModalProps) {
   const { contacts, updateContact } = useAppStore();
-  const { apps: userApps } = useApps();
+  const { apps: userApps, reload: reloadApps } = useApps();
+  const { user } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   
@@ -84,6 +86,7 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
 
   const handleSave = async () => {
     if (!contact) return;
+    if (!user) return;
     setLoading(true);
 
     try {
@@ -107,6 +110,8 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
         .eq('id', contactId);
 
       if (contactError) throw contactError;
+
+      reloadApps();
 
       await supabase.from('account_details').delete().eq('contact_id', contactId);
 

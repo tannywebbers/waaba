@@ -29,7 +29,7 @@ export function NewChatModal({ open, onClose, onSelectContact }: NewChatModalPro
   const { contacts, chats, addContact, setActiveChat, setViewMode } = useAppStore();
   const { user } = useAuth();
   const { isSharedUser, superUserId } = useSharedInbox();
-  const { apps: userApps } = useApps();
+  const { apps: userApps, reload: reloadApps } = useApps();
   const { toast } = useToast();
   const [search, setSearch] = useState('');
   const [quickAppType, setQuickAppType] = useState('');
@@ -92,6 +92,7 @@ export function NewChatModal({ open, onClose, onSelectContact }: NewChatModalPro
 
       // Ensure the quick-chat app is registered so it always exists in Settings → Apps
       const registeredApp = await ensureAppRegistered(user.id, quickAppType);
+      reloadApps();
 
       const payload = {
         user_id: contactOwnerId,
