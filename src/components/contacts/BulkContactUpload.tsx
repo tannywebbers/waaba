@@ -9,6 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { normalizePhoneNumber } from '@/lib/utils/phone';
 import { ensureAppRegistered } from '@/lib/registerApp';
 import { useApps } from '@/hooks/useApps';
+import { ensureContactAppLabels } from '@/lib/contactAppLabel';
 
 interface ContactJSON {
   loanId: string;
@@ -238,6 +239,13 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
       })) || [];
 
       addContacts(newContacts);
+
+      // Label each imported contact with its app name automatically.
+      await ensureContactAppLabels(
+        user.id,
+        (contactsData || []).map((c: any) => ({ id: c.id, appType: c.app_type })),
+      );
+
       toast({ title: `Successfully imported ${newContacts.length} contacts` });
       setPreview(null);
       onSuccess?.();

@@ -72,7 +72,7 @@ export function StickerPicker({ onSelect }: StickerPickerProps) {
           <StickerIcon className="h-[22px] w-[22px]" strokeWidth={2.25} />
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-[320px] p-3" side="top" align="end">
+      <PopoverContent className="w-[min(320px,calc(100vw-1.5rem))] p-3" side="top" align="end">
         <div className="flex items-center justify-between mb-2">
           <p className="font-semibold text-sm">Stickers</p>
           <Button size="sm" variant="ghost" disabled={uploading} onClick={() => fileRef.current?.click()}>

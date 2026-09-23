@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { getEffectiveWhatsAppUserId } from '@/lib/effectiveUser';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Archive, CheckSquare, MessageCircle, MoreVertical, Plus, RotateCcw, Search, Send, Settings2, SortAsc, SortDesc, SquarePen, Trash2, Users } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 
@@ -27,6 +27,7 @@ import { useApps } from '@/hooks/useApps';
 import { logSendDiagnostics } from '@/lib/sendDiagnostics';
 import { resolveTemplateBody, resolveVariable } from '@/lib/templateVariables';
 import { ensureAppRegistered } from '@/lib/registerApp';
+import { ensureContactAppLabels } from '@/lib/contactAppLabel';
 
 type ChatFilter = 'all' | 'unread' | 'archived';
 type SortBy = 'recent' | 'name' | 'amount';
@@ -51,6 +52,10 @@ interface PreparedRow {
   status: 'ready' | 'blocked' | 'sending' | 'sent' | 'failed' | 'scheduled';
   error?: string;
 }
+
+// Chat/Contact list scroll positions, preserved across unmounts (mobile opens
+// and closes the chat view, which tears this list down and back up).
+const preservedListScroll = new Map<string, number>();
 
 const resolveTemplate = (body: string, contact: any): string => resolveTemplateBody(body, contact).text;
 
@@ -131,6 +136,41 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const [bulkNumbers, setBulkNumbers] = useState('');
 
   const listContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Preserve the list scroll position across mounts. On mobile, opening a chat
+  // unmounts this list, so without this the user gets thrown back to the top —
+  // breaking the "send to this contact, stay at my place, send to the next" flow.
+  const preservedScrollKey = `${user?.id || ''}|${viewMode}|${chatFilter}|${showTrash}`;
+  const scrollRestoredRef = useRef(false);
+  const prevScrollKeyRef = useRef(preservedScrollKey);
+  if (prevScrollKeyRef.current !== preservedScrollKey) {
+    prevScrollKeyRef.current = preservedScrollKey;
+    scrollRestoredRef.current = false;
+  }
+
+  const handleListScroll = () => {
+    const el = listContainerRef.current;
+    if (el) preservedListScroll.set(preservedScrollKey, el.scrollTop);
+  };
+
+  useEffect(() => {
+    return () => {
+      const el = listContainerRef.current;
+      if (el) preservedListScroll.set(preservedScrollKey, el.scrollTop);
+    };
+  }, [preservedScrollKey]);
+
+  useLayoutEffect(() => {
+    const el = listContainerRef.current;
+    if (!el || scrollRestoredRef.current) return;
+    const saved = preservedListScroll.get(preservedScrollKey);
+    if (!saved || saved <= 0) { scrollRestoredRef.current = true; return; }
+    // Only restore once the list actually has content to scroll within.
+    if (el.scrollHeight > saved + 4) {
+      el.scrollTop = saved;
+      scrollRestoredRef.current = true;
+    }
+  }, [preservedScrollKey, chats.length, contacts.length]);
 
   const bulkFilteredMeta = metaTemplates.filter(t => t.name.toLowerCase().includes(bulkMetaSearch.toLowerCase()));
   const bulkFilteredApp = appTemplates.filter(t => t.name.toLowerCase().includes(bulkAppSearch.toLowerCase()));
@@ -370,6 +410,12 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
     }
 
     reloadApps();
+
+    // Give newly created/updated contacts a label named after their app.
+    await ensureContactAppLabels(
+      user.id,
+      savedContacts.map((contact) => ({ id: contact.id, appType: contact.app_type })),
+    );
 
     if (labelInserts.length > 0) {
       const { data: existingLabels } = await supabase
@@ -771,7 +817,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
         </div>
       )}
 
-      <div ref={listContainerRef} className="flex-1 overflow-y-auto custom-scrollbar">
+      <div ref={listContainerRef} onScroll={handleListScroll} className="flex-1 overflow-y-auto custom-scrollbar">
         {viewMode === 'chats' && (
           filteredChats.length === 0
             ? <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-4"><MessageCircle className="h-14 w-14 mb-3 opacity-40" /><p className="text-[15px]">No chats yet</p></div>
@@ -821,12 +867,11 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
                 onPermanentDelete={(id) => setConfirmPermDelete({ ids: [id] })}
                 onClick={() => {
                   if (showTrash) return;
-                  const chat = chats.find((c) => c.contact.id === contact.id);
-                  if (chat) {
-                    setActiveChat(chat);
-                    onChatSelect?.(chat);
-                    setViewMode('chats');
-                  }
+                  // Stay in the current view (Contacts stays Contacts; the chat opens
+                  // in the center/full-screen without force-switching to the Chats tab).
+                  const chat = chats.find((c) => c.contact.id === contact.id) || { id: contact.id, contact, unreadCount: 0 };
+                  setActiveChat(chat);
+                  onChatSelect?.(chat);
                 }}
               />
             ))}

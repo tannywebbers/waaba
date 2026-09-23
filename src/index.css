@@ -112,8 +112,10 @@
     @apply border-border;
   }
   html, body {
-    /* Never let stray fixed widths cause horizontal scroll on small screens */
+    /* Never let stray fixed widths cause horizontal scroll on small screens.
+       `hidden` is the fallback for engines without `overflow: clip`. */
     max-width: 100%;
+    overflow-x: hidden;
     overflow-x: clip;
   }
   body {
@@ -126,7 +128,9 @@
     text-size-adjust: 100%;
   }
   #root {
+    width: 100%;
     max-width: 100vw;
+    overflow-x: hidden;
     overflow-x: clip;
   }
   /* Media never overflows its container on small screens */
@@ -145,6 +149,17 @@
   @media (max-width: 767px) {
     html, body {
       overscroll-behavior-y: none;
+    }
+    /* Long unbroken tokens (loan IDs, phone numbers, URLs) wrap instead of
+       widening their row and pushing the page sideways */
+    #root * {
+      overflow-wrap: anywhere;
+    }
+    /* Pull popovers/dialogs inside the visible width on small screens */
+    [data-radix-popper-content-wrapper],
+    [role='dialog'],
+    [popover] {
+      max-width: 100vw;
     }
   }
 }

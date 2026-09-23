@@ -126,22 +126,58 @@ export const useAppStore = create<AppState>()((set, get) => ({
   contacts: [],
   setContacts: (contacts) => set({ contacts }),
   addContact: (contact) => {
-    set((state) => ({
-      contacts: [...state.contacts.filter((c) => c.id !== contact.id), contact],
-      chats: [...state.chats.filter((c) => c.id !== contact.id), { id: contact.id, contact, unreadCount: 0 }],
-    }));
+    set((state) => {
+      const existingChat = state.chats.find((c) => c.id === contact.id || c.contact.id === contact.id);
+      const chat: Chat = existingChat
+        ? {
+            ...existingChat,
+            contact,
+            // Preserve the chat's conversation preview + flags so an update/import
+            // never turns an existing chat into a "No messages yet" new contact.
+            lastMessage: existingChat.lastMessage,
+            unreadCount: existingChat.unreadCount,
+            isPinned: existingChat.isPinned,
+            isMuted: existingChat.isMuted,
+            isArchived: existingChat.isArchived,
+          }
+        : { id: contact.id, contact, unreadCount: 0 };
+      return {
+        contacts: [...state.contacts.filter((c) => c.id !== contact.id), contact],
+        chats: [...state.chats.filter((c) => c.id !== contact.id && c.contact.id !== contact.id), chat],
+      };
+    });
   },
   addContacts: (contacts) => {
-    set((state) => ({
-      contacts: [
-        ...state.contacts.filter((existing) => !contacts.some((incoming) => incoming.id === existing.id || incoming.phone === existing.phone)),
-        ...contacts,
-      ],
-      chats: [
-        ...state.chats.filter((existing) => !contacts.some((incoming) => incoming.id === existing.id || incoming.id === existing.contact.id || incoming.phone === existing.contact.phone)),
-        ...contacts.map(c => ({ id: c.id, contact: c, unreadCount: 0 })),
-      ],
-    }));
+    set((state) => {
+      const chats = [...state.chats];
+      const newChats: Chat[] = [];
+      for (const contact of contacts) {
+        const idx = chats.findIndex((c) => c.id === contact.id || c.contact.id === contact.id || c.contact.phone === contact.phone);
+        if (idx >= 0) {
+          const existing = chats[idx];
+          chats[idx] = {
+            ...existing,
+            contact,
+            // Preserve the conversation preview + flags when re-importing/updating
+            // an existing contact instead of treating it as brand new.
+            lastMessage: existing.lastMessage,
+            unreadCount: existing.unreadCount,
+            isPinned: existing.isPinned,
+            isMuted: existing.isMuted,
+            isArchived: existing.isArchived,
+          };
+        } else {
+          newChats.push({ id: contact.id, contact, unreadCount: 0 });
+        }
+      }
+      return {
+        contacts: [
+          ...state.contacts.filter((existing) => !contacts.some((incoming) => incoming.id === existing.id || incoming.phone === existing.phone)),
+          ...contacts,
+        ],
+        chats: [...chats, ...newChats],
+      };
+    });
   },
   updateContact: (id, updates) => set((state) => ({
     contacts: state.contacts.map(c => c.id === id ? { ...c, ...updates, updatedAt: new Date() } : c),

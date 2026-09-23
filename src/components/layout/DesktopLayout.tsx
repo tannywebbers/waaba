@@ -104,8 +104,8 @@ export function DesktopLayout() {
 
       {/* Main Panel - ChatList / Contacts / Settings */}
       <div className={cn(
-        "shrink-0 flex flex-col border-r border-panel-border",
-        sidebarOpen ? "w-[380px] lg:w-[420px]" : "w-[380px] lg:w-[420px] ml-12"
+        "shrink flex flex-col border-r border-panel-border min-w-[280px] w-[min(32vw,420px)]",
+        !sidebarOpen && "ml-12"
       )}>
         {viewMode === 'settings' ? (
           <SettingsPage />

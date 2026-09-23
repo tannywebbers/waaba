@@ -34,7 +34,7 @@ export function ContactPanel() {
   };
 
   return (
-    <div className="w-full md:w-80 h-full bg-panel flex flex-col md:border-l md:border-panel-border overflow-hidden">
+    <div className="w-full md:w-72 xl:w-80 shrink-0 h-full bg-panel flex flex-col md:border-l md:border-panel-border overflow-hidden">
       {/* Close button header */}
       <div className="flex items-center justify-between px-4 py-3 bg-panel-header border-b border-panel-border shrink-0">
         <h3 className="font-semibold text-[17px]">Contact Info</h3>
