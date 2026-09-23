@@ -162,7 +162,7 @@ export function ContactListItem({
   // =========================
 
   return (
-    <div className="relative">
+    <div className="relative" data-contact-id={contact.id}>
       <button
         onClick={handleClick}
         onTouchStart={handleTouchStart}

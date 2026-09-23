@@ -151,6 +151,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const handleListScroll = () => {
     const el = listContainerRef.current;
     if (el) preservedListScroll.set(preservedScrollKey, el.scrollTop);
+    updateAnchor();
   };
 
   useEffect(() => {
@@ -171,6 +172,44 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
       scrollRestoredRef.current = true;
     }
   }, [preservedScrollKey, chats.length, contacts.length]);
+
+  // ── Scroll anchoring: when an outgoing message re-sorts the list (Recent sort),
+  //    the just-messaged chat jumps to the top and the viewport shifts out from
+  //    under the user. Pin the item that is at the top of the visible area to the
+  //    same on-screen offset so desktop users stay in place to message the next one.
+  const anchorRef = useRef<{ id: string; offset: number } | null>(null);
+  const lastOrderSignatureRef = useRef<string>('');
+
+  const updateAnchor = () => {
+    const el = listContainerRef.current;
+    if (!el) return;
+    for (const child of Array.from(el.children) as HTMLElement[]) {
+      const id = child.dataset.chatId || child.dataset.contactId;
+      if (!id) continue;
+      if (child.offsetTop + child.offsetHeight > el.scrollTop + 1) {
+        anchorRef.current = { id, offset: el.scrollTop - child.offsetTop };
+        break;
+      }
+    }
+  };
+
+  useLayoutEffect(() => {
+    const el = listContainerRef.current;
+    if (!el) return;
+    const items = viewMode === 'chats' ? filteredChats : filteredContacts;
+    const signature = items.map((c: any) => c.id).join(',');
+    if (signature !== lastOrderSignatureRef.current) {
+      lastOrderSignatureRef.current = signature;
+      const anchor = anchorRef.current;
+      if (anchor && anchor.id && el.offsetParent) {
+        const child = Array.from(el.children as HTMLElement[]).find(
+          (n) => n.dataset.chatId === anchor.id || n.dataset.contactId === anchor.id,
+        );
+        if (child) el.scrollTop = child.offsetTop + anchor.offset;
+      }
+    }
+    updateAnchor();
+  });
 
   const bulkFilteredMeta = metaTemplates.filter(t => t.name.toLowerCase().includes(bulkMetaSearch.toLowerCase()));
   const bulkFilteredApp = appTemplates.filter(t => t.name.toLowerCase().includes(bulkAppSearch.toLowerCase()));
@@ -817,7 +856,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
         </div>
       )}
 
-      <div ref={listContainerRef} onScroll={handleListScroll} className="flex-1 overflow-y-auto custom-scrollbar">
+      <div ref={listContainerRef} onScroll={handleListScroll} className="relative flex-1 overflow-y-auto custom-scrollbar">
         {viewMode === 'chats' && (
           filteredChats.length === 0
             ? <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-4"><MessageCircle className="h-14 w-14 mb-3 opacity-40" /><p className="text-[15px]">No chats yet</p></div>

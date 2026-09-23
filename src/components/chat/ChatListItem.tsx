@@ -204,6 +204,7 @@ export function ChatListItem({
   return (
     <>
       <div
+        data-chat-id={chat.id}
         className={cn(
           'relative border-b border-panel-border/70',
           isActive && 'bg-[hsl(var(--highlight-active))]',
