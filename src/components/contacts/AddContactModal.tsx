@@ -58,13 +58,7 @@ export function AddContactModal() {
     dayType: '0',
   });
 
-  // Seed default appType from user's first app once loaded
-  useEffect(() => {
-    if (userApps.length === 0) return;
-    const first = userApps[0].name.toLowerCase();
-    setSingleForm((f) => f.appType ? f : { ...f, appType: first });
-    setBulkForm((f) => f.appType ? f : { ...f, appType: first });
-  }, [userApps]);
+  // Do not auto-seed appType; keep empty by default so empty appType is preserved
 
   // Labels
   interface LabelOption { id: string; name: string; color: string }
@@ -81,10 +75,9 @@ export function AddContactModal() {
   useEffect(() => { fetchLabels(); }, [fetchLabels]);
 
   const resetForms = () => {
-    const first = userApps[0]?.name.toLowerCase() || '';
-    setSingleForm({ loanId: '', name: '', phone: '', amount: '', appType: first, appTypeCustom: '', dayType: '0' });
+    setSingleForm({ loanId: '', name: '', phone: '', amount: '', appType: '', appTypeCustom: '', dayType: '0' });
     setAccountDetails([]);
-    setBulkForm({ contactIds: '', customerNames: '', phoneNumbers: '', appType: first, dayType: '0' });
+    setBulkForm({ contactIds: '', customerNames: '', phoneNumbers: '', appType: '', dayType: '0' });
     setSelectedLabelIds([]);
     setBulkSelectedLabelIds([]);
   };
@@ -124,7 +117,8 @@ export function AddContactModal() {
       // Ensure the chosen app is registered so it exists in Settings → Apps
       const registeredApp = await ensureAppRegistered(user.id, singleForm.appType);
       reloadApps();
-      const resolvedAppType = registeredApp || singleForm.appType;
+      const chosenApp = singleForm.appType?.trim();
+      const resolvedAppType = chosenApp ? (registeredApp || chosenApp) : '';
       // Shared users create contacts under their own user_id
       const contactOwnerId = user.id;
       const assignedUserId = isSharedUser ? user.id : null;
@@ -245,9 +239,16 @@ export function AddContactModal() {
     setLoading(true);
     try {
       // Ensure the chosen app is registered so it exists in Settings → Apps
-      const registeredBulkApp = await ensureAppRegistered(user.id, bulkForm.appType);
-      reloadApps();
-      const resolvedBulkApp = registeredBulkApp || bulkForm.appType;
+      const bulkChosen = bulkForm.appType?.trim();
+      let resolvedBulkApp = '';
+      if (bulkChosen) {
+        const registeredBulkApp = await ensureAppRegistered(user.id, bulkChosen);
+        reloadApps();
+        resolvedBulkApp = registeredBulkApp || bulkChosen;
+      } else {
+        reloadApps();
+        resolvedBulkApp = '';
+      }
       const contactOwnerId = isSharedUser && superUserId ? superUserId : user.id;
       const assignedUserId = isSharedUser ? user.id : null;
 
@@ -374,6 +375,7 @@ export function AddContactModal() {
                       onChange={(e) => setSingleForm({ ...singleForm, appType: e.target.value })}
                       className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
                     >
+                      <option value="">None (no app)</option>
                       {userApps.map((a) => (
                         <option key={a.id} value={a.name.toLowerCase()}>{a.name}</option>
                       ))}
@@ -481,6 +483,7 @@ export function AddContactModal() {
                       onChange={(e) => setBulkForm({ ...bulkForm, appType: e.target.value })}
                       className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
                     >
+                      <option value="">None (no app)</option>
                       {userApps.map((a) => (
                         <option key={a.id} value={a.name.toLowerCase()}>{a.name}</option>
                       ))}

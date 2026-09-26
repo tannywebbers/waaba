@@ -302,10 +302,8 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const appTypeOptions = useMemo(() => ['all', ...Object.keys(appTypeLabels)], [appTypeLabels]);
   const dayTypeOptions = useMemo(() => ['all', ...Array.from(new Set(contacts.map((c) => String(c.dayType ?? '0'))))], [contacts]);
 
-  // Seed bulk app default from first user app once loaded
-  useEffect(() => {
-    if (!bulkAppType && userApps.length > 0) setBulkAppType(userApps[0].name.toLowerCase());
-  }, [userApps, bulkAppType]);
+  // bulkAppType is intentionally not auto-seeded from the first app: an undefined
+  // app must stay undefined instead of silently becoming a default app name.
 
   const filteredContacts = contacts
     .filter((contact) => showTrash === !!contact.isDeleted)
@@ -418,6 +416,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
       if (findError) throw findError;
 
       const finalAppType = (bulkAppType || selected?.appType || existingContact?.app_type || '').trim();
+      // Empty appType means "leave empty" for new contacts; never invent a default.
       let savedAppType = finalAppType;
       if (finalAppType) {
         const registered = await ensureAppRegistered(user.id, finalAppType);
@@ -943,6 +942,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
                     </div>
                   ) : (
                     <select value={bulkAppType} onChange={(e) => setBulkAppType(e.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                      <option value="">None (leave empty)</option>
                       {appChoices.map((app) => <option key={app} value={app}>{appTypeLabels[app] || app}</option>)}
                     </select>
                   )}
@@ -986,8 +986,8 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
                   })}
                 </div>
               </div>
-              <Button className="w-full" onClick={handleBulkRecipientsNext} disabled={sendingBulk || bulkRecipientCount === 0 || userApps.length === 0}>
-                {sendingBulk ? 'Creating contacts...' : userApps.length === 0 ? 'Add an App in Settings → Apps first' : `Next: create ${bulkRecipientCount} contact(s)`}
+              <Button className="w-full" onClick={handleBulkRecipientsNext} disabled={sendingBulk || bulkRecipientCount === 0}>
+                {sendingBulk ? 'Creating contacts...' : `Next: create ${bulkRecipientCount} contact(s)`}
               </Button>
             </div>
           ) : bulkStep === 'templates' ? (

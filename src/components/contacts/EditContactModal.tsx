@@ -58,16 +58,15 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
   useEffect(() => {
     if (contact && open && !initializedRef.current) {
       initializedRef.current = true;
-      const knownAppTypes = userApps.map(a => a.name.toLowerCase());
-      const currentAppType = (contact.appType || '').toLowerCase();
-      const appTypeIsKnown = knownAppTypes.includes(currentAppType);
+      const currentAppType = (contact.appType || '').trim();
+      const isKnownApp = userApps.some((a) => a.name.toLowerCase() === currentAppType.toLowerCase());
 
       setFormData({
         loanId: contact.loanId || '',
         name: contact.name || '',
         phone: contact.phone || '',
         amount: contact.amount?.toString() || '',
-        appType: appTypeIsKnown ? currentAppType : (knownAppTypes[0] || ''),
+        appType: currentAppType && isKnownApp ? currentAppType.toLowerCase() : currentAppType,
         appTypeCustom: '',
         dayType: contact.dayType?.toString() || '0',
       });
@@ -90,9 +89,9 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
     setLoading(true);
 
     try {
-      // Ensure the chosen app stays registered (protects free-typed/synced values)
-      const registeredApp = await ensureAppRegistered(user.id, formData.appType);
-      const resolvedAppType = registeredApp || formData.appType;
+      // Empty appType is a valid value; only register/resolve when an app is chosen
+      const chosenApp = formData.appType?.trim();
+      const resolvedAppType = chosenApp ? (await ensureAppRegistered(user.id, chosenApp) || chosenApp) : '';
       const parsedDayType = parseInt(formData.dayType);
       const normalizedPhone = normalizePhoneNumber(formData.phone);
       const updatePayload: Record<string, any> = {
@@ -170,6 +169,14 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
 
   if (!contact) return null;
 
+  // Keep the contact's own app selectable even if it isn't (or no longer is) in Apps,
+  // so saving never silently replaces a custom app with a default one.
+  const contactAppType = (contact.appType || '').trim();
+  const appTypeChoices = userApps.map((a) => ({ value: a.name.toLowerCase(), label: a.name }));
+  if (contactAppType && !appTypeChoices.some((o) => o.value.toLowerCase() === contactAppType.toLowerCase())) {
+    appTypeChoices.push({ value: contactAppType, label: contactAppType });
+  }
+
   useDialogBackButton(open, () => onOpenChange(false));
 
   return (
@@ -213,8 +220,9 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
                   onChange={(e) => setFormData({ ...formData, appType: e.target.value })}
                   className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
                 >
-                  {userApps.map((a) => (
-                    <option key={a.id} value={a.name.toLowerCase()}>{a.name}</option>
+                  <option value="">None (no app)</option>
+                  {appTypeChoices.map((a) => (
+                    <option key={a.value} value={a.value}>{a.label}</option>
                   ))}
                 </select>
               )}

@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Search, Phone } from 'lucide-react';
 import { useAppStore } from '@/stores/appStore';
 import { useAuth } from '@/hooks/useAuth';
@@ -35,9 +35,7 @@ export function NewChatModal({ open, onClose, onSelectContact }: NewChatModalPro
   const [quickAppType, setQuickAppType] = useState('');
   const [creatingQuickChat, setCreatingQuickChat] = useState(false);
 
-  useEffect(() => {
-    if (!quickAppType && userApps.length > 0) setQuickAppType(userApps[0].name.toLowerCase());
-  }, [userApps, quickAppType]);
+  // quickAppType stays empty by default so a contact is never given a default app name.
 
   const filteredContacts = contacts.filter(contact =>
     contact.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -72,10 +70,6 @@ export function NewChatModal({ open, onClose, onSelectContact }: NewChatModalPro
       handleSelect(existingContactForPhone);
       return;
     }
-    if (userApps.length === 0) {
-      toast({ title: 'No apps available', description: 'Add an app in Settings → Apps first.', variant: 'destructive' });
-      return;
-    }
 
     setCreatingQuickChat(true);
     try {
@@ -91,7 +85,8 @@ export function NewChatModal({ open, onClose, onSelectContact }: NewChatModalPro
         .maybeSingle();
 
       // Ensure the quick-chat app is registered so it always exists in Settings → Apps
-      const registeredApp = await ensureAppRegistered(user.id, quickAppType);
+      const chosenApp = quickAppType?.trim();
+      const registeredApp = chosenApp ? await ensureAppRegistered(user.id, chosenApp) : null;
       reloadApps();
 
       const payload = {
@@ -100,7 +95,7 @@ export function NewChatModal({ open, onClose, onSelectContact }: NewChatModalPro
         name: existingContact?.name || phone,
         phone,
         loan_id: existingContact?.loan_id || '',
-        app_type: registeredApp || quickAppType || existingContact?.app_type || '',
+        app_type: registeredApp || chosenApp || existingContact?.app_type || '',
         is_deleted: false,
         deleted_at: null,
         created_at: new Date().toISOString(),
@@ -179,6 +174,7 @@ export function NewChatModal({ open, onClose, onSelectContact }: NewChatModalPro
                   onChange={(e) => setQuickAppType(e.target.value)}
                   className="mt-1 w-full h-9 rounded-md border border-input bg-background px-2 text-sm"
                 >
+                  <option value="">None (leave empty)</option>
                   {userApps.map((a) => (
                     <option key={a.id} value={a.name.toLowerCase()}>{a.name}</option>
                   ))}
