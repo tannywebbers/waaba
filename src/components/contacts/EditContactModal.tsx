@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { useState, useEffect, useRef } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -18,7 +18,18 @@ import { normalizePhoneNumber } from '@/lib/utils/phone';
 import { useApps } from '@/hooks/useApps';
 import { ensureAppRegistered } from '@/lib/registerApp';
 import { useDialogBackButton } from '@/hooks/useDialogBackButton';
-
+interface ContactListItemForm {
+  id?: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  role?: string;
+  notes?: string;
+  bankName?: string;
+  accountNumber?: string;
+  recipientName?: string;
+  isPrimary?: boolean;
+}
 interface AccountDetail {
   id?: string;
   bank: string;
@@ -50,8 +61,12 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
     appType: '',
     appTypeCustom: '',
     dayType: '0',
+    bvn: '',
+    imageUrl: '',
+    imageAlt: '',
   });
   const [accountDetails, setAccountDetails] = useState<AccountDetail[]>([]);
+  const [contactList, setContactList] = useState<ContactListItemForm[]>([]);
   const initializedRef = useRef(false);
 
   // Only initialize once when modal opens (not on every re-render)
@@ -69,6 +84,9 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
         appType: currentAppType && isKnownApp ? currentAppType.toLowerCase() : currentAppType,
         appTypeCustom: '',
         dayType: contact.dayType?.toString() || '0',
+        bvn: contact.bvn || '',
+        imageUrl: (contact as any).imageUrl || (contact as any).image_url || (contact as any).avatarUrl || (contact as any).avatar_url || '',
+        imageAlt: (contact as any).imageAlt || (contact as any).image_alt || '',
       });
       setAccountDetails(contact.accountDetails?.map(ad => ({
         id: ad.id,
@@ -76,6 +94,18 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
         accountNumber: ad.accountNumber || '',
         accountName: ad.accountName || '',
       })) || []);
+      setContactList(((contact as any).contacts || (contact as any).contactList || []).map((cc: any) => ({
+        id: cc.id,
+        name: cc.name || '',
+        phone: cc.phone || '',
+        email: cc.email || '',
+        role: cc.role || '',
+        notes: cc.notes || '',
+        bankName: cc.bankName || cc.bank_name || '',
+        accountNumber: cc.accountNumber || cc.account_number || '',
+        recipientName: cc.recipientName || cc.recipient_name || '',
+        isPrimary: cc.isPrimary || cc.is_primary || false,
+      })));
     }
 
     if (!open) {
@@ -101,6 +131,8 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
         amount: formData.amount ? parseFloat(formData.amount) : null,
         app_type: resolvedAppType,
         day_type: isNaN(parsedDayType) ? 0 : parsedDayType,
+        bvn: formData.bvn?.trim() || null,
+        image_url: formData.imageUrl?.trim() || null,
       };
 
       const { error: contactError } = await supabase
@@ -129,7 +161,24 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
           );
         if (accountError) throw accountError;
       }
-
+      if (contactList.length > 0 && user) {
+        await supabase.from('customer_contacts').delete().eq('customer_id', contactId).eq('user_id', user.id);
+        await supabase.from('customer_contacts').insert(
+          contactList.map(cc => ({
+            customer_id: contactId,
+            user_id: user.id,
+            name: cc.name || '',
+            phone: cc.phone || '',
+            email: cc.email || '',
+            role: cc.role || '',
+            notes: cc.notes || '',
+            bank_name: cc.bankName || '',
+            account_number: cc.accountNumber || '',
+            recipient_name: cc.recipientName || '',
+            is_primary: cc.isPrimary || false,
+          }))
+        );
+      }
       updateContact(contactId, {
         loanId: formData.loanId || '',
         name: formData.name,
@@ -137,6 +186,9 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
         amount: formData.amount ? parseFloat(formData.amount) : undefined,
         appType: resolvedAppType,
         dayType: parseInt(formData.dayType),
+        bvn: formData.bvn || '',
+        imageUrl: formData.imageUrl || '',
+        contacts: contactList,
         accountDetails: accountDetails.map((ad, idx) => ({
           id: ad.id || `temp-${idx}`,
           bank: ad.bank,
@@ -165,6 +217,15 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
 
   const updateAccountDetail = (index: number, field: keyof AccountDetail, value: string) => {
     setAccountDetails(accountDetails.map((ad, i) => i === index ? { ...ad, [field]: value } : ad));
+  };
+  const addContactItem = () => {
+    setContactList([...contactList, { name: '', phone: '', email: '', role: '', notes: '', bankName: '', accountNumber: '', recipientName: '', isPrimary: false }]);
+  };
+  const removeContactItem = (index: number) => {
+    setContactList(contactList.filter((_, i) => i !== index));
+  };
+  const updateContactItem = (index: number, field: keyof ContactListItemForm, value: string | boolean) => {
+    setContactList(contactList.map((cc, i) => i === index ? { ...cc, [field]: value } : cc));
   };
 
   if (!contact) return null;
@@ -212,7 +273,7 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
               <Label>App Type</Label>
               {userApps.length === 0 ? (
                 <div className="rounded-md border border-dashed border-input p-3 text-xs text-muted-foreground">
-                  No Apps Found. Go to <span className="font-medium text-foreground">Settings → Apps</span> to create your first App.
+                  No Apps Found. Go to <span className="font-medium text-foreground">Settings â†’ Apps</span> to create your first App.
                 </div>
               ) : (
                 <select
@@ -289,3 +350,13 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
     </Dialog>
   );
 }
+
+
+
+
+
+
+
+
+
+

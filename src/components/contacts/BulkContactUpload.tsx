@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { useState, useRef } from 'react';
 import { Upload, Download, FileJson, X, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,10 @@ interface ContactJSON {
   phone: string;
   amount?: number;
   appType?: string;
-  dayType?: -1 | 0;
+  dayType?: -1 | 0 | number;
+  bvn?: string;
+  imageUrl?: string;
+  contacts?: any[];
   accountDetails?: {
     bank: string;
     accountNumber: string;
@@ -74,6 +77,22 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
   const [preview, setPreview] = useState<ContactJSON[] | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
 
+  const downloadAndUploadImage = async (url: string): Promise<string | null> => {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      const file = new File([blob], 'contact-image', { type: blob.type || 'image/jpeg' });
+      const form = new FormData();
+      form.append('file', file);
+      const uploadRes = await fetch('/api/upload', { method: 'POST', body: form });
+      if (!uploadRes.ok) return null;
+      const data = await uploadRes.json();
+      return data.url || data.path || null;
+    } catch (e) {
+      return null;
+    }
+  };
   const downloadDemo = () => {
     const blob = new Blob([JSON.stringify(DEMO_JSON, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -104,12 +123,49 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
       } else if (!normalizePhoneNumber(`${contact.phone}`)) {
         rowErrors.push('phone is not a valid number');
       }
-      // appType is free-form now (managed in Settings › Apps)
+      // appType is free-form now (managed in Settings â€º Apps)
       if (contact.appType && typeof contact.appType !== 'string') {
         rowErrors.push('appType must be a string');
       }
       if (contact.dayType !== undefined && Number.isNaN(Number(contact.dayType))) {
         rowErrors.push('dayType must be a number (e.g. 0, -1, -7)');
+      }      }
+      const imageAliases = ['imageUrl','image_url','photo','photoUrl','avatar','avatarUrl','picture'];
+      const imgKey = imageAliases.find(k => contact[k] !== undefined && contact[k] !== null);
+      if (imgKey) {
+        const v = contact[imgKey];
+        if (typeof v !== 'string' || !/^https?:\/\//i.test(v.trim())) {
+          rowErrors.push('image URL must be a valid http(s) URL');
+        }
+      }
+      if (contact.bvn !== undefined && contact.bvn !== null) {
+        const bv = String(contact.bvn).trim();
+        if (!/^\d+$/.test(bv)) {
+          rowErrors.push('bvn must be digits only');
+        } else if (bv.length !== 11) {
+          rowErrors.push('bvn should be 11 digits');
+        }
+      }
+      const contactArrays = ['contacts','contactList','contactsList','linkedContacts'];
+      const ckey = contactArrays.find(k => Array.isArray(contact[k]));
+      let contactsListParsed: any[] | undefined;
+      if (ckey && contact[ckey]) {
+        contactsListParsed = contact[ckey].map((cc: any, ci: number) => {
+          const cemail = cc.email || cc.emailAddress || cc.mail;
+          if (cemail && typeof cemail === 'string' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cemail)) {
+            rowErrors.push(contacts[].email invalid);
+          }
+          return {
+            name: cc.name || cc.contactName || cc.fullName || '',
+            phone: cc.phone || cc.phoneNumber || cc.mobile || '',
+            email: cemail || '',
+            role: cc.role || cc.title || cc.relationship || '',
+            notes: cc.notes || cc.note || '',
+            bankName: cc.bankName || cc.bank || cc.bank_name || '',
+            accountNumber: cc.accountNumber || cc.account_number || cc.accountNo || '',
+            recipientName: cc.recipientName || cc.recipient_name || cc.accountName || '',
+          };
+        });
       }
 
       if (rowErrors.length > 0) {
@@ -138,13 +194,18 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
       const text = await file.text();
       const data = JSON.parse(text);
       
-      if (!Array.isArray(data)) {
-        setErrors(['JSON file must contain an array of contacts']);
-        setPreview(null);
-        return;
+      let raw = data;
+      if (!Array.isArray(raw)) {
+        if (raw && Array.isArray(raw.value)) {
+          raw = raw.value;
+        } else {
+          setErrors(['JSON file must contain an array of contacts']);
+          setPreview(null);
+          return;
+        }
       }
 
-      const { valid, errors } = validateContacts(data);
+      const { valid, errors } = validateContacts(raw);
       setErrors(errors);
       setPreview(valid);
     } catch (error) {
@@ -180,6 +241,11 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
         const phone = normalizePhoneNumber(c.phone);
         const { data: existing } = await supabase.from('contacts').select('id,loan_id').eq('user_id', user.id).eq('phone', phone).maybeSingle();
         const appKey = String(c.appType || '').trim().toLowerCase();
+        let imgUrl = c.imageUrl || null;
+        if (imgUrl) {
+          const downloaded = await downloadAndUploadImage(imgUrl);
+          if (downloaded) imgUrl = downloaded;
+        }
         const payload = {
           user_id: user.id,
           loan_id: c.loanId || existing?.loan_id || '',
@@ -188,6 +254,8 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
           amount: c.amount,
           app_type: canonicalByLower[appKey] || c.appType || '',
           day_type: c.dayType,
+          bvn: c.bvn || null,
+          image_url: imgUrl,
           is_deleted: false,
           deleted_at: null,
           created_at: new Date().toISOString(),
@@ -196,6 +264,23 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
           ? await supabase.from('contacts').update(payload).eq('id', existing.id).select().maybeSingle()
           : await supabase.from('contacts').insert(payload).select().maybeSingle();
         if (error) throw error;
+        if (c.contacts && c.contacts.length > 0 && data?.id && user) {
+          await supabase.from('customer_contacts').delete().eq('customer_id', data.id).eq('user_id', user.id);
+          await supabase.from('customer_contacts').insert(
+            c.contacts.map(cc => ({
+              customer_id: data.id,
+              user_id: user.id,
+              name: cc.name || '',
+              phone: cc.phone || '',
+              email: cc.email || '',
+              role: cc.role || '',
+              notes: cc.notes || '',
+              bank_name: cc.bankName || '',
+              account_number: cc.accountNumber || '',
+              recipient_name: cc.recipientName || '',
+            }))
+          );
+        }
         return data;
       }));
 
@@ -293,8 +378,8 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
         </div>
         <p className="text-[11px] text-muted-foreground mb-2">
           A list of contacts. Only <span className="font-medium text-foreground">name</span> and{' '}
-          <span className="font-medium text-foreground">phone</span> are required — everything else is optional.
-          Numbers can be written as 0803…, 234803… or +234 803…
+          <span className="font-medium text-foreground">phone</span> are required â€” everything else is optional.
+          Numbers can be written as 0803â€¦, 234803â€¦ or +234 803â€¦
         </p>
         <pre className="max-h-40 overflow-auto rounded bg-background p-2 text-[10px] leading-relaxed">
 {JSON.stringify(DEMO_JSON, null, 2)}
@@ -344,3 +429,11 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
     </div>
   );
 }
+
+
+
+
+
+
+
+

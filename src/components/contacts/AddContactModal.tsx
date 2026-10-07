@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { useState, useEffect, useCallback } from 'react';
 import { X, User, Phone, CreditCard, Banknote, Users, Plus, Calendar, Smartphone, Trash2, Tag, FileJson } from 'lucide-react';
 import { BulkContactUpload } from '@/components/contacts/BulkContactUpload';
@@ -47,8 +47,12 @@ export function AddContactModal() {
     appType: '',
     appTypeCustom: '',
     dayType: '0',
+    bvn: '',
+    imageUrl: '',
+    imageAlt: '',
   });
   const [accountDetails, setAccountDetails] = useState<AccountDetail[]>([]);
+  const [singleContacts, setSingleContacts] = useState<any[]>([]);
   
   const [bulkForm, setBulkForm] = useState({
     contactIds: '',
@@ -75,8 +79,9 @@ export function AddContactModal() {
   useEffect(() => { fetchLabels(); }, [fetchLabels]);
 
   const resetForms = () => {
-    setSingleForm({ loanId: '', name: '', phone: '', amount: '', appType: '', appTypeCustom: '', dayType: '0' });
+    setSingleForm({ loanId: '', name: '', phone: '', amount: '', appType: '', appTypeCustom: '', dayType: '0', bvn: '', imageUrl: '', imageAlt: '' });
     setAccountDetails([]);
+    setSingleContacts([]);
     setBulkForm({ contactIds: '', customerNames: '', phoneNumbers: '', appType: '', dayType: '0' });
     setSelectedLabelIds([]);
     setBulkSelectedLabelIds([]);
@@ -97,7 +102,9 @@ export function AddContactModal() {
 
   const updateAccountDetail = (index: number, field: keyof AccountDetail, value: string) => {
     setAccountDetails(accountDetails.map((ad, i) => i === index ? { ...ad, [field]: value } : ad));
-  };
+  };  const addSingleContact = () => setSingleContacts([...singleContacts, { name: '', phone: '', email: '', role: '', notes: '', bankName: '', accountNumber: '', recipientName: '' }]);
+  const removeSingleContact = (idx: number) => setSingleContacts(singleContacts.filter((_, i) => i !== idx));
+  const updateSingleContact = (idx: number, field: string, value: string) => setSingleContacts(singleContacts.map((c, i) => i===idx?{...c,[field]:value}:c));
 
   const handleSingleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,13 +115,13 @@ export function AddContactModal() {
     if (!user) return;
 
     if (userApps.length === 0) {
-      toast({ title: 'No apps found', description: 'Go to Settings → Apps to create your first App.', variant: 'destructive' });
+      toast({ title: 'No apps found', description: 'Go to Settings â†’ Apps to create your first App.', variant: 'destructive' });
       return;
     }
     const formattedPhone = autoFormatPhone(singleForm.phone);
     setLoading(true);
     try {
-      // Ensure the chosen app is registered so it exists in Settings → Apps
+      // Ensure the chosen app is registered so it exists in Settings â†’ Apps
       const registeredApp = await ensureAppRegistered(user.id, singleForm.appType);
       reloadApps();
       const chosenApp = singleForm.appType?.trim();
@@ -232,13 +239,13 @@ export function AddContactModal() {
     }
     if (!user) return;
     if (userApps.length === 0) {
-      toast({ title: 'No apps found', description: 'Go to Settings → Apps to create your first App.', variant: 'destructive' });
+      toast({ title: 'No apps found', description: 'Go to Settings â†’ Apps to create your first App.', variant: 'destructive' });
       return;
     }
 
     setLoading(true);
     try {
-      // Ensure the chosen app is registered so it exists in Settings → Apps
+      // Ensure the chosen app is registered so it exists in Settings â†’ Apps
       const bulkChosen = bulkForm.appType?.trim();
       let resolvedBulkApp = '';
       if (bulkChosen) {
@@ -367,7 +374,7 @@ export function AddContactModal() {
                   <Label className="flex items-center gap-1.5"><Smartphone className="h-3.5 w-3.5" /> App Type</Label>
                   {userApps.length === 0 ? (
                     <div className="rounded-md border border-dashed border-input p-3 text-xs text-muted-foreground">
-                      No Apps Found. Go to <span className="font-medium text-foreground">Settings → Apps</span> to create your first App.
+                      No Apps Found. Go to <span className="font-medium text-foreground">Settings â†’ Apps</span> to create your first App.
                     </div>
                   ) : (
                     <select
@@ -475,7 +482,7 @@ export function AddContactModal() {
                   <Label className="flex items-center gap-1.5"><Smartphone className="h-3.5 w-3.5" /> App Type (all)</Label>
                   {userApps.length === 0 ? (
                     <div className="rounded-md border border-dashed border-input p-3 text-xs text-muted-foreground">
-                      No Apps Found. Go to <span className="font-medium text-foreground">Settings → Apps</span> to create your first App.
+                      No Apps Found. Go to <span className="font-medium text-foreground">Settings â†’ Apps</span> to create your first App.
                     </div>
                   ) : (
                     <select
@@ -539,3 +546,6 @@ export function AddContactModal() {
     </Dialog>
   );
 }
+
+
+
