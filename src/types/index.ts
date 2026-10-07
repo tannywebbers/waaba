@@ -1,4 +1,30 @@
+﻿export interface ContactImage {
+  url?: string;
+  key?: string;
+  alt?: string;
+  uploadedAt?: Date;
+}
+
+export interface ContactListItem {
+  id?: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  role?: string;
+  notes?: string;
+  bankName?: string;
+  accountNumber?: string;
+  recipientName?: string;
+  isPrimary?: boolean;
+  labels?: string[];
+}
 export interface Contact {
+  bvn?: string;
+  imageUrl?: string;
+  imageKey?: string;
+  imageAlt?: string;
+  imageUploadedAt?: Date;
+  contacts?: ContactListItem[];
   id: string;
   loanId: string;
   name: string;
@@ -100,3 +126,4 @@ export interface Sticker {
 
 export type ViewMode = 'chats' | 'contacts' | 'settings';
 export type SettingsTab = 'api' | 'theme' | 'account' | 'notifications' | 'business' | 'templates' | 'logs' | 'system-logs' | 'stickers' | 'apps';
+

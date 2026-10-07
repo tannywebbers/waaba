@@ -1,4 +1,4 @@
-import { generateMessageId } from '@/lib/utils/messageId';
+﻿import { generateMessageId } from '@/lib/utils/messageId';
 
 export interface TemplateVariable {
   value: string;
@@ -21,6 +21,13 @@ export const APP_VARIABLES: TemplateVariable[] = [
   { value: 'current_time', label: 'Current Time' },
   { value: 'payment_details', label: 'Payment Details' },
   { value: 'message_id', label: 'Message ID (random 16 chars)' },
+  { value: 'bvn', label: 'BVN' },
+  { value: 'contact_name', label: 'Contact Name' },
+  { value: 'contact_email', label: 'Contact Email' },
+  { value: 'contact_phone', label: 'Contact Phone' },
+  { value: 'contact_role', label: 'Contact Role' },
+  { value: 'parent_name', label: 'Parent Name' },
+  { value: 'customer_image_url', label: 'Customer Image URL' },
 ];
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -105,6 +112,13 @@ export function resolveVariable(name: string, c: any, ctx: { messageId?: string 
       return formatCurrentTime(now);
     case 'message_id':
       return ctx.messageId || generateMessageId();
+    case 'bvn': return c?.bvn ?? '';
+    case 'parent_name': return c?.name || '';
+    case 'customer_image_url': return c?.imageUrl ?? c?.avatar ?? c?.avatar_url ?? '';
+    case 'contact_name': return c?.contactName ?? c?.contact_name ?? (c?.contact?.name || '');
+    case 'contact_email': return c?.contactEmail ?? c?.contact_email ?? (c?.contact?.email || '');
+    case 'contact_phone': return c?.contactPhone ?? c?.contact_phone ?? (c?.contact?.phone || c?.phone || '');
+    case 'contact_role': return c?.contactRole ?? c?.contact_role ?? (c?.contact?.role || '');
     default:
       return '';
   }
@@ -146,3 +160,7 @@ export function insertAtCursor(
   const value = current.slice(0, start) + text + current.slice(end);
   return { value, caret: start + text.length };
 }
+
+
+
+

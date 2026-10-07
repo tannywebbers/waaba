@@ -1,0 +1,364 @@
+================================================================================
+PROMPT 1.5 — Fix the contact import (repayment details are being dropped) and
+rebuild the conversation screen so the composer, header, contact info strip and
+the editable contact profile work exactly like the Waaba app
+================================================================================
+
+This prompt CONTINUES prompt1.txt. Keep everything already specified there
+(entities, JSON format, phone normalisation, template variables, bulk send,
+no-defaults rule). This document fixes three specific problems:
+
+  PROBLEM 1 — The import reports FAIL, but contacts are created anyway, and the
+              customer's REPAYMENT DETAILS (account number, bank, receiver's
+              name) are not saved / not visible.
+  PROBLEM 2 — A contact screen that behaves like Waaba's: a message input area
+              that is always reachable (pinned above the keyboard / at the
+              bottom), a chat header with the contact's name, and a compact info
+              strip under the header showing Loan ID, Amount, Due Date, App, etc.
+  PROBLEM 3 — Tapping the profile must open FULL contact details that can be
+              EDITED IN PLACE (account details, app, labels, loan data).
+
+I analysed the real export file we must support. Use it as the acceptance
+fixture:  whatsapp-output-2026-10-03T09-06-59-186Z.json  (58 rows).
+
+WHAT THE REAL DATA LOOKS LIKE (verified — build to this)
+  - 58 rows. Top-level keys present on EVERY row:
+    loanId, name, phone, amount, appType, dayType, accountDetails, id, userId
+  - accountDetails: EVERY row has exactly ONE entry, and every entry has all
+    three fields populated: bank, accountNumber, accountName.
+  - phone: every value is an 11-digit LOCAL number starting with 0
+    (e.g. 07062598550). Normalisation must turn it into 2347062598550.
+  - amount: integers (10000..120000). dayType: -1 on every row.
+  - loanId: 23 characters, always starting "OD".
+  - appType: 7 distinct values, mixed case, must be preserved exactly:
+    Oyakudi (15), Lumoni (11), MoniBoat (9), TunaCredit (6), PixKudi (6),
+    SapaClear (6), NayraJet (5).
+  - bank: "palmPay" on all 58 rows — keep bank as a real, editable field anyway.
+  - name: lowercase, and 9 of the 58 rows contain DOUBLE SPACES, e.g.
+    "olomola  toyin  Esther".
+  - accountName contains a company suffix in brackets, e.g.
+    "olomola toyin Esther(EMPATHY DESK LTD)" and "chinonso Friday ALO(CATALYSTCARE
+    LTD)" — sometimes with no space before "(". PRESERVE THIS VERBATIM.
+  - id / userId are the SOURCE SYSTEM's identifiers, not ours.
+  - THE FILE CONTAINS A REAL DUPLICATE PHONE: 08032519041 appears TWICE for the
+    same customer ("chinonso Friday ALO", same amount, same app, same bank) but
+    with TWO DIFFERENT loanIds (OD260927131211880111337 and
+    OD260927131237152105749) and TWO DIFFERENT account numbers (6639298815 and
+    6678949889). This is one customer with two loans — the import MUST NOT
+    silently drop either loan or either account number.
+
+
+================================================================================
+1. FIX THE IMPORT SO REPAYMENT DETAILS ARE SAVED
+================================================================================
+
+1.1 THE MOST LIKELY ROOT CAUSE — FIX THIS FIRST
+The file rows carry `id` and `userId`. If the importer uses the file's `id` as
+the contact id, or inserts account_details with the file's `id` as
+`contact_id`, every child row points at a contact that does not exist in your
+database. The result is exactly the reported symptom: the contact appears in the
+list, but its repayment details are missing.
+
+Required:
+- Treat `id` and `userId` from the file as UNKNOWN/IGNORED foreign keys. Never
+  use them as the primary key of a contact, and never use them as
+  `account_details.contactId`.
+- Capture the id RETURNED by your create/update call for each contact and use
+  THAT id when inserting its account rows.
+- If you want to keep a trace of the source ids, store them in separate optional
+  fields (`sourceId`, `sourceUserId`). They must never be used for relationships.
+
+1.2 REPAYMENT DETAILS MUST BE WRITTEN AND VERIFIED
+Treat account details as a required part of the contact payload when the file
+provides it, not as an optional afterthought.
+
+- For each contact row: after creating/updating the contact, insert one
+  account_details row per entry in `accountDetails` (bank, accountNumber,
+  accountName), using the returned contact id.
+- Validate before saving: an account entry needs at least `bank` AND
+  `accountNumber`. If `accountName` is missing, still save the entry with an
+  empty receiver name and do NOT reject the whole row.
+- Trim whitespace on bank / accountNumber / accountName. Do NOT change their
+  casing, do NOT title-case them, and do NOT strip the bracketed company suffix
+  from `accountName`.
+- Upsert account rows by (contactId, accountNumber) — never create a second copy
+  of an account number that already exists for that contact, and NEVER delete an
+  existing account just because it is absent from the uploaded file. Re-uploading
+  the same file must not duplicate or wipe repayment details.
+- Verify before reporting success: count the account rows you intended to write
+  and the account rows that actually exist for those contacts. If a contact ends
+  up with fewer account rows than the file specified, that row is a FAILED row.
+
+1.3 THE IMPORT MUST NEVER REPORT A FALSE RESULT
+The current behaviour ("it says FAIL but imports contacts anyway") is caused by
+partial writes plus a single generic error toast. Fix it:
+
+- Process rows independently and accumulate a per-row outcome:
+  `created` | `updated` | `failed` (with a reason).
+- The UI must show an accurate summary, for example:
+    "Imported 58 contacts — 57 created, 1 updated (2 loans), 0 failed."
+  and when rows fail, list them: "Row 14: could not save account details — …"
+- A generic "Import failed" message is only allowed when NOTHING was saved.
+  If some rows saved, the message must state exactly how many saved and how many
+  failed. Never show "failed" while contacts were in fact created.
+- A row must be all-or-nothing: if a row's accounts cannot be saved, do not leave
+  a half-imported contact behind — roll that row back (delete the contact you
+  just created for it, or restore its previous values) and count it as failed.
+- On success clear the preview and reset the file input so the same file can be
+  re-uploaded immediately.
+- Do not close the modal when there were failures; keep the error list visible so
+  the user can fix the file and retry only what is needed.
+
+1.4 DUPLICATE PHONES AND MULTIPLE LOANS (from the real fixture)
+The fixture's duplicate phone is ONE customer with TWO loans. Do not collapse it.
+
+- Add a `loans` child entity (contactId, loanId, amount, dayType, appType,
+  dueDate, isPrimary) so a contact can hold more than one loan.
+- The Contact keeps `loanId`, `amount`, `dayType`, `appType` as the PRIMARY loan
+  so the header info strip and the template variables keep working exactly as
+  specified in prompt1.txt.
+- Import rule: normalise the phone, then
+    * no contact with that phone           -> create the contact + loan 1
+    * contact exists, same loanId            -> update that loan
+    * contact exists, DIFFERENT loanId      -> add a second loan to that same
+                                               contact and set it as primary if
+                                               the contact has no primary yet
+    * contact exists, accounts in the file  -> union the accounts in
+- Report merges explicitly in the summary, e.g.
+  "1 contact received a second loan (OD260927131211880111337, OD260927131237152105749)
+   and 2 repayment accounts."
+- If you decide NOT to introduce the loans entity, then you must surface the
+  conflict to the user in the preview ("2 rows share phone 08032519041 with
+  different Loan IDs — keep both / keep the first / cancel") and never silently
+  discard one. Do not merge by overwriting.
+
+1.5 DATA CLEANING ON IMPORT (matching the real file)
+- Collapse runs of whitespace in `name` to single spaces
+  ("olomola  toyin  Esther" -> "olomola toyin Esther"). Keep the original casing;
+  do not capitalise or title-case.
+- Keep `loanId` exactly as given (23 chars, "OD…"), trimmed, never reformatted.
+- Keep `appType` exactly as given, including capitalisation, and register/find the
+  app case-insensitively (see prompt1.txt §6A).
+- `dayType` must be stored as a number and may be negative.
+- Ignore any other unknown keys in a row rather than failing the row.
+
+
+================================================================================
+2. THE CONVERSATION SCREEN — LAYOUT THAT MATCHES WAABA
+================================================================================
+
+The screen is a vertical stack of exactly four regions, in this order:
+
+  [ A ] CHAT HEADER          — fixed, always visible, never scrolls
+  [ B ] CONTACT INFO STRIP   — fixed, directly under the header, never scrolls
+  [ C ] MESSAGE LIST         — the ONLY region that scrolls
+  [ D ] MESSAGE COMPOSER     — fixed, always visible, pinned to the bottom
+
+The page itself must not scroll. Lock the document/app shell so that only region
+C scrolls, otherwise the composer gets pushed off-screen by the keyboard.
+
+2.1 [D] THE MESSAGE INPUT AREA (composer) — MUST NEVER BE HIDDEN
+This is the part that is currently wrong. Requirements:
+
+- The composer is always visible: pinned to the bottom of the screen when the
+  keyboard is closed, and riding directly above the keyboard when it opens. It
+  must never be covered by the keyboard, the on-screen keyboard suggestion bar,
+  the browser URL bar, or the home indicator.
+- Implement the keyboard behaviour with the visual viewport, exactly like Waaba:
+    * listen to `window.visualViewport` `resize` and `scroll`;
+    * on change, set the chat screen container's height to
+      `visualViewport.height` px and its top offset to `visualViewport.offsetTop`
+      px, so the whole screen (header + strip + composer) is resized to the
+      actually visible area;
+    * after the resize, in the next animation frame, scroll the message list to
+      the newest message;
+    * on unmount, remove the listeners and clear the inline height/top styles.
+  (If your framework offers a `dvh`/`svh` unit or a keyboard-inset CSS variable,
+  you may use it instead — but the composer must provably stay above the
+  keyboard on iOS Safari, Android Chrome and desktop.)
+- Respect the safe areas: add `padding-bottom: max(8px, env(safe-area-inset-bottom))`
+  to the composer, and `padding-top: max(env(safe-area-inset-top), 12px)` to the
+  header.
+- Layout of the composer row: a round attach/menu button, a growing text input,
+  and a send button. When the input is empty the send button may show a mic or a
+  plus icon; once there is text it becomes the send button.
+- The input must grow with content up to a maximum of roughly 5 lines, and after
+  that the text scrolls INSIDE the input. The composer must never grow so tall
+  that it hides the conversation.
+- The input must be focusable and the keyboard must open when the user taps it.
+- Keep Enter = newline and add an explicit Send button; on mobile the send button
+  is the primary action (Enter must NOT send on touch devices).
+- When the user sends: clear the input, reset its height to one line, scroll the
+  message list to the newest message, and show the message optimistically with
+  status `sending`, then update it to `sent` or `failed` (with a retry
+  affordance on failure).
+- Above the composer, show transient context strips when active:
+  replying-to a message, editing a message, or a failed-message banner. Each has a
+  close (x) button and must not permanently occupy space.
+- Stacking: composer and header must have a higher z-index than the message list
+  and its background, and the composer's background must be opaque so messages
+  never show through it.
+- If the message list is empty, show a centred empty state that still leaves the
+  header, the info strip and the composer visible.
+
+2.2 [A] CHAT HEADER
+- Left: a back button (mobile only).
+- Then a tappable identity block: contact avatar (initials fallback), the
+  contact's NAME in bold, and a secondary line showing presence/last-seen or the
+  phone number. Long names and phones must truncate with an ellipsis, not wrap
+  and not push the header taller.
+- Tapping the avatar or the name opens the full contact profile (see §3).
+- Right: an options menu containing at least — View contact, Pin, Mute, Archive,
+  Block, Move to trash.
+- The header must stay a fixed height and must not change size when the presence
+  text changes or a notification arrives.
+
+2.3 [B] CONTACT INFO STRIP — directly under the header
+A single compact horizontal strip showing the essentials at a glance, always
+visible, never scrolling away with the messages.
+
+- Content, in this order (chips/cards with a tiny label + value):
+    Loan ID | Amount | Due Date | Day Type | App
+  plus, if space allows: Phone. Due Date is computed from dayType as
+  (today − dayType) formatted dd/MM/yyyy.
+- Values must be truncated with an ellipsis (the Loan ID is 23 characters) and
+  the strip must scroll horizontally on narrow screens rather than wrapping or
+  overflowing. Never cause horizontal page scroll.
+- A missing value renders as "—" (or "None" for App). Never render a default app
+  name — if the contact has no app, the chip must read "None" / "—".
+- If the contact has repayment details, show a chip such as "1 account" or
+  "2 accounts" that opens the profile scrolled to the Bank Accounts section.
+- Tapping any chip opens the full contact profile.
+- When a value is edited (in the profile or elsewhere), the strip must update
+  immediately without a page reload.
+- Keep the strip on one line at all times; its height is fixed.
+
+
+================================================================================
+3. FULL CONTACT DETAILS + EDIT IN PLACE (tap the profile)
+================================================================================
+
+Tapping the avatar/name (or any info-strip chip) opens the full details view,
+like Waaba's Contact Info panel: a full-screen scrollable sheet on mobile, and a
+side panel on desktop.
+
+3.1 VIEW MODE — sections in this order
+  1. Profile block: avatar (large), contact name, phone, presence/last seen,
+     and quick actions (Call/SMS, Message).
+  2. LOAN DETAILS: every loan for this contact (see §1.4 — a contact can have
+     more than one). Each loan card shows Loan ID, Amount, Due Date, Day Type,
+     and App, with the primary loan marked "Primary".
+  3. CONTACT INFORMATION: phone (normalised, tap to copy), optional email,
+     labels as coloured chips.
+  4. REPAYMENT DETAILS / BANK ACCOUNTS: one card per account showing
+     Bank, Account Number, and Receiver's Name, each on its own line, exactly as
+     it was imported (preserve the bracketed company suffix).
+     This section is REQUIRED to be visible whenever the contact has accounts,
+     and must show a clear "No repayment details yet" state when it does not.
+  5. History summary: last message preview and time, unread count, and whether
+     the conversation is pinned/muted/archived.
+
+3.2 EDIT MODE — everything editable without leaving the screen
+- Each section has its own "Edit" toggle. Toggling turns its fields into inputs
+  and shows Save / Cancel for that section only. Save writes that section and
+  refreshes the header info strip + the contact list immediately.
+- Editable in place:
+    * Contact: name, phone (re-normalised on save), and an APP selector. The App
+      selector MUST include an explicit "None (no app)" option and MUST default to
+      the contact's current value — never to the first app in the list. If the
+      contact's app is not in your apps list, still show it as an option so
+      saving cannot discard it.
+    * Loans: loan id, amount, day type, app, and due date (derived from day
+      type). Add a loan, edit a loan, mark one primary, delete a loan.
+    * Repayment details: add an account (bank + account number + receiver's
+      name), edit an existing account inline, and remove an account (with a
+      confirmation). Changes must persist immediately.
+    * Labels: toggle coloured chips to assign/unassign labels, plus a label
+      manager if you already have one.
+- Bottom actions: "Edit Contact" (full form, optional), "Move to Trash"
+  (soft delete + confirm), and for trashed contacts "Restore".
+- Save rules that must hold:
+    - An empty field saves as empty; it is never replaced by a default.
+    - Re-saving without changes must not create duplicate account rows or
+      duplicate loans.
+    - Phone is re-normalised on save, and if the new phone collides with another
+      contact's, block the save with a clear message.
+- After any edit, the profile view, the chat header info strip, and the contacts
+    list must all reflect the new values without a manual refresh.
+
+
+================================================================================
+4. ACCEPTANCE CRITERIA FOR PROMPT 1.5
+================================================================================
+
+IMPORT
+ 1. Uploading whatsapp-output-2026-10-03T09-06-59-186Z.json reports success and
+    creates/updates 58 contacts with NO errors.
+ 2. Every one of the 58 contacts ends up with exactly one repayment account
+    containing the file's bank, accountNumber and accountName — verified by
+    opening 5 random contacts' profiles.
+ 3. "olomola toyin Esther(EMPATHY DESK LTD)" is stored and displayed EXACTLY as
+    in the file (no space inserted, no suffix removed, casing unchanged).
+ 4. "olomola  toyin  Esther" is stored with single spaces.
+ 5. Phone 07062598550 is stored as 2347062598550 and matches an existing contact
+    created from +2347062598550.
+ 6. The duplicate phone 08032519041 ends up as ONE contact holding BOTH loan IDs
+    (OD260927131211880111337 and OD260927131237152105749) and BOTH account
+    numbers (6639298815 and 6678949889). No loan and no account number is lost,
+    and the summary mentions the merge.
+ 7. The file's `id` and `userId` values are never used as a contact's primary key
+    or as an account's contact id.
+ 8. All 7 apps (Oyakudi, Lumoni, MoniBoat, TunaCredit, PixKudi, SapaClear,
+    NayraJet) exist with the exact capitalisation, and each contact carries a
+    label named after its app.
+ 9. Uploading the SAME file a second time changes nothing: no duplicate contacts,
+    no duplicate loans, no duplicate accounts, no duplicate labels — and the
+    contacts' conversation history and unread counts are untouched.
+10. A file whose rows are all invalid imports nothing and says so, with a
+    "Row N: <reason>" list. A file with some valid rows imports those and reports
+    exactly how many failed.
+11. If a row's repayment details cannot be saved, that contact is NOT left
+    half-imported, and the count of failures in the message matches reality.
+
+COMPOSER
+12. On a phone, with the keyboard closed, the composer sits at the bottom of the
+    screen above the home indicator.
+13. On a phone, tapping the input opens the keyboard and the composer moves up so
+    that it is FULLY visible above the keyboard, on iOS Safari and Android
+    Chrome. No part of it is hidden.
+14. Opening the keyboard scrolls the message list to the newest message, and the
+    newest message is never hidden behind the composer.
+15. The message list scrolls; the header, the info strip and the composer do not
+    move. The page itself never scrolls or bounces.
+16. Typing 5+ lines grows the composer to its maximum and then scrolls the text
+    inside it; the conversation is still visible.
+17. Sending shows the message immediately with status `sending`, clears and resets
+    the input, scrolls to the bottom, and ends as `sent` or `failed` (with retry).
+
+HEADER AND INFO STRIP
+18. The header shows the contact's name and stays a fixed height; the back button
+    and options menu are always reachable.
+19. The info strip under the header shows Loan ID, Amount, Due Date, Day Type and
+    App for the open contact, matches the stored values, and does not scroll away
+    when the messages scroll.
+20. The strip never overflows horizontally: a 23-character Loan ID truncates with
+    an ellipsis and the strip scrolls horizontally on a narrow screen.
+21. A contact with no app shows "None"/"—" in the App chip — never another app's
+    name.
+
+PROFILE AND EDITING
+22. Tapping the avatar, the name, or any info-strip chip opens the full details
+    view with sections: profile, loans, contact information, repayment details,
+    history.
+23. The repayment details section lists every account as Bank / Account Number /
+    Receiver's Name and shows "No repayment details yet" when there are none.
+24. From that view I can add an account, edit an account inline, and delete an
+    account, and the change is saved and reflected everywhere immediately.
+25. From that view I can change the contact's app, including setting it to
+    "None (no app)", and it stays empty — it never becomes the first app.
+26. From that view I can edit/add/delete loans, change day type and see the due
+    date update, and mark a different loan as primary.
+27. From that view I can assign and remove labels, and the label chips update in
+    the contacts list.
+28. Editing anything updates the chat header info strip and the contacts list
+    without a page refresh, and the conversation history is preserved.

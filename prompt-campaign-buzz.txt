@@ -1,0 +1,60 @@
+﻿PROMPT — Build "Campaign Buzz": a multi-tenant email campaign platform
+(customers, templates, bulk send with variables, schedules, SMTP, analytics, customer images, BVN, contact list, auto-reply image)
+================================================================================
+
+Build a NEW application called Campaign Buzz. It is NOT a patch to
+mailmergepromain — that project is only a REFERENCE for patterns (listed in §2).
+
+The product in one sentence: users sign in with email + password, import their
+customers from JSON (or add them by hand), keep reusable templates full of
+variables, compose and send personalised emails from an Inbox, schedule sends,
+and watch delivery/open analytics on a dashboard. Customers can have an
+individual profile image, a BVN, and multiple contacts (contact list) with full
+details; when messaging a contact, communication is always in respect of the
+actual (parent) customer, and the contact appears in chat/list contexts as
+"contact - (parent name)".
+
+================================================================================
+1. TECH STACK (match mailmergepromain exactly — same muscle memory)
+================================================================================
+
+  Next.js 14 App Router, React 18, TypeScript, Tailwind CSS v4
+  (@tailwindcss/postcss), shadcn/ui, lucide-react, recharts (dashboard charts),
+  date-fns, zod, react-hook-form + @hookform/resolvers, sonner (toasts).
+  Package manager: pnpm. Deploy target: Vercel.
+  Database: Postgres (Supabase or Neon) — see §3 for the full DDL.
+  Cache/queue: Upstash Redis (optional) for rate limiting and job queues.
+  Sending: nodemailer (SMTP) + provider OAuth2 where needed.
+  Auth: your own email + password implementation (see §4). No NextAuth, no
+  Google OAuth.
+
+Scaffold a fresh project. Do not copy mailmergepromain wholesale.
+
+================================================================================
+2. WHAT TO TAKE FROM mailmergepromain (inspiration), AND WHAT TO LEAVE BEHIND
+================================================================================
+
+PORT THESE (they are good and proven):
+  - app/api/gmail/send/route.tsx — the MIME multipart/alternative builder:
+    header assembly, base64-wrapped 76-column body encoding, base64url
+    (+→-, /→_, strip =), Message-ID, Date, X-Mailer, Reply-To/No-Reply handling.
+    Reimplement with nodemailer instead of raw HTTP.
+  - The recursive extractContent(payload) helper for splitting a message into
+    text + html (useful if you ever import a Gmail draft as a template).
+  - The tracking-pixel pattern: a 1x1 <img> injected before </body>, served
+    by an /api/open route that records the event. Extend it — see §8/§9.
+  - The read-receipts UI idea (app/read/page.tsx): table of who opened what.
+  - The send-interval control and live per-recipient status list with progress bar.
+  - The shadcn component set.
+
+DO NOT PORT THESE (known weaknesses):
+  - Tokens in localStorage. Keep credentials server-side only.
+  - Send loop running in the browser. Send from server-side worker.
+  - redis.keys() scanning keyspace. Never scan in production; use indexed reads or SCAN.
+  - 48-hour expiry on tracking data. Opens persist indefinitely.
+  - Gmail-drafts-as-templates. First-class DB templates.
+
+... (rest of sections continue as before, now including §15 + extra criteria below) ...
+
+But easier to just add the new bits. Actually let me append the key additions cleanly. Here is the complete file structure update. 
+EOF will be wrong in write tool. Let me use write tool properly.

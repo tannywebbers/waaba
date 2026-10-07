@@ -1,0 +1,545 @@
+================================================================================
+PROMPT: Upgrade the SMS app to import contacts from JSON exactly like our Waaba
+app does, support every variable Waaba supports, and let us view / edit / send
+SMS to contacts from a Contacts tab
+================================================================================
+
+ROLE
+You are the lead engineer on an existing SMS web app (built on Base44). Your job
+is to upgrade the Contacts area so it matches the proven behaviour of our other
+app ("Waaba"), which already does bulk JSON contact import correctly.
+
+Do not rewrite the whole app. Extend the existing Contacts feature in place,
+keep the existing visual language, auth, and SMS provider integration, and make
+the changes listed below. Keep everything scoped to the currently signed-in
+user (multi-tenant: no user may ever read or write another user's contacts).
+
+
+================================================================================
+1. GOAL
+================================================================================
+
+A user must be able to:
+
+1. Download a JSON template, fill it with their contacts, and upload it.
+2. Have every contact saved with ALL of its data: name, phone, loan id, amount,
+   app type, day type, and one or multiple bank account details.
+3. Re-upload a corrected file and have existing contacts updated (not duplicated),
+   and one or more bank accounts per contact, plus an automatic label named after
+   the app.
+4. See all contacts in a Contacts tab, filter/sort/search them, edit any field,
+   and send an SMS to one or many of them using templates with variables that are
+   filled from the contact's saved data.
+5. Never have an empty value silently replaced with a default value. This is the
+   single most important rule in this document.
+
+
+================================================================================
+2. HARD RULE — NO DEFAULT VALUES (this was a real bug in Waaba, do not repeat it)
+================================================================================
+
+Waaba originally had a bug where "app type" (called `app` / `appType` below) was
+ALWAYS filled with the user's FIRST app name, even when the contact had no app.
+Any flow that prepares or re-saves a contact (single add, bulk add, bulk send
+"prepare contacts" step, edit modal) stamped that default app onto every contact.
+
+Required behaviour:
+
+- If a value is empty/missing/undefined in the input, it must be STORED AS EMPTY.
+  Never substitute the first app, the first label, or any other default.
+- On an UPSERT of an existing contact, a field that is empty in the incoming data
+  must NOT overwrite a value that is already stored on that contact.
+  (Exception: the Edit Contact form is an explicit user edit — if the user picks
+  "None (no app)" and saves, that becomes empty.)
+- Every "App" selector in the UI must include an explicit empty option labelled
+  "None (no app)" / "None (leave empty)", and its default value must be empty —
+  never pre-selected to the first item.
+- Creating a contact must never require an app to already exist. If no apps exist
+  yet, the flow must still work and store an empty app.
+- The "prepare recipients" step of a bulk send must NOT modify `app` on contacts
+  the user did not explicitly choose an app for.
+
+
+================================================================================
+3. DATA MODEL
+================================================================================
+
+Create/extend these entities (keep the names close to these; adapt types to
+whatever your Base44 project already uses).
+
+CONTACT
+  name                string, required
+  phone               string, required, stored in normalized international form
+  loanId              string, optional   (import key `loanId`)
+  amount              number, optional
+  appType             string, optional   (import key `appType`) — "" means none
+  dayType             number, optional, default 0, may be negative
+  avatarUrl           string, optional
+  isPinned            boolean
+  isArchived          boolean
+  isMuted             boolean
+  isBlocked           boolean
+  isDeleted           boolean            (soft delete / trash)
+  deletedAt           datetime, nullable
+  lastMessage         object, nullable    (denormalised for list sorting)
+  lastMessageAt       datetime, nullable
+  unreadCount         number
+  assignedUserId      string, nullable    (for shared/team users)
+  createdAt           datetime
+  updatedAt           datetime
+
+  Uniqueness: (owner, phone). You must have a real unique constraint or a
+  deterministic upsert keyed on owner + phone. Duplicate phone numbers must
+  never create a second contact.
+
+ACCOUNT_DETAIL  (child of CONTACT, one-to-many)
+  contactId      -> Contact
+  bank           string
+  accountNumber  string
+  accountName    string
+
+APP
+  name            string  (unique per owner, case-insensitive)
+  createdAt, updatedAt
+
+LABEL
+  name            string
+  color           string  (hex)
+  createdAt
+
+CONTACT_LABEL  (join, many-to-many)
+  contactId -> Contact
+  labelId   -> Label
+
+MESSAGE  (the SMS thread)
+  contactId       -> Contact
+  content         string   (the fully resolved text that was sent)
+  type            string   ("text" | "template")
+  templateName    string, nullable
+  resolvedParams  object/json, nullable   (variable name -> value used)
+  status          string   ("pending" | "sending" | "sent" | "failed" | "scheduled")
+  providerMessageId string, nullable
+  errorMessage    string, nullable
+  scheduledAt     datetime, nullable
+  isOutgoing      boolean
+  createdAt
+
+TEMPLATE
+  name      string
+  body      string   (may contain {{variable}} tokens)
+  category  string, optional
+  createdAt, updatedAt
+
+
+================================================================================
+4. JSON IMPORT FILE FORMAT
+================================================================================
+
+The upload must accept a JSON **array** of contact objects (not a wrapper object).
+Only `name` and `phone` are required. Everything else is optional.
+
+Required shape (this is the exact template the app must offer for download):
+
+[
+  {
+    "loanId": "LN-100241",
+    "name": "Chinedu Okafor",
+    "phone": "08031234567",
+    "amount": 50000,
+    "appType": "",
+    "dayType": 0,
+    "accountDetails": [
+      { "bank": "Zenith Bank", "accountNumber": "2088341170", "accountName": "Chinedu Okafor" }
+    ]
+  },
+  {
+    "loanId": "LN-100242",
+    "name": "Aisha Bello",
+    "phone": "2348098765432",
+    "amount": 75000,
+    "appType": "",
+    "dayType": -1,
+    "accountDetails": [
+      { "bank": "GTBank", "accountNumber": "0123456789", "accountName": "Aisha Bello" },
+      { "bank": "First Bank", "accountNumber": "3112233445", "accountName": "Aisha Bello" }
+    ]
+  },
+  {
+    "loanId": "LN-100243",
+    "name": "Tunde Adeyemi",
+    "phone": "+234 802 555 0134",
+    "amount": 120000,
+    "appType": "",
+    "dayType": -7,
+    "accountDetails": []
+  }
+]
+
+Field rules:
+- `name`      required, must be a non-empty string.
+- `phone`     required, must be non-empty and must normalize to a valid number.
+- `loanId`    optional text.
+- `amount`    optional number. Accept numeric strings.
+- `appType`   optional string. `""` / null / missing  => store EMPTY app.
+              A non-empty value => register/find the app (see §6) and store the
+              canonical app name with its original capitalisation.
+- `dayType`   optional integer, may be negative (0, -1, -7, 3). Default 0.
+- `accountDetails` optional array; each item needs at least `bank` +
+  `accountNumber`. An empty array means "no accounts" (see the upsert rule below).
+
+The import screen must contain, above the upload button:
+  - a "Download Template" button that generates exactly the JSON above as a
+    `.json` file, so users always have a valid sample; and
+  - a short human-readable format description plus a scrollable pretty-printed
+    example (the array above), so the user never has to guess the format.
+
+
+================================================================================
+5. PHONE NORMALISATION (implement exactly this)
+================================================================================
+
+Every phone number — imported, pasted, typed, or bulk-messaged — must be stored
+in this normalized form, and dedup must use this normalized value:
+
+  digits = input.replace(/[^0-9+]/g, '').replace(/^\+/, '').replace(/^00/, '')
+  if digits == ''                        -> invalid
+  else if digits starts with '234'       -> digits
+  else if digits starts with '0'         -> '234' + digits.substring(1)
+  else                                   -> '234' + digits
+
+So `08031234567`, `+234 803 123 4567`, `00234 803 123 4567` and `2348031234567`
+all become `2348031234567`. Nigeria is the default country; if the app supports
+other countries, make the country code configurable but keep this exact rule as
+the default behaviour.
+
+For bulk paste, split the input on newlines and commas, normalize each, drop
+empties, and de-duplicate.
+
+
+================================================================================
+6. IMPORT VALIDATION & SAVE PIPELINE
+================================================================================
+
+On file selection (before any save):
+
+1. Parse the JSON. If it is not an array, show: "JSON file must contain an array
+   of contacts".
+2. If parsing fails, show: "Invalid JSON file format".
+3. Validate row by row, collecting errors instead of failing the whole file.
+   Error format: `Row 3: phone is not a valid number` (1-based row numbers).
+   Checks:
+     - loanId, if present, must be text           -> "loanId must be text"
+     - name is required and must be text          -> "name is required"
+     - phone is required                          -> "phone is required"
+     - phone must normalize to a valid number     -> "phone is not a valid number"
+     - appType, if present, must be a string      -> "appType must be a string"
+     - dayType, if present, must be a number      -> "dayType must be a number (e.g. 0, -1, -7)"
+4. Show a preview panel: "N contacts ready to import", listing the first 5
+   validated contacts with their name and phone, then "+X more contacts".
+   Rows with errors are excluded from the import but their errors are listed.
+
+On "Import N Contacts":
+
+A. APP REGISTRATION (do this first, once, for the whole file)
+   For each DISTINCT non-empty `appType` value in the file:
+     - look for an existing app for this user whose name matches
+       case-insensitively; if found, use that existing row's name as canonical;
+     - if not found, create the app using the value exactly as written in the
+       file (preserve capitalisation, e.g. "SapaClear", "PixKudi");
+     - build a map: lowercase file value -> canonical stored app name.
+   Empty appType values are skipped entirely — do NOT create an app for them and
+   do NOT map them to anything.
+   After creating apps, refresh the app list in the UI.
+
+B. CONTACT UPSERT (for each validated row, keyed on owner + normalized phone)
+   - No existing contact -> INSERT a new contact.
+   - Existing contact  -> UPDATE it field by field:
+       * If the row provides `appType`, set `app` to the canonical app name.
+       * If the row's `appType` is empty/missing, LEAVE the existing app as-is.
+       * If the row provides a non-empty `loanId`, set it. Otherwise keep the
+         existing loan id.
+       * `name`, `amount`, `dayType`: update when provided, otherwise keep the
+         existing values.
+       * Set `isDeleted = false` and clear `deletedAt` (importing a contact
+         restores it from the trash).
+       * Bump `updatedAt`.
+   - Account details: if the row contains an `accountDetails` array, DELETE the
+     existing account_details rows for that contact and INSERT the new ones.
+     This prevents duplicate accounts on re-import. If the array is absent
+     (not merely empty), leave existing accounts untouched.
+   - Use a unique constraint on (owner, phone) or an upsert so a double-click or
+     a retry can never create duplicates.
+
+C. AUTOMATIC LABELS FROM APP NAMES
+   After saving, for every distinct non-empty app among the imported contacts:
+     - find-or-create a Label whose name equals the app name (case-insensitive
+       match);
+     - assign that label to every imported contact that has that app;
+     - be idempotent — never insert a duplicate label assignment.
+   Label colour when creating: derive deterministically from the app name so the
+   same app always gets the same colour. Use this palette and this hash:
+       palette = ['#ef4444','#f97316','#eab308','#22c55e','#06b6d4','#3b82f6','#8b5cf6','#ec4899']
+       hash = 0
+       for each character in the app name: hash = (hash * 31 + charCode) >>> 0
+       color = palette[hash % palette.length]
+
+D. FEEDBACK
+   - Success: "Successfully imported N contacts" and close/reset the modal.
+   - Failure: a destructive toast with the real error. Do not silently swallow
+     errors, and do not report success for rows that failed.
+   - After import, the new/updated contacts must appear in the Contacts list
+     immediately, and the contact list must show each contact's LAST MESSAGE
+     unchanged if it already had one (import must never wipe conversation
+     history or reset unread counts to a wrong value).
+
+
+================================================================================
+7. TEMPLATE VARIABLES — support ALL of these
+================================================================================
+
+Every template must be able to use these `{{variable}}` tokens, resolved from
+the saved contact data. Resolution rules (implement exactly):
+
+  {{customer_name}}   -> contact name. Aliases: {{name}}
+  {{loan_id}}         -> loan id
+  {{amount}}          -> amount formatted with the en-NG locale, 0 fraction
+                          digits, e.g. 50000 -> "50,000". Empty if not set.
+  {{phone_number}}    -> normalized phone. Alias: {{phone}}
+  {{app_name}}        -> the contact's app. Alias: {{app_type}}
+  {{day_type}}        -> the day type as a plain number, e.g. "-1"
+  {{due_date}}        -> due date computed as (today - dayType), formatted
+                          dd/MM/yyyy. dayType 0 => today, dayType -7 => 7 days
+                          from now, dayType 3 => 3 days ago. Empty if dayType is
+                          unset.
+  {{account_number}}  -> account number of the contact's FIRST account
+  {{account_name}}    -> account name of the contact's FIRST account
+  {{bank_name}}       -> bank of the contact's FIRST account. Alias: {{bank}}
+  {{payment_details}} -> ALL accounts, one per entry, formatted as
+                          "Bank - AccountNumber (AccountName)"
+                          joined with "; " (e.g. "GTBank - 0123456789 (Aisha
+                          Bello); First Bank - 3112233445 (Aisha Bello)").
+                          Empty if the contact has no accounts.
+  {{current_date}}    -> today, dd/MM/yyyy
+  {{current_time}}    -> now, hh:mm AM/PM (12-hour, zero-padded hour)
+  {{message_id}}      -> a random 16-character id. IMPORTANT: it must be
+                          generated ONCE per resolved message and the SAME value
+                          must be reused for every occurrence of {{message_id}}
+                          inside that one message.
+
+Token matching must tolerate whitespace: `{{ customer_name }}` works the same as
+`{{customer_name}}`. Unknown tokens resolve to an empty string and must be
+reported as missing (see §8).
+
+When a user edits a template in the UI, offer a variable picker listing all of
+the above with human labels:
+  Customer Name, Loan ID, Amount, Due Date, Account Number, Account Name,
+  Bank Name, Phone Number, App Name, Day Type, Current Date, Current Time,
+  Payment Details, Message ID.
+Clicking a variable inserts it at the cursor position.
+
+
+================================================================================
+8. SENDING SMS TO CONTACTS
+================================================================================
+
+A. FROM THE CONTACTS TAB — single contact
+   Clicking a contact opens its SMS thread showing full history (sent and
+   received), with the contact's details (name, phone, loan id, amount, app, day
+   type, due date, accounts, labels) visible and editable.
+   From the thread the user can send a free-text SMS or pick a template. The
+   template picker must PRE-SELECT the contact's own app when the contact has an
+   app (fall back to no selection, never to an unrelated default), and must show
+   the fully resolved preview before sending.
+
+B. BULK SEND from the Contacts tab (selection mode)
+   1. The user taps "Select", picks contacts (or Select All / Deselect All), and
+      taps "Message (N)".
+   2. Step 1 — RECIPIENTS: an optional textarea to paste extra numbers
+      (comma/newline separated, see §5). For every pasted number, find-or-create
+      the contact (same upsert rules as the JSON import, minus the file-specific
+      fields). Show "N pasted number(s) parsed. Local 090 numbers will be saved
+      as 23490 international format."
+      Also on this step: an "App" selector (with the empty option), a "Day Type"
+      field (leave blank to keep each contact's existing day type), and a
+      "Labels" picker that applies to all recipients.
+      Button: "Next: create N contact(s)".
+   3. Step 2 — TEMPLATE: choose a saved template (with a search box) and,
+      optionally, a schedule date-time.
+   4. Step 3 — PREVIEW: this is the important safety step.
+      - "PREPARE CONTACTS" must run first, creating/updating contacts as in §6B.
+        It must NOT invent or overwrite `app` (see §2).
+      - Resolve the template for every recipient and show one row per recipient
+        containing: contact name, phone, the fully resolved message text, and a
+        status badge.
+      - Statuses per row: `ready`, `incomplete`, `sending`, `sent`, `failed`,
+        `scheduled`.
+      - If a variable has no value for a contact, do NOT silently send a broken
+        message: leave the literal `{{token}}` in the text, mark the row
+        `incomplete`, and show the reason (e.g. "Missing: amount"). Incomplete
+        rows are excluded from sending but remain visible so the user can fix the
+        contact.
+      - Header summary: "N recipient(s) prepared" plus counts for ready / sent /
+        scheduled / failed / incomplete.
+      - Sending must proceed row by row so one failure never aborts the batch,
+        and each result must be written back onto its row.
+      - On completion: if everything succeeded, toast
+        "✅ Sent to N contact(s)" (or "✅ Scheduled for N contact(s)") and clear
+        the selection. If some failed, toast
+        "⚠️ X sent, Y failed" with the instruction to retry the failed ones, and
+        allow re-sending only the failed rows.
+      - Every sent SMS must be persisted as a MESSAGE on that contact with the
+        resolved text, the template name, and the resolved variable values.
+   5. SCHEDULED sends: when a schedule time is set, store the message with
+      `scheduledAt` and `status = "scheduled"` and send it from a background job
+      at that time. Validate the date/time before proceeding and reject an
+      invalid one with a clear message.
+
+C. Sending must be resilient: per-recipient failure must record the provider's
+   error message on that row/message so the user can see exactly what failed.
+
+
+================================================================================
+9. CONTACTS TAB REQUIREMENTS
+================================================================================
+
+The Contacts tab must support:
+
+LISTING
+  - One row per contact showing: avatar/initials, name, phone, and a compact
+    summary (loan id, amount, app name, day type, labels as coloured pills).
+  - An always-visible "New Contact" entry at the top of the list.
+  - "No contacts yet" empty state.
+
+SEARCH & FILTER (combine together)
+  - Search across name, phone, AND loan id.
+  - Filter by app type ("All app types" + one option per distinct app found).
+  - Filter by day type ("All day types" + one option per distinct day type).
+  - Filter by label.
+  - A Trash view showing only soft-deleted contacts, with Restore and
+    Delete permanently actions.
+
+SORT
+  - Sort by Name, Recent (newest first), Amount, Loan ID; each ascending and
+    descending.
+  - Keep the list scroll position anchored across re-sorts and filters so rows do
+    not jump while the user is reading, and restore the previous scroll position
+    when the user leaves and returns to the tab.
+
+SELECTION MODE
+  - Toggle selection, Select All / Deselect All (respecting the active filter),
+    and bulk actions: Archive / Unarchive, Move to Trash, Restore, Delete
+    permanently, Assign labels, Message (N).
+
+ARCHIVE & TRASH
+  - Archived contacts are hidden from the default list and shown via an
+    "Archived" filter with its own count.
+  - Soft delete sets `isDeleted` + `deletedAt`; restore clears both.
+  - Permanent delete also removes that contact's messages, labels assignments,
+    and account details, and must ask for confirmation.
+
+ADD / EDIT CONTACT
+  Keep three entry points, as separate tabs in one modal:
+    1. Single   — one contact form.
+    2. Bulk Paste — three textareas (Loan IDs optional, Customer Names one per
+       line, Phone Numbers one per line) plus "App Type (all)" and
+       "Day Type (all)". Validate that the three lists line up and show a clear
+       error when they do not ("Loan IDs (2), Names (3), and Phones (2) must
+       line up.").
+    3. Import File — the JSON upload described in §4/§6.
+  Every form must include:
+    - Loan ID, Customer Name*, Phone Number*, Amount, App Type (with the empty
+      option, defaulting to empty), Day Type, and a repeatable "Account Details"
+      list (Bank / Account Number / Account Name) with add and remove per row.
+    - A "Country code auto-added for Nigerian numbers" hint under the phone field.
+    - A "Can be negative (e.g. -1, -7)" hint under day type.
+    - A Labels picker.
+  EDIT rules: opening the edit form must show the contact's ACTUAL stored values.
+  Never replace an unknown or empty app with the first app in the list. If the
+  contact's app is not in the user's app list, still show it as an option so
+  saving does not silently discard it. Saving replaces that contact's account
+  details with the ones in the form (delete-then-insert) so accounts are never
+    duplicated.
+  Handle duplicate errors gracefully: if the phone or loan id already exists,
+    say so clearly ("A contact with this Loan ID or phone number already
+    exists.") rather than showing a raw database error.
+
+
+================================================================================
+10. ACCEPTANCE CRITERIA (verify each of these before you call it done)
+================================================================================
+
+1. Uploading the sample file from §4 imports 3 contacts with all fields,
+   including Aisha Bello's two bank accounts.
+2. Phone `08031234567`, `+234 803 123 4567` and `2348031234567` all resolve to
+   the same contact — re-importing the same file never creates duplicates.
+3. Importing a file where `appType` is `""` leaves `app` EMPTY. Open the contact
+   in the edit form: the App Type selector still shows empty, and it did not
+   become the first app in the list.
+4. Importing a file where `appType` is `"SapaClear"` stores `SapaClear` (correct
+   capitalisation) and the app appears in Settings → Apps.
+5. Re-importing a corrected file UPDATES the existing contact, does not duplicate
+   it, does not duplicate its bank accounts, and does not wipe its conversation
+   history / last message.
+6. Re-importing a row with an empty `appType` over a contact that already has an
+   app leaves that app unchanged.
+7. Every imported contact with an app gets a label named after that app, the same
+   app always gets the same label colour, and running the import twice does not
+   create duplicate label assignments.
+8. After import, contacts appear in the Contacts list immediately with correct
+   loan id, amount, app and day type, and are searchable by name, phone and loan
+   id.
+9. Creating a contact by hand with no app selected stores an empty app, and this
+   works even when the user has zero apps configured.
+10. Editing a contact that has an empty app and saving does NOT assign the first
+    app; and editing a contact whose app is not in the app list does not discard
+    it.
+11. Every variable in §7 resolves correctly, including the aliases
+    ({{name}}, {{phone}}, {{app_type}}, {{bank}}), `{{amount}}` rendered as
+    "50,000", `{{due_date}}` = today − dayType in dd/MM/yyyy, and
+    `{{payment_details}}` listing every account joined with "; ".
+12. `{{message_id}}` appears once as the same 16-character value everywhere in a
+    single message.
+13. A bulk send to contacts where one is missing `amount` shows that row as
+    `incomplete` with "Missing: amount", leaves the literal `{{amount}}` visible,
+    and does not send that row — while the other rows send normally.
+14. Bulk send's "prepare contacts" step does not change any contact's app unless
+    the user explicitly picked an app in that dialog.
+15. A bulk send where one recipient fails shows "⚠️ X sent, Y failed", keeps the
+    successful rows marked `sent`, and lets the user retry only the failed rows.
+16. Scheduled sends are stored with a future `scheduledAt` and delivered by a
+    background job at that time.
+17. Archiving, trashing, restoring and permanently deleting all behave as
+    described in §9, and permanent delete removes the contact's messages, labels
+    and account details.
+18. Changing sort or filters does not make the list jump, and the scroll position
+    is restored when you navigate away from the Contacts tab and back.
+19. User A can never see or modify User B's contacts, apps, labels, templates or
+    messages through any of these flows.
+20. An import with a mix of valid and invalid rows imports the valid rows and
+    lists every invalid row as "Row N: <reason>" instead of failing the file.
+
+
+================================================================================
+11. HOW TO BUILD IT (suggested order)
+================================================================================
+
+1. Entities + fields + relationships + the unique constraint on (owner, phone).
+2. Phone normalisation helper + the app find-or-create helper (case-insensitive).
+3. Template variable resolver + the "missing variables" report.
+4. Import endpoint: validate -> register apps -> upsert contacts -> replace
+   account details -> apply labels -> return a per-row result.
+5. Import UI: Download Template, upload, validation errors, preview, progress.
+6. Contacts tab: list, search, filters, sort, scroll anchoring, empty states.
+7. Add/Edit modals (Single, Bulk Paste, Import File) honouring the empty-value rule.
+8. Single SMS thread + template picker with variable insertion and resolved preview.
+9. Bulk send: recipients -> template -> prepare -> preview -> send/schedule,
+   with per-row status and retry.
+10. Archive / trash / restore / permanent delete, and the background job for
+    scheduled messages.
+11. Work through the 20 acceptance criteria one by one and report the result of
+    each.
+
+Report back with: the entity schema you created, the final import JSON format you
+support, the variable list you implemented, and a pass/fail line for each of the
+20 acceptance criteria.
+================================================================================
