@@ -1,6 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 
-// Columns that only exist after migration 20260225100000 is applied.
+// Columns that only exist after migration 20261007100000 is applied.
 const CONTACT_OPTIONAL_COLUMNS = ['bvn', 'image_url', 'image_key', 'image_alt', 'image_uploaded_at'];
 const LIST_OPTIONAL_COLUMNS = ['email', 'role', 'notes', 'bank_name', 'account_number', 'recipient_name', 'is_primary', 'labels', 'user_id'];
 
