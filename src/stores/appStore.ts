@@ -1,7 +1,8 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { create } from 'zustand';
 import { supabase } from '@/integrations/supabase/client';
 import { ViewMode, Message, Chat, Contact } from '@/types';
+import { fetchContactLists } from '@/lib/contactsDb';
 
 // Minimal UI state persisted to localStorage
 interface PersistedUIState {
@@ -34,7 +35,7 @@ function loadUIState(): Partial<PersistedUIState> {
 function saveUIState(state: PersistedUIState) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch { /* quota exceeded — ignore */ }
+  } catch { /* quota exceeded â€” ignore */ }
 }
 
 function loadCachedData(): CachedData | null {
@@ -62,7 +63,7 @@ function saveCachedData(contacts: Contact[], chats: Chat[], messages: Record<str
       ts: Date.now(),
     };
     localStorage.setItem(CACHE_KEY, JSON.stringify(data));
-  } catch { /* quota — ignore */ }
+  } catch { /* quota â€” ignore */ }
 }
 
 interface AppState {
@@ -79,7 +80,7 @@ interface AppState {
   chats: Chat[];
   setChats: (chats: Chat[]) => void;
   activeChat: Chat | null;
-  setActiveChat: (chat: Chat | null) => Promise<void>; // 🔥 CHANGED: Now async
+  setActiveChat: (chat: Chat | null) => Promise<void>; // ðŸ”¥ CHANGED: Now async
 
   messages: Record<string, Message[]>;
   setMessages: (contactId: string, messages: Message[]) => void;
@@ -92,7 +93,7 @@ interface AppState {
   // Unread counters
   unreadCounts: Record<string, number>;
   incrementUnread: (contactId: string) => void;
-  clearUnread: (contactId: string) => Promise<void>; // 🔥 CHANGED: Now async
+  clearUnread: (contactId: string) => Promise<void>; // ðŸ”¥ CHANGED: Now async
   totalUnread: () => number;
 
   // Favorites
@@ -194,12 +195,12 @@ export const useAppStore = create<AppState>()((set, get) => ({
   setChats: (chats) => set({ chats }),
   activeChat: null,
   
-  // 🔥 CRITICAL FIX: Mark messages as read in DATABASE when chat opens
+  // ðŸ”¥ CRITICAL FIX: Mark messages as read in DATABASE when chat opens
   setActiveChat: async (chat) => {
     set({ activeChat: chat, showContactPanel: false });
     
     if (chat) {
-      console.log('📖 [Store] Marking messages as read for chat:', chat.id);
+      console.log('ðŸ“– [Store] Marking messages as read for chat:', chat.id);
       
       // Clear unread count in memory immediately (for instant UI update)
       set((state) => ({
@@ -216,9 +217,9 @@ export const useAppStore = create<AppState>()((set, get) => ({
         .neq('status', 'read'); // Only update messages that aren't already read
       
       if (error) {
-        console.error('❌ [Store] Failed to mark messages as read:', error);
+        console.error('âŒ [Store] Failed to mark messages as read:', error);
       } else {
-        console.log('✅ [Store] Messages marked as read in database');
+        console.log('âœ… [Store] Messages marked as read in database');
         
         // Also update local message status for consistency
         set((state) => ({
@@ -245,7 +246,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
     
     // Prevent duplicates
     if (existing.find(m => m.id === message.id)) {
-      console.log('⚠️ [Store] Duplicate message detected, skipping:', message.id);
+      console.log('âš ï¸ [Store] Duplicate message detected, skipping:', message.id);
       return state;
     }
     
@@ -261,9 +262,9 @@ export const useAppStore = create<AppState>()((set, get) => ({
         .eq('id', message.id)
         .then(({ error }) => {
           if (error) {
-            console.error('❌ [Store] Failed to mark new message as read:', error);
+            console.error('âŒ [Store] Failed to mark new message as read:', error);
           } else {
-            console.log('✅ [Store] New incoming message marked as read:', message.id);
+            console.log('âœ… [Store] New incoming message marked as read:', message.id);
           }
         });
     }
@@ -287,7 +288,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
     const updatedMessages = (state.messages[contactId] || []).map(m =>
       m.id === messageId ? { ...m, status, ...(errorInfo || {}) } : m
     );
-    // Update lastMessage in chats — check both by ID match and if it's the latest outgoing
+    // Update lastMessage in chats â€” check both by ID match and if it's the latest outgoing
     const updatedChats = state.chats.map(chat => {
       if (chat.id !== contactId) return chat;
       if (chat.lastMessage?.id === messageId) {
@@ -318,9 +319,9 @@ export const useAppStore = create<AppState>()((set, get) => ({
     unreadCounts: { ...state.unreadCounts, [contactId]: (state.unreadCounts[contactId] || 0) + 1 },
   })),
   
-  // 🔥 FIXED: Clear unread also marks as read in database
+  // ðŸ”¥ FIXED: Clear unread also marks as read in database
   clearUnread: async (contactId) => {
-    console.log('📖 [Store] Clearing unread for contact:', contactId);
+    console.log('ðŸ“– [Store] Clearing unread for contact:', contactId);
     
     // Clear in memory immediately
     set((state) => ({
@@ -337,9 +338,9 @@ export const useAppStore = create<AppState>()((set, get) => ({
       .neq('status', 'read');
     
     if (error) {
-      console.error('❌ [Store] Failed to mark messages as read:', error);
+      console.error('âŒ [Store] Failed to mark messages as read:', error);
     } else {
-      console.log('✅ [Store] Messages marked as read for contact:', contactId);
+      console.log('âœ… [Store] Messages marked as read for contact:', contactId);
       
       // Update local state
       set((state) => ({
@@ -412,11 +413,32 @@ export const useAppStore = create<AppState>()((set, get) => ({
         isPinned: c.is_pinned || false, isMuted: c.is_muted || false, isArchived: c.is_archived || false,
         isBlocked: c.is_blocked || false, isDeleted: c.is_deleted || false, deletedAt: c.deleted_at ? new Date(c.deleted_at) : undefined,
         assignedUserId: c.assigned_user_id || undefined,
+        bvn: c.bvn || undefined,
+        imageUrl: c.image_url || undefined,
         createdAt: new Date(c.created_at), updatedAt: new Date(c.updated_at),
         accountDetails: (c.account_details || []).map((ad: any) => ({
           id: ad.id, bank: ad.bank, accountNumber: ad.account_number, accountName: ad.account_name,
         })),
       }));
+
+      // Attach each customer's contact list (best effort: table may not exist yet)
+      if (contacts.length > 0) {
+        const contactLists = await fetchContactLists(contacts.map(c => c.id), userId);
+        if (contactLists) {
+          contacts.forEach(c => {
+            const rows = contactLists[c.id];
+            if (rows && rows.length > 0) {
+              c.contacts = rows.map((r: any) => ({
+                id: r.id, name: r.name || '', phone: r.phone || undefined,
+                email: r.email || undefined, role: r.role || undefined, notes: r.notes || undefined,
+                bankName: r.bank_name || undefined, accountNumber: r.account_number || undefined,
+                recipientName: r.recipient_name || undefined, isPrimary: r.is_primary || false,
+                labels: r.labels || [],
+              }));
+            }
+          });
+        }
+      }
 
       const contactIds = contacts.map(c => c.id);
       const { data: messagesData, error: messagesError } = contactIds.length > 0
@@ -451,7 +473,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
         messagesMap[m.contact_id].push(message);
         lastMessages[m.contact_id] = message;
         
-        // 🔥 Count unread: incoming messages with status != 'read'
+        // ðŸ”¥ Count unread: incoming messages with status != 'read'
         // This is accurate because we now mark messages as 'read' in database when chat opens
         if (!m.is_outgoing && m.status !== 'read') {
           unreadCounts[m.contact_id] = (unreadCounts[m.contact_id] || 0) + 1;
@@ -510,3 +532,4 @@ function _persistUI() {
     drafts: s.drafts,
   });
 }
+

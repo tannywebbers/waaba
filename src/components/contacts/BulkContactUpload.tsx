@@ -10,7 +10,7 @@ import { normalizePhoneNumber } from '@/lib/utils/phone';
 import { ensureAppRegistered } from '@/lib/registerApp';
 import { useApps } from '@/hooks/useApps';
 import { ensureContactAppLabels } from '@/lib/contactAppLabel';
-
+import { saveContactRow, saveContactList } from '@/lib/contactsDb';
 interface ContactJSON {
   loanId: string;
   name: string;
@@ -27,11 +27,9 @@ interface ContactJSON {
     accountName: string;
   }[];
 }
-
 interface BulkContactUploadProps {
   onSuccess?: () => void;
 }
-
 const DEMO_JSON: ContactJSON[] = [
   {
     loanId: "LN-100241",
@@ -66,7 +64,6 @@ const DEMO_JSON: ContactJSON[] = [
     accountDetails: []
   }
 ];
-
 export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
   const { user } = useAuth();
   const { addContacts } = useAppStore();
@@ -76,7 +73,6 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState<ContactJSON[] | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
-
   const downloadAndUploadImage = async (url: string): Promise<string | null> => {
     try {
       const res = await fetch(url);
@@ -104,14 +100,11 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
-
   const validateContacts = (contacts: any[]): { valid: ContactJSON[]; errors: string[] } => {
     const valid: ContactJSON[] = [];
     const errors: string[] = [];
-
     contacts.forEach((contact, index) => {
       const rowErrors: string[] = [];
-
       if (contact.loanId !== undefined && contact.loanId !== null && typeof contact.loanId !== 'string') {
         rowErrors.push('loanId must be text');
       }
@@ -129,7 +122,7 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
       }
       if (contact.dayType !== undefined && Number.isNaN(Number(contact.dayType))) {
         rowErrors.push('dayType must be a number (e.g. 0, -1, -7)');
-      }      }
+      }
       const imageAliases = ['imageUrl','image_url','photo','photoUrl','avatar','avatarUrl','picture'];
       const imgKey = imageAliases.find(k => contact[k] !== undefined && contact[k] !== null);
       if (imgKey) {
@@ -153,7 +146,7 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
         contactsListParsed = contact[ckey].map((cc: any, ci: number) => {
           const cemail = cc.email || cc.emailAddress || cc.mail;
           if (cemail && typeof cemail === 'string' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cemail)) {
-            rowErrors.push(contacts[].email invalid);
+            rowErrors.push('contacts[' + ci + '].email invalid');
           }
           return {
             name: cc.name || cc.contactName || cc.fullName || '',
@@ -167,7 +160,6 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
           };
         });
       }
-
       if (rowErrors.length > 0) {
         errors.push(`Row ${index + 1}: ${rowErrors.join(', ')}`);
       } else {
@@ -179,17 +171,17 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
           appType: contact.appType || '',
           dayType: contact.dayType ?? 0,
           accountDetails: contact.accountDetails || [],
+          bvn: contact.bvn ? String(contact.bvn).trim() : undefined,
+          imageUrl: imgKey ? String(contact[imgKey]).trim() : undefined,
+          contacts: contactsListParsed,
         });
       }
     });
-
     return { valid, errors };
   };
-
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     try {
       const text = await file.text();
       const data = JSON.parse(text);
@@ -204,7 +196,6 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
           return;
         }
       }
-
       const { valid, errors } = validateContacts(raw);
       setErrors(errors);
       setPreview(valid);
@@ -212,14 +203,13 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
       setErrors(['Invalid JSON file format']);
       setPreview(null);
     }
-
     e.target.value = '';
   };
-
   const handleUpload = async () => {
     if (!preview || preview.length === 0 || !user) return;
     setLoading(true);
-
+    const droppedColumns: string[] = [];
+    let listMissing = false;
     try {
       // Register every distinct app name in the file so the imported appType always
       // exists in the user's Apps (case-insensitive) and auto-selects in the senders.
@@ -236,7 +226,6 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
         if (canonical) canonicalByLower[name.toLowerCase()] = canonical;
       }
       reloadApps();
-
       const contactsData = await Promise.all(preview.map(async (c) => {
         const phone = normalizePhoneNumber(c.phone);
         const { data: existing } = await supabase.from('contacts').select('id,loan_id').eq('user_id', user.id).eq('phone', phone).maybeSingle();
@@ -255,18 +244,20 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
           app_type: canonicalByLower[appKey] || c.appType || '',
           day_type: c.dayType,
           bvn: c.bvn || null,
+          avatar_url: imgUrl,
           image_url: imgUrl,
           is_deleted: false,
           deleted_at: null,
           created_at: new Date().toISOString(),
         };
-        const { data, error } = existing
-          ? await supabase.from('contacts').update(payload).eq('id', existing.id).select().maybeSingle()
-          : await supabase.from('contacts').insert(payload).select().maybeSingle();
-        if (error) throw error;
+        const saved = await saveContactRow(payload, existing?.id);
+        if (saved.error) throw saved.error;
+        const data = saved.data;
+        saved.dropped.forEach(col => {
+          if (droppedColumns.indexOf(col) === -1) droppedColumns.push(col);
+        });
         if (c.contacts && c.contacts.length > 0 && data?.id && user) {
-          await supabase.from('customer_contacts').delete().eq('customer_id', data.id).eq('user_id', user.id);
-          await supabase.from('customer_contacts').insert(
+          const listResult = await saveContactList(data.id, user.id,
             c.contacts.map(cc => ({
               customer_id: data.id,
               user_id: user.id,
@@ -280,10 +271,10 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
               recipient_name: cc.recipientName || '',
             }))
           );
+          if (listResult.missingTable) listMissing = true;
         }
         return data;
       }));
-
       // Insert account details
       const accountDetailsToInsert: any[] = [];
       contactsData?.forEach((contact, index) => {
@@ -297,15 +288,12 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
           });
         });
       });
-
       if (accountDetailsToInsert.length > 0) {
         const { error: accountError } = await supabase
           .from('account_details')
           .insert(accountDetailsToInsert);
-
         if (accountError) throw accountError;
       }
-
       // Update local state
       const newContacts = contactsData?.map((c, index) => ({
         id: c.id,
@@ -322,16 +310,19 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
           ...ad,
         })),
       })) || [];
-
       addContacts(newContacts);
-
       // Label each imported contact with its app name automatically.
       await ensureContactAppLabels(
         user.id,
         (contactsData || []).map((c: any) => ({ id: c.id, appType: c.app_type })),
       );
-
-      toast({ title: `Successfully imported ${newContacts.length} contacts` });
+      const warnings: string[] = [];
+      if (droppedColumns.indexOf('bvn') !== -1) warnings.push('BVN values were not saved: the database migration is missing.');
+      if (listMissing) warnings.push('Contact list entries were not saved: run the DB migration to create customer_contacts.');
+      toast({
+        title: `Successfully imported ${newContacts.length} contacts`,
+        ...(warnings.length ? { description: warnings.join(' '), variant: 'destructive' as const } : {}),
+      });
       setPreview(null);
       onSuccess?.();
     } catch (error) {
@@ -341,7 +332,6 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
       setLoading(false);
     }
   };
-
   return (
     <div className="space-y-4">
       <input
@@ -351,7 +341,6 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
         className="hidden"
         onChange={handleFileSelect}
       />
-
       <div className="flex gap-2">
         <Button
           variant="outline"
@@ -370,7 +359,6 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
           Upload JSON
         </Button>
       </div>
-
       <div className="rounded-lg border border-input bg-muted/40 p-3">
         <div className="flex items-center gap-2 mb-2">
           <FileJson className="h-4 w-4 text-primary" />
@@ -385,7 +373,6 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
 {JSON.stringify(DEMO_JSON, null, 2)}
         </pre>
       </div>
-
       {errors.length > 0 && (
         <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
           <p className="text-sm font-medium text-destructive mb-2">Validation Errors:</p>
@@ -396,7 +383,6 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
           </ul>
         </div>
       )}
-
       {preview && preview.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -420,7 +406,6 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
               </p>
             )}
           </div>
-
           <Button onClick={handleUpload} disabled={loading} className="w-full">
             {loading ? 'Importing...' : `Import ${preview.length} Contacts`}
           </Button>
@@ -429,11 +414,3 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
     </div>
   );
 }
-
-
-
-
-
-
-
-

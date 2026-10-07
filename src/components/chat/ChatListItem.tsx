@@ -236,7 +236,7 @@ export function ChatListItem({
             </div>
           )}
 
-          <ContactAvatar name={(contact.parentName || contact.contact?.parentName) ? contact -  : (contact.displayName || contact.name)} avatar={contact.avatar} isOnline={contact.isOnline} size="md" />
+          <ContactAvatar name={((contact.parentName || contact.contact?.parentName) ? `contact - ${(contact.parentName || contact.contact?.parentName)}` : (contact.displayName || contact.name))} avatar={contact.avatar} isOnline={contact.isOnline} size="md" />
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-2">
@@ -246,7 +246,7 @@ export function ChatListItem({
                   hasUnread ? 'font-extrabold' : 'font-semibold'
                 )}
               >
-                {(contact.parentName || contact.contact?.parentName) ? contact -  : (contact.displayName || contact.name)}
+                { (contact.parentName || contact.contact?.parentName) ? `contact - ${(contact.parentName || contact.contact?.parentName)}` : (contact.displayName || contact.name) }
               </span>
               {lastMessage && (
                 <span className="text-xs text-muted-foreground shrink-0">
@@ -404,5 +404,6 @@ export function ChatListItem({
     </>
   );
 }
+
 
 

@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { useState, useRef } from 'react';
 import { Contact } from '@/types';
 import { ContactAvatar } from '@/components/shared/ContactAvatar';
@@ -50,6 +50,9 @@ export function ContactListItem({
   const { setEditContactId, deleteContact } = useAppStore();
   const { toast } = useToast();
 
+  const parentName: string = (contact as any).parentName || (contact as any).contact?.parentName || '';
+  const displayName = parentName ? `contact - ${parentName}` : (contact.name || '');
+
   const [showOptions, setShowOptions] = useState(false);
 
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
@@ -92,9 +95,9 @@ export function ContactListItem({
     // SINGLE TAP
     if (!isLongPress.current && !isScrolling.current) {
       if (selectionMode && onToggleSelect) {
-        onToggleSelect(contact.id); // ✅ mobile single tap select
+        onToggleSelect(contact.id); // âœ… mobile single tap select
       } else {
-        onClick(); // ✅ open chat
+        onClick(); // âœ… open chat
       }
     }
 
@@ -190,7 +193,7 @@ export function ContactListItem({
         )}
 
         <ContactAvatar
-          name={contact.name}
+          name={displayName}
           avatar={contact.avatar}
           isOnline={contact.isOnline}
           lastSeen={contact.lastSeen}
@@ -200,7 +203,7 @@ export function ContactListItem({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
             <h3 className="font-semibold truncate text-[15px]">
-              {contact.name}
+              {displayName}
             </h3>
           </div>
 
@@ -208,7 +211,7 @@ export function ContactListItem({
             <span className="truncate">{contact.phone}</span>
             {contact.amount && (
               <>
-                <span>•</span>
+                <span>â€¢</span>
                 <span className="font-medium">
                   {formatCurrency(contact.amount)}
                 </span>

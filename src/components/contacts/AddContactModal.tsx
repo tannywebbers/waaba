@@ -18,6 +18,7 @@ import { normalizePhoneNumber } from '@/lib/utils/phone';
 import { useApps } from '@/hooks/useApps';
 import { ensureAppRegistered } from '@/lib/registerApp';
 import { useDialogBackButton } from '@/hooks/useDialogBackButton';
+import { saveContactRow, saveContactList } from '@/lib/contactsDb';
 
 interface AccountDetail {
   bank: string;
@@ -146,20 +147,17 @@ export function AddContactModal() {
         amount: singleForm.amount ? parseFloat(singleForm.amount) : existingContact?.amount ?? null,
         app_type: resolvedAppType,
         day_type: isNaN(parseInt(singleForm.dayType)) ? 0 : parseInt(singleForm.dayType),
+        bvn: singleForm.bvn?.trim() || null,
+        avatar_url: singleForm.imageUrl?.trim() || null,
+        image_url: singleForm.imageUrl?.trim() || null,
         is_deleted: false,
         deleted_at: null,
         created_at: new Date().toISOString(),
       };
 
-      const { data: contactData, error: contactError } = existingContact
-        ? await supabase.from('contacts').update(contactPayload).eq('id', existingContact.id).select().maybeSingle()
-        : await supabase
-        .from('contacts')
-        .insert(contactPayload)
-        .select()
-        .maybeSingle();
-
-      if (contactError) throw contactError;
+      const saved = await saveContactRow(contactPayload, existingContact?.id);
+      if (saved.error) throw saved.error;
+      const contactData = saved.data;
       if (!contactData) throw new Error('Contact could not be saved.');
 
       const validAccounts = accountDetails.filter(ad => ad.bank.trim() && ad.accountNumber.trim());
@@ -173,6 +171,27 @@ export function AddContactModal() {
             account_name: ad.accountName.trim(),
           })));
         if (accountError) console.error('Error saving account details:', accountError);
+      }
+
+      let listMissing = false;
+      if (singleContacts.length > 0 && contactData?.id) {
+        const listResult = await saveContactList(contactData.id, contactOwnerId,
+          singleContacts.map(cc => ({
+            customer_id: contactData.id,
+            user_id: contactOwnerId,
+            name: cc.name || '',
+            phone: cc.phone || '',
+            email: cc.email || '',
+            role: cc.role || '',
+            notes: cc.notes || '',
+            bank_name: cc.bankName || '',
+            account_number: cc.accountNumber || '',
+            recipient_name: cc.recipientName || '',
+            is_primary: false,
+          }))
+        );
+        if (listResult.error) console.error('Error saving contact list:', listResult.error);
+        listMissing = listResult.missingTable;
       }
 
       // Assign labels
@@ -197,6 +216,19 @@ export function AddContactModal() {
         amount: contactData.amount ? Number(contactData.amount) : undefined,
         appType: contactData.app_type || '',
         dayType: contactData.day_type ?? 0,
+        bvn: contactData.bvn || singleForm.bvn?.trim() || undefined,
+        imageUrl: contactData.image_url || contactData.avatar_url || singleForm.imageUrl?.trim() || undefined,
+        avatar: contactData.avatar_url || undefined,
+        contacts: singleContacts.map(cc => ({
+          name: cc.name || '',
+          phone: cc.phone || '',
+          email: cc.email || '',
+          role: cc.role || '',
+          notes: cc.notes || '',
+          bankName: cc.bankName || '',
+          accountNumber: cc.accountNumber || '',
+          recipientName: cc.recipientName || '',
+        })),
         createdAt: new Date(contactData.created_at),
         updatedAt: new Date(contactData.updated_at),
         accountDetails: validAccounts.map((ad, idx) => ({
@@ -207,7 +239,14 @@ export function AddContactModal() {
         })),
       });
 
-      toast({ title: 'Contact added', description: `${contactData.name} has been added successfully.` });
+      const warnings: string[] = [];
+      if (saved.dropped.indexOf('bvn') !== -1) warnings.push('BVN was not saved: run the DB migration.');
+      if (listMissing) warnings.push('Contact list was not saved: run the DB migration to create customer_contacts.');
+      toast({
+        title: 'Contact added',
+        description: warnings.length ? `${contactData.name} has been added. ${warnings.join(' ')}` : `${contactData.name} has been added successfully.`,
+        ...(warnings.length ? { variant: 'destructive' as const } : {}),
+      });
       handleClose();
     } catch (error: any) {
       const msg = error?.message || 'Unknown error';

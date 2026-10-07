@@ -15,6 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { normalizePhoneNumber } from '@/lib/utils/phone';
+import { saveContactRow, saveContactList } from '@/lib/contactsDb';
 import { useApps } from '@/hooks/useApps';
 import { ensureAppRegistered } from '@/lib/registerApp';
 import { useDialogBackButton } from '@/hooks/useDialogBackButton';
@@ -132,15 +133,13 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
         app_type: resolvedAppType,
         day_type: isNaN(parsedDayType) ? 0 : parsedDayType,
         bvn: formData.bvn?.trim() || null,
+        avatar_url: formData.imageUrl?.trim() || null,
         image_url: formData.imageUrl?.trim() || null,
       };
 
-      const { error: contactError } = await supabase
-        .from('contacts')
-        .update(updatePayload)
-        .eq('id', contactId);
+      const saved = await saveContactRow(updatePayload, contactId);
 
-      if (contactError) throw contactError;
+      if (saved.error) throw saved.error;
 
       reloadApps();
 
@@ -161,9 +160,9 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
           );
         if (accountError) throw accountError;
       }
+      let listMissing = false;
       if (contactList.length > 0 && user) {
-        await supabase.from('customer_contacts').delete().eq('customer_id', contactId).eq('user_id', user.id);
-        await supabase.from('customer_contacts').insert(
+        const listResult = await saveContactList(contactId, user.id,
           contactList.map(cc => ({
             customer_id: contactId,
             user_id: user.id,
@@ -178,6 +177,8 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
             is_primary: cc.isPrimary || false,
           }))
         );
+        if (listResult.error) throw listResult.error;
+        listMissing = listResult.missingTable;
       }
       updateContact(contactId, {
         loanId: formData.loanId || '',
@@ -197,7 +198,13 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
         })),
       });
 
-      toast({ title: 'Contact updated successfully' });
+      const warnings: string[] = [];
+      if (saved.dropped.indexOf('bvn') !== -1) warnings.push('BVN was not saved: run the DB migration.');
+      if (listMissing) warnings.push('Contact list was not saved: run the DB migration to create customer_contacts.');
+      toast({
+        title: 'Contact updated successfully',
+        ...(warnings.length ? { description: warnings.join(' '), variant: 'destructive' as const } : {}),
+      });
       onOpenChange(false);
     } catch (error: any) {
       console.error('Error updating contact:', error);
