@@ -18,7 +18,12 @@ export function ContactPanel() {
   const { toast } = useToast();
   const [openingItemPhone, setOpeningItemPhone] = useState('');
 
-  const openItemChat = async (item: any) => {
+  const contactListItemLabel = (item: any, index: number) => {
+    const base = item?.name?.trim() || contact.name;
+    return base ? `Contact${index + 1} - ${base}` : `Contact${index + 1}`;
+  };
+
+  const openItemChat = async (item: any, index: number) => {
     if (!user) return;
     const rawPhone = normalizePhoneNumber(item.phone || '');
     if (!rawPhone) return;
@@ -36,7 +41,7 @@ export function ContactPanel() {
       const payload = {
         user_id: user.id,
         assigned_user_id: null,
-        name: item.name?.trim() || contact.name,
+        name: contactListItemLabel(item, index),
         phone: rawPhone.replace('+', ''),
         loan_id: contact.loanId || '',
         app_type: contact.appType || '',
@@ -196,7 +201,7 @@ export function ContactPanel() {
                     <div key={item.id || index} className="p-3 rounded-lg bg-muted/40 border border-panel-border">
                       <div className="flex items-center justify-between gap-2">
                         <div className="min-w-0">
-                          <p className="font-medium text-sm truncate">{item.name?.trim() || contact.name}</p>
+                          <p className="font-medium text-sm truncate">{contactListItemLabel(item, index)}</p>
                           <p className="text-xs text-muted-foreground truncate">{item.phone}</p>
                         </div>
                         <Button
@@ -204,7 +209,7 @@ export function ContactPanel() {
                           size="sm"
                           className="shrink-0"
                           disabled={openingItemPhone !== ''}
-                          onClick={() => openItemChat(item)}
+                          onClick={() => openItemChat(item, index)}
                         >
                           {openingItemPhone === normalizePhoneNumber(item.phone || '') ? (
                             <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />

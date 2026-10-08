@@ -71,6 +71,11 @@ export function ContactExtras({
   const updateItem = (index: number, field: keyof ContactListItemForm, value: string | boolean) =>
     onItemsChange(items.map((cc, i) => (i === index ? { ...cc, [field]: value } : cc)));
 
+  const itemLabel = (cc: ContactListItemForm, index: number) => {
+    const base = cc.name?.trim() || parentName?.trim() || '';
+    return base ? `Contact${index + 1} - ${base}` : `Contact${index + 1}`;
+  };
+
   return (
     <>
       <div className="space-y-2">
@@ -136,8 +141,8 @@ export function ContactExtras({
         {items.map((cc, index) => (
           <div key={index} className="p-3 border rounded-lg space-y-2">
             <div className="flex justify-between items-center">
-              <span className="text-sm font-medium">
-                {cc.name?.trim() || parentName?.trim() || `Contact ${index + 1}`}
+              <span className="text-sm font-medium" data-testid="contact-item-label">
+                {itemLabel(cc, index)}
               </span>
               <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(index)}>
                 <Trash2 className="h-4 w-4 text-destructive" />
