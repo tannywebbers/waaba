@@ -11,6 +11,7 @@ import { ensureAppRegistered } from '@/lib/registerApp';
 import { useApps } from '@/hooks/useApps';
 import { ensureContactAppLabels } from '@/lib/contactAppLabel';
 import { saveContactRow, saveContactList } from '@/lib/contactsDb';
+import { uploadUrlToStorage } from '@/lib/uploadImage';
 interface ContactJSON {
   loanId: string;
   name: string;
@@ -74,6 +75,9 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
   const [preview, setPreview] = useState<ContactJSON[] | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const downloadAndUploadImage = async (url: string): Promise<string | null> => {
+    if (!user) return null;
+    const stored = await uploadUrlToStorage(user.id, url);
+    if (stored) return stored;
     try {
       const res = await fetch(url);
       if (!res.ok) return null;
@@ -116,7 +120,7 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
       } else if (!normalizePhoneNumber(`${contact.phone}`)) {
         rowErrors.push('phone is not a valid number');
       }
-      // appType is free-form now (managed in Settings â€º Apps)
+      // appType is free-form now (managed in Settings › Apps)
       if (contact.appType && typeof contact.appType !== 'string') {
         rowErrors.push('appType must be a string');
       }
@@ -366,8 +370,8 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
         </div>
         <p className="text-[11px] text-muted-foreground mb-2">
           A list of contacts. Only <span className="font-medium text-foreground">name</span> and{' '}
-          <span className="font-medium text-foreground">phone</span> are required â€” everything else is optional.
-          Numbers can be written as 0803â€¦, 234803â€¦ or +234 803â€¦
+          <span className="font-medium text-foreground">phone</span> are required — everything else is optional.
+          Numbers can be written as 0803…, 234803… or +234 803…
         </p>
         <pre className="max-h-40 overflow-auto rounded bg-background p-2 text-[10px] leading-relaxed">
 {JSON.stringify(DEMO_JSON, null, 2)}

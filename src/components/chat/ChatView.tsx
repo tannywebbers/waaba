@@ -99,7 +99,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
     if (conflicts && conflicts.length > 0) {
       const ownerName = conflicts[0].owner_name || 'another user';
       toast({
-        title: 'ðŸš« Conversation Already Assigned',
+        title: '🚫 Conversation Already Assigned',
         description: `This phone number (${phone}) is currently assigned to ${ownerName}. Replies will be routed to their inbox, so sending from here would create an inconsistent conversation.`,
         variant: 'destructive',
         duration: 8000,
@@ -267,7 +267,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
 
     const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', await getEffectiveWhatsAppUserId(user.id)).maybeSingle();
     if (!settings?.api_token || !settings?.phone_number_id) {
-      toast({ title: 'âŒ WhatsApp not configured', description: 'Go to Settings > WhatsApp API to configure your credentials.', variant: 'destructive', duration: 5000 });
+      toast({ title: '❌ WhatsApp not configured', description: 'Go to Settings > WhatsApp API to configure your credentials.', variant: 'destructive', duration: 5000 });
       return null;
     }
 
@@ -287,7 +287,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       userId: user.id,
       to: normalizedPhone,
       messageType: type,
-      request: { ...requestBody, token: 'Â«redactedÂ»' },
+      request: { ...requestBody, token: '«redacted»' },
       response: data,
       invokeError: error,
     });
@@ -297,8 +297,8 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       const details = getWhatsAppErrorExplanation(errMsg);
       const metaCode = data?.errorCode ? ` (Meta code ${data.errorCode}${data?.errorSubcode ? `/${data.errorSubcode}` : ''})` : '';
       toast({
-        title: `âŒ ${details.title}${metaCode}`,
-        description: `${data?.errorDetails || details.description}\n\nðŸ’¡ ${details.action}\n\nSee Settings â†’ System Logs for the full payload.`,
+        title: `❌ ${details.title}${metaCode}`,
+        description: `${data?.errorDetails || details.description}\n\n💡 ${details.action}\n\nSee Settings → System Logs for the full payload.`,
         variant: 'destructive',
         duration: 9000,
       });
@@ -425,7 +425,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         const currentBalance = (membership as any[])?.[0]?.balance ?? 0;
         if (currentBalance < 1) {
           toast({
-            title: 'ðŸ’° Insufficient Message Credits',
+            title: '💰 Insufficient Message Credits',
             description: `You need at least 1 credit to send a business-initiated template. Your current balance is ${currentBalance}. Contact your admin to top up.`,
             variant: 'destructive',
             duration: 8000,
@@ -437,7 +437,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
 
       const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', await getEffectiveWhatsAppUserId(user.id)).maybeSingle();
       if (!settings?.api_token || !settings?.phone_number_id) {
-        toast({ title: 'âŒ WhatsApp not configured', variant: 'destructive', duration: 5000 });
+        toast({ title: '❌ WhatsApp not configured', variant: 'destructive', duration: 5000 });
         return;
       }
       const normalizedPhone = activeChat.contact.phone.replace(/[^\d+]/g, '').replace(/^\+/, '');
@@ -453,7 +453,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         templateComponents: Array.isArray(template.components) ? template.components : undefined,
       };
 
-      logEvent('info', 'send:chat:template', `ðŸ“¤ Sending approved template "${template.name}" (${template.language || 'en'}) to ${normalizedPhone}`, {
+      logEvent('info', 'send:chat:template', `📤 Sending approved template "${template.name}" (${template.language || 'en'}) to ${normalizedPhone}`, {
         templateDefinition: template.components ?? null,
         paramsCollected: params,
         templateStatus: template.status ?? null,
@@ -470,7 +470,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         templateName: template.name,
         templateLanguage: template.language || 'en',
         templateParams: params,
-        request: { ...templateRequest, token: 'Â«redactedÂ»' },
+        request: { ...templateRequest, token: '«redacted»' },
         response: data,
         invokeError: error,
       });
@@ -480,8 +480,8 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         const details = getWhatsAppErrorExplanation(errMsg);
         const metaCode = data?.errorCode ? ` (Meta ${data.errorCode}${data?.errorSubcode ? `/${data.errorSubcode}` : ''})` : '';
         toast({
-          title: `âŒ ${details.title}${metaCode}`,
-          description: `${data?.errorDetails || errMsg}\n\nðŸ’¡ ${details.action}\n\nOpen Settings â†’ System Logs for the exact payload sent to Meta.`,
+          title: `❌ ${details.title}${metaCode}`,
+          description: `${data?.errorDetails || errMsg}\n\n💡 ${details.action}\n\nOpen Settings → System Logs for the exact payload sent to Meta.`,
           variant: 'destructive',
           duration: 10000,
         });
@@ -508,7 +508,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         });
         const bal = newBalance as number;
         if (bal >= 0) {
-          toast({ title: `ðŸ’° Credit deducted`, description: `Remaining balance: ${bal}`, duration: 3000 });
+          toast({ title: `💰 Credit deducted`, description: `Remaining balance: ${bal}`, duration: 3000 });
         }
       }
 
@@ -525,10 +525,10 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         });
       }
       
-      toast({ title: 'âœ… Template sent', duration: 3000 });
+      toast({ title: '✅ Template sent', duration: 3000 });
     } catch (err: any) {
       const details = getWhatsAppErrorExplanation(err.message || 'Unknown error');
-      toast({ title: `âŒ ${details.title}`, description: `${details.description}\n\nðŸ’¡ ${details.action}`, variant: 'destructive', duration: 8000 });
+      toast({ title: `❌ ${details.title}`, description: `${details.description}\n\n💡 ${details.action}`, variant: 'destructive', duration: 8000 });
     } finally {
       setSending(false);
     }
@@ -625,7 +625,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
 
       // Show error alert for failed messages
       if (status === 'failed') {
-        toast({ title: 'âŒ Message Failed', description: 'WhatsApp rejected this message. Check the error above for details.', variant: 'destructive', duration: 5000 });
+        toast({ title: '❌ Message Failed', description: 'WhatsApp rejected this message. Check the error above for details.', variant: 'destructive', duration: 5000 });
       }
 
       // Keep focus on input so user can send next message immediately
@@ -639,7 +639,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       }, 50);
     } catch (error: any) {
       const details = getWhatsAppErrorExplanation(error.message || 'Unknown error');
-      toast({ title: `âŒ ${details.title}`, description: `${details.description}\n\nðŸ’¡ ${details.action}`, variant: 'destructive', duration: 8000 });
+      toast({ title: `❌ ${details.title}`, description: `${details.description}\n\n💡 ${details.action}`, variant: 'destructive', duration: 8000 });
       setInputValue(content);
     } finally {
       setSending(false);
@@ -688,7 +688,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       if (error) throw error;
     } catch (error: any) {
       setMessages(activeChat.id, currentMessages);
-      toast({ title: 'âŒ Failed to delete message', description: error.message, variant: 'destructive', duration: 5000 });
+      toast({ title: '❌ Failed to delete message', description: error.message, variant: 'destructive', duration: 5000 });
     }
   };
 
@@ -726,7 +726,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
     try {
       const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', await getEffectiveWhatsAppUserId(user.id)).maybeSingle();
       if (!settings?.api_token || !settings?.phone_number_id) {
-        toast({ title: 'âŒ WhatsApp not configured', description: 'Go to Settings > WhatsApp API to configure your credentials.', variant: 'destructive', duration: 5000 });
+        toast({ title: '❌ WhatsApp not configured', description: 'Go to Settings > WhatsApp API to configure your credentials.', variant: 'destructive', duration: 5000 });
         return;
       }
 
@@ -749,7 +749,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
 
         if (error || !data?.success) {
           failCount++;
-          toast({ title: `âŒ Failed to forward`, description: `To ${contact.name || contact.phone}: ${data?.error || error?.message || 'Send failed'}`, variant: 'destructive', duration: 5000 });
+          toast({ title: `❌ Failed to forward`, description: `To ${contact.name || contact.phone}: ${data?.error || error?.message || 'Send failed'}`, variant: 'destructive', duration: 5000 });
         } else {
           okCount++;
           const { data: msgData } = await supabase.from('messages').insert({
@@ -776,7 +776,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       }
 
       toast({
-        title: `âœ… Forwarded to ${okCount} contact(s)`,
+        title: `✅ Forwarded to ${okCount} contact(s)`,
         description: failCount > 0 ? `${failCount} failed` : undefined,
       });
       setForwardDialogOpen(false);
@@ -821,7 +821,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
 
       // If audio format isn't supported by Meta, send as document so recipient can open it
       if (type === 'audio' && !SUPPORTED_AUDIO_MIMES.some(m => finalMimeType.toLowerCase().startsWith(m))) {
-        console.log(`âš ï¸ Audio MIME "${finalMimeType}" not supported by WhatsApp, sending as document`);
+        console.log(`⚠️ Audio MIME "${finalMimeType}" not supported by WhatsApp, sending as document`);
         effectiveType = 'document';
       }
 
@@ -857,17 +857,17 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       });
 
       if (status === 'failed') {
-        toast({ title: 'âŒ Media Failed', description: 'WhatsApp rejected this file. Check the error above for details.', variant: 'destructive', duration: 5000 });
+        toast({ title: '❌ Media Failed', description: 'WhatsApp rejected this file. Check the error above for details.', variant: 'destructive', duration: 5000 });
       }
     } catch (error: any) {
       const details = getWhatsAppErrorExplanation(error.message || 'File upload failed');
-      toast({ title: `âŒ ${details.title}`, description: `${details.description}\n\nðŸ’¡ ${details.action}`, variant: 'destructive', duration: 8000 });
+      toast({ title: `❌ ${details.title}`, description: `${details.description}\n\n💡 ${details.action}`, variant: 'destructive', duration: 8000 });
     } finally {
       setUploading(false);
     }
   };
 
-  // Voice note: record â†’ convert to MP3 via edge function â†’ upload to Meta via media ID â†’ send
+  // Voice note: record → convert to MP3 via edge function → upload to Meta via media ID → send
   const [voiceStatus, setVoiceStatus] = useState<string | null>(null);
 
   const handleVoiceNoteSend = async (blob: Blob) => {
@@ -883,14 +883,14 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       const blocked = await checkConflictingAssignment();
       if (blocked) { setUploading(false); return; }
 
-      // Voice is already MP3 from vmsg encoder â€” no conversion needed
+      // Voice is already MP3 from vmsg encoder — no conversion needed
       setVoiceStatus('Sending...');
       const mp3File = new File([blob], `voice-${Date.now()}.mp3`, { type: blob.type || 'audio/mpeg' });
 
       // Get WhatsApp settings
       const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', await getEffectiveWhatsAppUserId(user.id)).maybeSingle();
       if (!settings?.api_token || !settings?.phone_number_id) {
-        toast({ title: 'âŒ WhatsApp not configured', variant: 'destructive' });
+        toast({ title: '❌ WhatsApp not configured', variant: 'destructive' });
         return;
       }
 
@@ -938,7 +938,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(filePath);
 
       const { data: msgData, error: dbError } = await supabase.from('messages').insert({
-        user_id: user.id, contact_id: activeChat.id, content: 'ðŸŽµ Voice note',
+        user_id: user.id, contact_id: activeChat.id, content: '🎵 Voice note',
         type: 'audio', status: 'sent', is_outgoing: true,
         media_url: urlData.publicUrl, whatsapp_message_id: whatsappMessageId,
       }).select().maybeSingle();
@@ -946,17 +946,17 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       if (dbError) throw dbError;
 
       addMessage(activeChat.id, {
-        id: msgData.id, contactId: msgData.contact_id, content: 'ðŸŽµ Voice note',
+        id: msgData.id, contactId: msgData.contact_id, content: '🎵 Voice note',
         type: 'audio', status: 'sent', isOutgoing: true,
         timestamp: new Date(msgData.created_at), mediaUrl: urlData.publicUrl,
         whatsappMessageId: whatsappMessageId,
       });
 
-      toast({ title: 'âœ… Voice note sent', duration: 3000 });
+      toast({ title: '✅ Voice note sent', duration: 3000 });
     } catch (error: any) {
       console.error('Voice note error:', error);
       const details = getWhatsAppErrorExplanation(error.message || 'Voice note failed');
-      toast({ title: `âŒ ${details.title}`, description: `${details.description}\n\nðŸ’¡ ${details.action}`, variant: 'destructive', duration: 8000 });
+      toast({ title: `❌ ${details.title}`, description: `${details.description}\n\n💡 ${details.action}`, variant: 'destructive', duration: 8000 });
     } finally {
       setUploading(false);
       setVoiceStatus(null);
@@ -1172,7 +1172,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
                     scrollbarWidth: 'thin',
                     scrollbarColor: 'rgba(155, 155, 155, 0.5) transparent'
                   }}
-                  /* Allow typing while a message is sending â€” input is never disabled */
+                  /* Allow typing while a message is sending — input is never disabled */
                 />
 
                 {/* Auto-reply image toggle: sends the image after the reply message */}
@@ -1255,7 +1255,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         </div>
       </div>
 
-      {/* Mobile emoji panel â€” renders below input like a keyboard */}
+      {/* Mobile emoji panel — renders below input like a keyboard */}
       {isMobile && emojiPanelOpen && (
         <div className="shrink-0 z-20">
           <MobileEmojiPanel
@@ -1303,7 +1303,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
             <div className="space-y-1 pr-1">
               {filteredForwardContacts.length === 0 ? (
                 <p className="text-center py-8 text-muted-foreground text-sm">
-                  {forwardContacts.length === 0 ? 'Loading contactsâ€¦' : 'No contacts found'}
+                  {forwardContacts.length === 0 ? 'Loading contacts…' : 'No contacts found'}
                 </p>
               ) : filteredForwardContacts.map((c) => (
                 <label key={c.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent cursor-pointer">
@@ -1319,11 +1319,11 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
           </ScrollArea>
           <div className="flex items-center gap-2 pt-3 border-t border-border">
             <div className="flex-1 text-xs text-muted-foreground">
-              {forwardSending ? `Forwarding ${forwardProgress}/${forwardSelected.size}â€¦` : `${forwardSelected.size} selected`}
+              {forwardSending ? `Forwarding ${forwardProgress}/${forwardSelected.size}…` : `${forwardSelected.size} selected`}
             </div>
             <Button variant="outline" onClick={() => setForwardDialogOpen(false)} disabled={forwardSending}>Cancel</Button>
             <Button onClick={handleForward} disabled={forwardSending || forwardSelected.size === 0}>
-              <Send className="h-4 w-4 mr-1" />{forwardSending ? 'Forwardingâ€¦' : 'Forward'}
+              <Send className="h-4 w-4 mr-1" />{forwardSending ? 'Forwarding…' : 'Forward'}
             </Button>
           </div>
         </DialogContent>

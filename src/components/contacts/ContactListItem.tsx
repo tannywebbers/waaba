@@ -95,9 +95,9 @@ export function ContactListItem({
     // SINGLE TAP
     if (!isLongPress.current && !isScrolling.current) {
       if (selectionMode && onToggleSelect) {
-        onToggleSelect(contact.id); // âœ… mobile single tap select
+        onToggleSelect(contact.id); // ✅ mobile single tap select
       } else {
-        onClick(); // âœ… open chat
+        onClick(); // ✅ open chat
       }
     }
 
@@ -211,7 +211,7 @@ export function ContactListItem({
             <span className="truncate">{contact.phone}</span>
             {contact.amount && (
               <>
-                <span>â€¢</span>
+                <span>•</span>
                 <span className="font-medium">
                   {formatCurrency(contact.amount)}
                 </span>

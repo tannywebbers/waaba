@@ -16,6 +16,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { normalizePhoneNumber } from '@/lib/utils/phone';
 import { saveContactRow, saveContactList } from '@/lib/contactsDb';
+import { ContactExtras } from '@/components/contacts/ContactExtras';
 import { useApps } from '@/hooks/useApps';
 import { ensureAppRegistered } from '@/lib/registerApp';
 import { useDialogBackButton } from '@/hooks/useDialogBackButton';
@@ -280,7 +281,7 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
               <Label>App Type</Label>
               {userApps.length === 0 ? (
                 <div className="rounded-md border border-dashed border-input p-3 text-xs text-muted-foreground">
-                  No Apps Found. Go to <span className="font-medium text-foreground">Settings â†’ Apps</span> to create your first App.
+                  No Apps Found. Go to <span className="font-medium text-foreground">Settings → Apps</span> to create your first App.
                 </div>
               ) : (
                 <select
@@ -343,6 +344,16 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
               </div>
             ))}
           </div>
+
+          <ContactExtras
+            userId={user?.id}
+            imageUrl={formData.imageUrl}
+            onImageUrlChange={(url) => setFormData({ ...formData, imageUrl: url })}
+            bvn={formData.bvn}
+            onBvnChange={(value) => setFormData({ ...formData, bvn: value })}
+            items={contactList}
+            onItemsChange={(next) => setContactList(next)}
+          />
 
           <div className="flex gap-2 pt-4">
             <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1">

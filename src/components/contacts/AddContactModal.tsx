@@ -19,6 +19,7 @@ import { useApps } from '@/hooks/useApps';
 import { ensureAppRegistered } from '@/lib/registerApp';
 import { useDialogBackButton } from '@/hooks/useDialogBackButton';
 import { saveContactRow, saveContactList } from '@/lib/contactsDb';
+import { ContactExtras } from '@/components/contacts/ContactExtras';
 
 interface AccountDetail {
   bank: string;
@@ -116,13 +117,13 @@ export function AddContactModal() {
     if (!user) return;
 
     if (userApps.length === 0) {
-      toast({ title: 'No apps found', description: 'Go to Settings â†’ Apps to create your first App.', variant: 'destructive' });
+      toast({ title: 'No apps found', description: 'Go to Settings → Apps to create your first App.', variant: 'destructive' });
       return;
     }
     const formattedPhone = autoFormatPhone(singleForm.phone);
     setLoading(true);
     try {
-      // Ensure the chosen app is registered so it exists in Settings â†’ Apps
+      // Ensure the chosen app is registered so it exists in Settings → Apps
       const registeredApp = await ensureAppRegistered(user.id, singleForm.appType);
       reloadApps();
       const chosenApp = singleForm.appType?.trim();
@@ -278,13 +279,13 @@ export function AddContactModal() {
     }
     if (!user) return;
     if (userApps.length === 0) {
-      toast({ title: 'No apps found', description: 'Go to Settings â†’ Apps to create your first App.', variant: 'destructive' });
+      toast({ title: 'No apps found', description: 'Go to Settings → Apps to create your first App.', variant: 'destructive' });
       return;
     }
 
     setLoading(true);
     try {
-      // Ensure the chosen app is registered so it exists in Settings â†’ Apps
+      // Ensure the chosen app is registered so it exists in Settings → Apps
       const bulkChosen = bulkForm.appType?.trim();
       let resolvedBulkApp = '';
       if (bulkChosen) {
@@ -413,7 +414,7 @@ export function AddContactModal() {
                   <Label className="flex items-center gap-1.5"><Smartphone className="h-3.5 w-3.5" /> App Type</Label>
                   {userApps.length === 0 ? (
                     <div className="rounded-md border border-dashed border-input p-3 text-xs text-muted-foreground">
-                      No Apps Found. Go to <span className="font-medium text-foreground">Settings â†’ Apps</span> to create your first App.
+                      No Apps Found. Go to <span className="font-medium text-foreground">Settings → Apps</span> to create your first App.
                     </div>
                   ) : (
                     <select
@@ -463,6 +464,16 @@ export function AddContactModal() {
                   </div>
                 ))}
               </div>
+
+              <ContactExtras
+                userId={user?.id}
+                imageUrl={singleForm.imageUrl}
+                onImageUrlChange={(url) => setSingleForm({ ...singleForm, imageUrl: url })}
+                bvn={singleForm.bvn}
+                onBvnChange={(value) => setSingleForm({ ...singleForm, bvn: value })}
+                items={singleContacts}
+                onItemsChange={setSingleContacts}
+              />
 
               {/* Label Selector */}
               {availableLabels.length > 0 && (
@@ -521,7 +532,7 @@ export function AddContactModal() {
                   <Label className="flex items-center gap-1.5"><Smartphone className="h-3.5 w-3.5" /> App Type (all)</Label>
                   {userApps.length === 0 ? (
                     <div className="rounded-md border border-dashed border-input p-3 text-xs text-muted-foreground">
-                      No Apps Found. Go to <span className="font-medium text-foreground">Settings â†’ Apps</span> to create your first App.
+                      No Apps Found. Go to <span className="font-medium text-foreground">Settings → Apps</span> to create your first App.
                     </div>
                   ) : (
                     <select
