@@ -21,7 +21,8 @@ interface ContactJSON {
   dayType?: -1 | 0 | number;
   bvn?: string;
   imageUrl?: string;
-  contacts?: any[];
+  contactlist?: string[];
+  contactList?: any[];
   accountDetails?: {
     bank: string;
     accountNumber: string;
@@ -33,36 +34,38 @@ interface BulkContactUploadProps {
 }
 const DEMO_JSON: ContactJSON[] = [
   {
-    loanId: "LN-100241",
+    loanId: "OD261002093223538120879",
     name: "Chinedu Okafor",
     phone: "08031234567",
     amount: 50000,
-    appType: "",
-    dayType: 0,
+    appType: "TunaCredit",
+    dayType: -1,
+    bvn: "22128834390",
     accountDetails: [
-      { bank: "Zenith Bank", accountNumber: "2088341170", accountName: "Chinedu Okafor" }
+      { bank: "PalmPay", accountNumber: "8022315379", accountName: "Chinedu Okafor" }
+    ],
+    contactlist: [
+      "09021234567",
+      "08187654321",
+      "08031234567",
     ]
   },
   {
-    loanId: "LN-100242",
+    loanId: "OD261002093223538120880",
     name: "Aisha Bello",
     phone: "2348098765432",
     amount: 75000,
-    appType: "",
-    dayType: -1,
+    appType: "Oyakudi",
+    dayType: -7,
+    bvn: "22128834391",
     accountDetails: [
       { bank: "GTBank", accountNumber: "0123456789", accountName: "Aisha Bello" },
-      { bank: "First Bank", accountNumber: "3112233445", accountName: "Aisha Bello" }
+      { bank: "GTBank", accountNumber: "0123456789", accountName: "Aisha Bello" }
+    ],
+    contactlist: [
+      "08051234567",
+      { name: "Bello Sam", phone: "07099887766" }
     ]
-  },
-  {
-    loanId: "LN-100243",
-    name: "Tunde Adeyemi",
-    phone: "+234 802 555 0134",
-    amount: 120000,
-    appType: "",
-    dayType: -7,
-    accountDetails: []
   }
 ];
 export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
@@ -143,26 +146,41 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
           rowErrors.push('bvn should be 11 digits');
         }
       }
-      const contactArrays = ['contacts','contactList','contactsList','linkedContacts'];
+      const contactArrays = ['contactlist','contactList','contactsList','contacts','linkedContacts'];
       const ckey = contactArrays.find(k => Array.isArray(contact[k]));
       let contactsListParsed: any[] | undefined;
       if (ckey && contact[ckey]) {
-        contactsListParsed = contact[ckey].map((cc: any, ci: number) => {
-          const cemail = cc.email || cc.emailAddress || cc.mail;
-          if (cemail && typeof cemail === 'string' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cemail)) {
-            rowErrors.push('contacts[' + ci + '].email invalid');
-          }
-          return {
-            name: cc.name || cc.contactName || cc.fullName || '',
-            phone: cc.phone || cc.phoneNumber || cc.mobile || '',
-            email: cemail || '',
-            role: cc.role || cc.title || cc.relationship || '',
-            notes: cc.notes || cc.note || '',
-            bankName: cc.bankName || cc.bank || cc.bank_name || '',
-            accountNumber: cc.accountNumber || cc.account_number || cc.accountNo || '',
-            recipientName: cc.recipientName || cc.recipient_name || cc.accountName || '',
-          };
-        });
+        contactsListParsed = contact[ckey]
+          .map((cc: any) => {
+            // New format: plain phone strings (name/details inherited from the customer).
+            if (typeof cc === 'string' || typeof cc === 'number') {
+              // Invalid phones are simply dropped (self/dupes handled below).
+              return { name: '', phone: `${cc}`.trim() };
+            }
+            const cemail = cc?.email || cc?.emailAddress || cc?.mail;
+            if (cemail && typeof cemail === 'string' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cemail)) {
+              rowErrors.push('contacts[' + ci + '].email invalid');
+            }
+            return {
+              name: cc?.name || cc?.contactName || cc?.fullName || '',
+              phone: cc?.phone || cc?.phoneNumber || cc?.mobile || '',
+              email: cemail || '',
+              role: cc?.role || cc?.title || cc?.relationship || '',
+              notes: cc?.notes || cc?.note || '',
+              bankName: cc?.bankName || cc?.bank || cc?.bank_name || '',
+              accountNumber: cc?.accountNumber || cc?.account_number || cc?.accountNo || '',
+              recipientName: cc?.recipientName || cc?.recipient_name || cc?.accountName || '',
+            };
+          })
+          // Normalize + drop duplicates + drop entries that are the customer's own phone.
+          .filter(r => {
+            const n = normalizePhoneNumber(r.phone);
+            if (!n) return false;
+            r.phone = n;
+            if (normalizePhoneNumber(`${contact.phone}`) === n) return false;
+            return true;
+          })
+          .filter((r, i, arr) => arr.findIndex(x => x.phone === r.phone) === i);
       }
       if (rowErrors.length > 0) {
         errors.push(`Row ${index + 1}: ${rowErrors.join(', ')}`);
@@ -175,9 +193,9 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
           appType: contact.appType || '',
           dayType: contact.dayType ?? 0,
           accountDetails: contact.accountDetails || [],
-          bvn: contact.bvn ? String(contact.bvn).trim() : undefined,
+bvn: contact.bvn ? String(contact.bvn).trim() : undefined,
           imageUrl: imgKey ? String(contact[imgKey]).trim() : undefined,
-          contacts: contactsListParsed,
+          contactlist: contactsListParsed,
         });
       }
     });
@@ -232,7 +250,22 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
       reloadApps();
       const contactsData = await Promise.all(preview.map(async (c) => {
         const phone = normalizePhoneNumber(c.phone);
-        const { data: existing } = await supabase.from('contacts').select('id,loan_id').eq('user_id', user.id).eq('phone', phone).maybeSingle();
+        // Separate-customer matching: a same-phone row only merges into an existing
+        // contact when loan ID (then app) matches; otherwise it becomes a new contact.
+        const { data: existingRows } = await supabase
+          .from('contacts')
+          .select('id,loan_id,app_type')
+          .eq('user_id', user.id)
+          .eq('phone', phone);
+        const rows = (existingRows || []) as any[];
+        const loanIn = String(c.loanId || '').trim().toLowerCase();
+        const appIn = String(c.appType || '').trim().toLowerCase();
+        let match: any = null;
+        if (rows.length > 0) {
+          if (loanIn) match = rows.find(r => String(r.loan_id || '').trim().toLowerCase() === loanIn) || null;
+          if (!match && appIn) match = rows.find(r => String(r.app_type || '').trim().toLowerCase() === appIn) || null;
+          if (!match && !loanIn) match = rows[0];
+        }
         const appKey = String(c.appType || '').trim().toLowerCase();
         let imgUrl = c.imageUrl || null;
         if (imgUrl) {
@@ -241,7 +274,7 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
         }
         const payload = {
           user_id: user.id,
-          loan_id: c.loanId || existing?.loan_id || '',
+          loan_id: c.loanId || match?.loan_id || '',
           name: c.name,
           phone,
           amount: c.amount,
@@ -254,66 +287,75 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
           deleted_at: null,
           created_at: new Date().toISOString(),
         };
-        const saved = await saveContactRow(payload, existing?.id);
+        const saved = await saveContactRow(payload, match?.id);
         if (saved.error) throw saved.error;
         const data = saved.data;
         saved.dropped.forEach(col => {
           if (droppedColumns.indexOf(col) === -1) droppedColumns.push(col);
         });
-        if (c.contacts && c.contacts.length > 0 && data?.id && user) {
-          const listResult = await saveContactList(data.id, user.id,
-            c.contacts.map(cc => ({
-              customer_id: data.id,
-              user_id: user.id,
-              name: cc.name || '',
-              phone: cc.phone || '',
-              email: cc.email || '',
-              role: cc.role || '',
-              notes: cc.notes || '',
-              bank_name: cc.bankName || '',
-              account_number: cc.accountNumber || '',
-              recipient_name: cc.recipientName || '',
-            }))
-          );
+        if (data?.id && user) {
+          // Account details: replace per contact, dedupe by account number (plus bank).
+          const seenAccountsLocal = new Set<string>();
+          const accountDetailsToInsert: any[] = [];
+          (c.accountDetails || []).forEach((ad: any) => {
+            if (!ad?.bank?.trim() || !ad?.accountNumber?.trim()) return;
+            const bankKey = `${String(ad.bank).trim()}::${String(ad.accountNumber).trim()}`;
+            if (seenAccountsLocal.has(bankKey)) return;
+            seenAccountsLocal.add(bankKey);
+            accountDetailsToInsert.push({
+              contact_id: data.id,
+              bank: ad.bank,
+              account_number: ad.accountNumber,
+              account_name: ad.accountName,
+            });
+          });
+          if (accountDetailsToInsert.length > 0) {
+            await supabase.from('account_details').delete().eq('contact_id', data.id);
+            const { error: accountError } = await supabase
+              .from('account_details')
+              .insert(accountDetailsToInsert);
+            if (accountError) throw accountError;
+          }
+          // Contact list: name and details inherit from the parent customer.
+          const listRows = (c.contactlist || []).map((cc: any) => ({
+            customer_id: data.id,
+            user_id: user.id,
+            name: cc.name?.trim() || c.name || '',
+            phone: normalizePhoneNumber(cc.phone || ''),
+            email: cc.email || '',
+            role: cc.role || '',
+            notes: cc.notes || '',
+            bank_name: cc.bankName || '',
+            account_number: cc.accountNumber || '',
+            recipient_name: cc.recipientName || '',
+          })).filter(r => r.phone);
+          const listResult = await saveContactList(data.id, user.id, listRows);
           if (listResult.missingTable) listMissing = true;
         }
         return data;
       }));
-      // Insert account details
-      const accountDetailsToInsert: any[] = [];
-      contactsData?.forEach((contact, index) => {
-        const originalContact = preview[index];
-        originalContact.accountDetails?.forEach(ad => {
-          accountDetailsToInsert.push({
-            contact_id: contact.id,
-            bank: ad.bank,
-            account_number: ad.accountNumber,
-            account_name: ad.accountName,
-          });
-        });
-      });
-      if (accountDetailsToInsert.length > 0) {
-        const { error: accountError } = await supabase
-          .from('account_details')
-          .insert(accountDetailsToInsert);
-        if (accountError) throw accountError;
-      }
       // Update local state
-      const newContacts = contactsData?.map((c, index) => ({
-        id: c.id,
-        loanId: c.loan_id,
-        name: c.name,
-        phone: c.phone,
-        amount: c.amount ? Number(c.amount) : undefined,
-        appType: c.app_type || '',
-        dayType: c.day_type ?? 0,
-        createdAt: new Date(c.created_at),
-        updatedAt: new Date(c.updated_at),
-        accountDetails: preview[index].accountDetails?.map((ad, i) => ({
-          id: `temp-${i}`,
-          ...ad,
-        })),
-      })) || [];
+      const newContacts = contactsData?.map((c, index) => {
+        const orig = preview[index];
+        return {
+          id: c.id,
+          loanId: c.loan_id,
+          name: c.name,
+          phone: c.phone,
+          amount: c.amount ? Number(c.amount) : undefined,
+          appType: c.app_type || '',
+          dayType: c.day_type ?? 0,
+          bvn: c.bvn || orig.bvn || undefined,
+          imageUrl: orig.imageUrl || undefined,
+          contacts: orig.contactlist || [],
+          createdAt: new Date(c.created_at),
+          updatedAt: new Date(c.updated_at),
+          accountDetails: orig.accountDetails?.map((ad, i) => ({
+            id: `temp-${i}`,
+            ...ad,
+          })),
+        };
+      }) || [];
       addContacts(newContacts);
       // Label each imported contact with its app name automatically.
       await ensureContactAppLabels(
@@ -369,9 +411,12 @@ export function BulkContactUpload({ onSuccess }: BulkContactUploadProps) {
           <p className="text-xs font-medium">How the file should look</p>
         </div>
         <p className="text-[11px] text-muted-foreground mb-2">
-          A list of contacts. Only <span className="font-medium text-foreground">name</span> and{' '}
+          A list of customers. Only <span className="font-medium text-foreground">name</span> and{' '}
           <span className="font-medium text-foreground">phone</span> are required — everything else is optional.
-          Numbers can be written as 0803…, 234803… or +234 803…
+          <br />
+          <span className="font-medium text-foreground">contactlist</span> is the customer's linked contacts (phone numbers).
+          Their name and details are inherited from the customer, and the customer's own number is skipped automatically.
+          Duplicate account numbers are also removed.
         </p>
         <pre className="max-h-40 overflow-auto rounded bg-background p-2 text-[10px] leading-relaxed">
 {JSON.stringify(DEMO_JSON, null, 2)}

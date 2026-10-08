@@ -144,39 +144,48 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
 
       reloadApps();
 
-      await supabase.from('account_details').delete().eq('contact_id', contactId);
+await supabase.from('account_details').delete().eq('contact_id', contactId);
 
-      if (accountDetails.length > 0) {
+      const seenAccounts = new Set<string>();
+      const uniqueAccounts = accountDetails
+        .filter(ad => ad.bank.trim() || ad.accountNumber.trim())
+        .filter(ad => {
+          const key = ad.accountNumber.trim();
+          if (!key) return true;
+          if (seenAccounts.has(key)) return false;
+          seenAccounts.add(key);
+          return true;
+        });
+      if (uniqueAccounts.length > 0) {
         const { error: accountError } = await supabase
           .from('account_details')
           .insert(
-            accountDetails
-              .filter(ad => ad.bank.trim() || ad.accountNumber.trim())
-              .map(ad => ({
-                contact_id: contactId,
-                bank: ad.bank,
-                account_number: ad.accountNumber,
-                account_name: ad.accountName,
-              }))
+            uniqueAccounts.map(ad => ({
+              contact_id: contactId,
+              bank: ad.bank,
+              account_number: ad.accountNumber,
+              account_name: ad.accountName,
+            }))
           );
         if (accountError) throw accountError;
       }
       let listMissing = false;
-      if (contactList.length > 0 && user) {
+      if (user) {
         const listResult = await saveContactList(contactId, user.id,
           contactList.map(cc => ({
-            customer_id: contactId,
-            user_id: user.id,
-            name: cc.name || '',
-            phone: cc.phone || '',
-            email: cc.email || '',
-            role: cc.role || '',
-            notes: cc.notes || '',
-            bank_name: cc.bankName || '',
-            account_number: cc.accountNumber || '',
-            recipient_name: cc.recipientName || '',
-            is_primary: cc.isPrimary || false,
-          }))
+              customer_id: contactId,
+              user_id: user.id,
+              name: cc.name?.trim() || formData.name?.trim() || '',
+              phone: normalizePhoneNumber(cc.phone || ''),
+              email: cc.email || '',
+              role: cc.role || '',
+              notes: cc.notes || '',
+              bank_name: cc.bankName || '',
+              account_number: cc.accountNumber || '',
+              recipient_name: cc.recipientName || '',
+              is_primary: cc.isPrimary || false,
+            }))
+            .filter(r => r.phone)
         );
         if (listResult.error) throw listResult.error;
         listMissing = listResult.missingTable;
@@ -276,7 +285,7 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
             <Input type="number" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })} placeholder="Enter amount" />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+<div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label>App Type</Label>
               {userApps.length === 0 ? (
@@ -306,6 +315,18 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
                 placeholder="0"
               />
               <p className="text-[11px] text-muted-foreground">Can be negative (e.g. -1)</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>BVN</Label>
+              <Input
+                id="contact-bvn"
+                inputMode="numeric"
+                maxLength={11}
+                value={formData.bvn}
+                onChange={(e) => setFormData({ ...formData, bvn: e.target.value.replace(/\D/g, '') })}
+                placeholder="11-digit Bank Verification Number"
+              />
             </div>
           </div>
 
@@ -349,8 +370,7 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
             userId={user?.id}
             imageUrl={formData.imageUrl}
             onImageUrlChange={(url) => setFormData({ ...formData, imageUrl: url })}
-            bvn={formData.bvn}
-            onBvnChange={(value) => setFormData({ ...formData, bvn: value })}
+            parentName={formData.name}
             items={contactList}
             onItemsChange={(next) => setContactList(next)}
           />

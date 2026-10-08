@@ -1,5 +1,6 @@
 // @ts-nocheck
-import { Phone, Edit2, Trash2, CreditCard, Banknote, Smartphone, Calendar, X } from 'lucide-react';
+import { useState } from 'react';
+import { Phone, Edit2, Trash2, CreditCard, Banknote, Smartphone, Calendar, X, MessageCircle, Loader2, Users } from 'lucide-react';
 import { useAppStore } from '@/stores/appStore';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,11 +10,60 @@ import { formatCurrency, formatLastSeen } from '@/lib/utils/format';
 import { isContactOnline } from '@/lib/utils/presence';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
+import { normalizePhoneNumber } from '@/lib/utils/phone';
 
 export function ContactPanel() {
-  const { activeChat, setShowContactPanel, deleteContact, setEditContactId } = useAppStore();
+  const { activeChat, setShowContactPanel, deleteContact, setEditContactId, contacts, chats, addContact, setActiveChat, setViewMode } = useAppStore();
   const { user } = useAuth();
   const { toast } = useToast();
+  const [openingItemPhone, setOpeningItemPhone] = useState('');
+
+  const openItemChat = async (item: any) => {
+    if (!user) return;
+    const rawPhone = normalizePhoneNumber(item.phone || '');
+    if (!rawPhone) return;
+    const existing = contacts.find(c => normalizePhoneNumber(c.phone) === rawPhone);
+    if (existing) {
+      const existingChat = chats.find(c => c.id === existing.id || c.contact.id === existing.id);
+      if (existingChat) setActiveChat(existingChat);
+      else setActiveChat({ id: existing.id, contact: existing, unreadCount: 0 });
+      setViewMode('chats');
+      setShowContactPanel(false);
+      return;
+    }
+    setOpeningItemPhone(rawPhone);
+    try {
+      const payload = {
+        user_id: user.id,
+        assigned_user_id: null,
+        name: item.name?.trim() || contact.name,
+        phone: rawPhone.replace('+', ''),
+        loan_id: contact.loanId || '',
+        app_type: contact.appType || '',
+        amount: contact.amount || null,
+        is_deleted: false,
+        deleted_at: null,
+        created_at: new Date().toISOString(),
+      };
+      const { data, error } = await supabase.from('contacts').insert(payload).select().maybeSingle();
+      if (error) throw error;
+      const newContact = {
+        id: data.id, loanId: data.loan_id, name: data.name, phone: data.phone,
+        appType: data.app_type || '', amount: data.amount,
+        createdAt: new Date(data.created_at), updatedAt: new Date(data.updated_at),
+        isPinned: false, isMuted: false, isArchived: false,
+      };
+      addContact(newContact);
+      setActiveChat({ id: newContact.id, contact: newContact, unreadCount: 0 });
+      setViewMode('chats');
+      setShowContactPanel(false);
+      toast({ title: `Chatting with ${newContact.name}` });
+    } catch (err: any) {
+      toast({ title: 'Failed to open chat', description: err.message, variant: 'destructive' });
+    } finally {
+      setOpeningItemPhone('');
+    }
+  };
 
   if (!activeChat) return null;
 
@@ -102,6 +152,18 @@ export function ContactPanel() {
                   <p className="font-medium">{contact.dayType ?? 0} Day</p>
                 </div>
               </div>
+
+              {contact.bvn && (
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center">
+                    <CreditCard className="h-4 w-4 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">BVN</p>
+                    <p className="font-medium tracking-wide">{contact.bvn}</p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -121,6 +183,43 @@ export function ContactPanel() {
               </div>
             </div>
           </div>
+
+          {contact.contacts && contact.contacts.length > 0 && (
+            <>
+              <Separator />
+              <div>
+                <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                  <Users className="h-3.5 w-3.5" /> Contacts ({contact.contacts.length})
+                </h4>
+                <div className="space-y-2">
+                  {contact.contacts.map((item, index) => (
+                    <div key={item.id || index} className="p-3 rounded-lg bg-muted/40 border border-panel-border">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-medium text-sm truncate">{item.name?.trim() || contact.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">{item.phone}</p>
+                        </div>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="shrink-0"
+                          disabled={openingItemPhone !== ''}
+                          onClick={() => openItemChat(item)}
+                        >
+                          {openingItemPhone === normalizePhoneNumber(item.phone || '') ? (
+                            <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                          ) : (
+                            <MessageCircle className="h-3.5 w-3.5 mr-1" />
+                          )}
+                          Message
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
 
           {contact.accountDetails && contact.accountDetails.length > 0 && (
             <>

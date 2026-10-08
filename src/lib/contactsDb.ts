@@ -66,7 +66,6 @@ export async function saveContactList(
   userId: string,
   rows: Record<string, any>[],
 ): Promise<SavedListResult> {
-  if (rows.length === 0) return { missingTable: false, dropped: [], error: null };
   const body = rows.map(r => ({ ...r }));
   const dropped: string[] = [];
   for (let attempt = 0; attempt <= LIST_OPTIONAL_COLUMNS.length + 2; attempt++) {
@@ -86,6 +85,7 @@ export async function saveContactList(
       if (missingColumn(del.error)) continue;
       return { missingTable: false, dropped, error: del.error };
     }
+    if (body.length === 0) return { missingTable: false, dropped, error: null };
     const ins = await supabase.from('customer_contacts').insert(body);
     if (!ins.error) return { missingTable: false, dropped, error: null };
     if (isMissingRelation(ins.error)) return { missingTable: true, dropped, error: null };

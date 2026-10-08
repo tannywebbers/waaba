@@ -2,7 +2,7 @@
 import { getEffectiveWhatsAppUserId } from '@/lib/effectiveUser';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, Clock, Forward, ImagePlus, MessageCircle, Search, Send, X, Reply as ReplyIcon } from 'lucide-react';
+import { ArrowLeft, Clock, Forward, Image as ImageIcon, MessageCircle, Search, Send, X, Reply as ReplyIcon } from 'lucide-react';
 import { EmojiPickerButton, MobileEmojiPanel } from '@/components/chat/EmojiPickerButton';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -15,7 +15,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { ContactAvatar } from '@/components/shared/ContactAvatar';
 import { MessageBubble } from '@/components/chat/MessageBubble';
 import { ChatOptionsMenu } from '@/components/chat/ChatOptionsMenu';
-import { FileUploadButton } from '@/components/chat/FileUploadButton';
 import { UnifiedTemplateSelector } from '@/components/chat/UnifiedTemplateSelector';
 import { VoiceRecorderButton } from '@/components/chat/VoiceRecorderButton';
 import { ImagePastePreview } from '@/components/chat/ImagePastePreview';
@@ -76,8 +75,6 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
   const [forwardSending, setForwardSending] = useState(false);
   const [forwardProgress, setForwardProgress] = useState(0);
   const [sendImageAfterReply, setSendImageAfterReply] = useState(false);
-  const [selectedAutoReplyImage, setSelectedAutoReplyImage] = useState<File | null>(null);
-  const autoReplyFileRef = useRef<HTMLInputElement | null>(null);
   const schedulePressTimer = useRef<NodeJS.Timeout | null>(null);
 
   // Check if the phone number is assigned to another user in the shared inbox (uses SECURITY DEFINER to bypass RLS)
@@ -589,9 +586,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
             activeChat.contact.imageUrl || activeChat.contact.image_url ||
             activeChat.contact.avatar || activeChat.contact.avatar_url || undefined;
 
-          if (selectedAutoReplyImage) {
-            await handleFileUpload(selectedAutoReplyImage, 'image');
-          } else if (contactImage) {
+          if (contactImage) {
             const imgWamid = await sendMessageToWhatsApp('image', 'image', contactImage,
               { fileName: 'image.jpg', mimeType: 'image/jpeg' }, undefined);
             if (imgWamid) {
@@ -611,7 +606,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
           } else {
             toast({
               title: 'No image found',
-              description: 'No image selected and this customer has no profile image.',
+              description: 'This customer has no attached image. Attach one from Edit Contact, then toggle Send Image.',
               duration: 4000,
             });
           }
@@ -619,7 +614,6 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
           console.warn('Auto-reply image send failed (ignored):', e);
         } finally {
           setSendImageAfterReply(false);
-          setSelectedAutoReplyImage(null);
         }
       }
 
@@ -1175,46 +1169,20 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
                   /* Allow typing while a message is sending — input is never disabled */
                 />
 
-                {/* Auto-reply image toggle: sends the image after the reply message */}
+                {/* Auto-reply image toggle: sends the customer's attached image after the reply */}
                 <div className="shrink-0 self-end pb-[2px] flex items-center gap-1">
-                  <input
-                    ref={autoReplyFileRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0] || null;
-                      if (f) { setSelectedAutoReplyImage(f); setSendImageAfterReply(true); }
-                      e.target.value = '';
-                    }}
-                  />
                   <Button
                     type="button"
                     variant={sendImageAfterReply ? 'default' : 'ghost'}
                     size="icon"
                     className="h-8 w-8"
                     title={sendImageAfterReply
-                      ? (selectedAutoReplyImage ? 'Will send image after reply: ' + selectedAutoReplyImage.name : 'Image will be sent after the reply. Click to disable.')
-                      : 'Send an image after the reply message'}
-                    onClick={() => {
-                      if (sendImageAfterReply) {
-                        setSendImageAfterReply(false);
-                        setSelectedAutoReplyImage(null);
-                      } else {
-                        setSendImageAfterReply(true);
-                        autoReplyFileRef.current?.click();
-                      }
-                    }}
+                      ? 'The customer\'s attached image will be sent after the reply. Click to disable.'
+                      : 'Send the customer\'s attached image after the reply message'}
+                    onClick={() => setSendImageAfterReply(!sendImageAfterReply)}
                   >
-                    <ImagePlus className="h-4 w-4" />
+                    <ImageIcon className="h-4 w-4" />
                   </Button>
-                </div>
-                {/* File upload button */}
-                <div className="shrink-0 self-end pb-[2px]">
-                  <FileUploadButton
-                    onFileSelect={(file, type) => handleFileUpload(file, type)}
-                    uploading={uploading}
-                  />
                 </div>
 
                 {/* Template button */}

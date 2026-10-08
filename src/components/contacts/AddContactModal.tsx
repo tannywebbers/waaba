@@ -132,12 +132,22 @@ export function AddContactModal() {
       const contactOwnerId = user.id;
       const assignedUserId = isSharedUser ? user.id : null;
 
-      const { data: existingContact } = await supabase
+const { data: existingRows } = await supabase
         .from('contacts')
-        .select('*')
+        .select('id,loan_id,app_type')
         .eq('user_id', contactOwnerId)
-        .eq('phone', formattedPhone)
-        .maybeSingle();
+        .eq('phone', formattedPhone);
+      const rows = (existingRows || []) as any[];
+      // Reuse an existing contact only when its loan + app match; otherwise keep
+      // the same phone as a SEPARATE contact (different loan/app = separate customer record).
+      const loanIn = (singleForm.loanId || '').trim().toLowerCase();
+      const appIn = resolvedAppType.trim().toLowerCase();
+      let existingContact: any = null;
+      if (rows.length > 0) {
+        if (loanIn) existingContact = rows.find(r => String(r.loan_id || '').trim().toLowerCase() === loanIn) || null;
+        if (!existingContact && appIn) existingContact = rows.find(r => String(r.app_type || '').trim().toLowerCase() === appIn) || null;
+        if (!existingContact && !loanIn) existingContact = rows[0];
+      }
 
       const contactPayload = {
         user_id: contactOwnerId,
@@ -161,7 +171,15 @@ export function AddContactModal() {
       const contactData = saved.data;
       if (!contactData) throw new Error('Contact could not be saved.');
 
-      const validAccounts = accountDetails.filter(ad => ad.bank.trim() && ad.accountNumber.trim());
+      const seenAccounts = new Set<string>();
+      const validAccounts = accountDetails
+        .filter(ad => ad.bank.trim() && ad.accountNumber.trim())
+        .filter(ad => {
+          const key = ad.accountNumber.trim();
+          if (seenAccounts.has(key)) return false;
+          seenAccounts.add(key);
+          return true;
+        });
       if (validAccounts.length > 0) {
         const { error: accountError } = await supabase
           .from('account_details')
@@ -175,24 +193,27 @@ export function AddContactModal() {
       }
 
       let listMissing = false;
-      if (singleContacts.length > 0 && contactData?.id) {
-        const listResult = await saveContactList(contactData.id, contactOwnerId,
-          singleContacts.map(cc => ({
-            customer_id: contactData.id,
-            user_id: contactOwnerId,
-            name: cc.name || '',
-            phone: cc.phone || '',
-            email: cc.email || '',
-            role: cc.role || '',
-            notes: cc.notes || '',
-            bank_name: cc.bankName || '',
-            account_number: cc.accountNumber || '',
-            recipient_name: cc.recipientName || '',
-            is_primary: false,
-          }))
-        );
+      const listRows = singleContacts
+        .map(cc => ({
+          customer_id: contactData.id,
+          user_id: contactOwnerId,
+          name: cc.name?.trim() || singleForm.name?.trim() || '',
+          phone: normalizePhoneNumber(cc.phone || ''),
+          email: cc.email || '',
+          role: cc.role || '',
+          notes: cc.notes || '',
+          bank_name: cc.bankName || '',
+          account_number: cc.accountNumber || '',
+          recipient_name: cc.recipientName || '',
+          is_primary: false,
+        }))
+        .filter(r => r.phone);
+      if (listRows.length > 0 && contactData?.id) {
+        const listResult = await saveContactList(contactData.id, contactOwnerId, listRows);
         if (listResult.error) console.error('Error saving contact list:', listResult.error);
         listMissing = listResult.missingTable;
+      } else if (contactData?.id) {
+        await saveContactList(contactData.id, contactOwnerId, []);
       }
 
       // Assign labels
@@ -299,14 +320,22 @@ export function AddContactModal() {
       const contactOwnerId = isSharedUser && superUserId ? superUserId : user.id;
       const assignedUserId = isSharedUser ? user.id : null;
 
-      const contactsData: any[] = [];
-      for (let i = 0; i < ids.length; i++) {
-        const { data: existingContact } = await supabase
+const contactsData: any[] = [];
+      for (let i = 0; i < phones.length; i++) {
+        const loanIdIn = (ids[i]?.trim() || '').toLowerCase();
+        const appIn = resolvedBulkApp.trim().toLowerCase();
+        const { data: existingRows } = await supabase
           .from('contacts')
-          .select('*')
+          .select('id,loan_id,app_type')
           .eq('user_id', contactOwnerId)
-          .eq('phone', phones[i])
-          .maybeSingle();
+          .eq('phone', phones[i]);
+        const rows2 = (existingRows || []) as any[];
+        let existingContact: any = null;
+        if (rows2.length > 0) {
+          if (loanIdIn) existingContact = rows2.find(r => String(r.loan_id || '').trim().toLowerCase() === loanIdIn) || null;
+          if (!existingContact && appIn) existingContact = rows2.find(r => String(r.app_type || '').trim().toLowerCase() === appIn) || null;
+          if (!existingContact && !loanIdIn) existingContact = rows2[0];
+        }
 
         const payload = {
         user_id: contactOwnerId,
@@ -409,7 +438,7 @@ export function AddContactModal() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+<div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label className="flex items-center gap-1.5"><Smartphone className="h-3.5 w-3.5" /> App Type</Label>
                   {userApps.length === 0 ? (
@@ -438,6 +467,17 @@ export function AddContactModal() {
                     placeholder="0"
                   />
                   <p className="text-[11px] text-muted-foreground">Can be negative (e.g. -1, -7)</p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1.5"><CreditCard className="h-3.5 w-3.5" /> BVN</Label>
+                  <Input
+                    id="contact-bvn"
+                    inputMode="numeric"
+                    maxLength={11}
+                    value={singleForm.bvn}
+                    onChange={(e) => setSingleForm({ ...singleForm, bvn: e.target.value.replace(/\D/g, '') })}
+                    placeholder="11-digit Bank Verification Number"
+                  />
                 </div>
               </div>
 
@@ -469,8 +509,7 @@ export function AddContactModal() {
                 userId={user?.id}
                 imageUrl={singleForm.imageUrl}
                 onImageUrlChange={(url) => setSingleForm({ ...singleForm, imageUrl: url })}
-                bvn={singleForm.bvn}
-                onBvnChange={(value) => setSingleForm({ ...singleForm, bvn: value })}
+                parentName={singleForm.name}
                 items={singleContacts}
                 onItemsChange={setSingleContacts}
               />

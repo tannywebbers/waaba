@@ -120,15 +120,27 @@ interface AppState {
 
 const persisted = loadUIState();
 
+// A blank side matches anything; otherwise values must be equal (case-insensitive).
+const loanMatches = (a?: string, b?: string) => {
+  const x = (a || '').trim().toLowerCase();
+  const y = (b || '').trim().toLowerCase();
+  return x === y || !x || !y;
+};
+
 export const useAppStore = create<AppState>()((set, get) => ({
   viewMode: persisted.viewMode || 'chats',
   setViewMode: (mode) => { set({ viewMode: mode }); _persistUI(); },
 
   contacts: [],
   setContacts: (contacts) => set({ contacts }),
-  addContact: (contact) => {
+addContact: (contact) => {
     set((state) => {
-      const existingChat = state.chats.find((c) => c.id === contact.id || c.contact.id === contact.id);
+      const sameRecord = (existing: Contact) =>
+        existing.id === contact.id ||
+        (existing.phone === contact.phone &&
+          loanMatches(existing.loanId, contact.loanId) &&
+          loanMatches(existing.appType, contact.appType));
+      const existingChat = state.chats.find((c) => c.id === contact.id || sameRecord(c.contact));
       const chat: Chat = existingChat
         ? {
             ...existingChat,
@@ -143,17 +155,22 @@ export const useAppStore = create<AppState>()((set, get) => ({
           }
         : { id: contact.id, contact, unreadCount: 0 };
       return {
-        contacts: [...state.contacts.filter((c) => c.id !== contact.id), contact],
-        chats: [...state.chats.filter((c) => c.id !== contact.id && c.contact.id !== contact.id), chat],
+        contacts: [...state.contacts.filter((c) => !sameRecord(c)), contact],
+        chats: [...state.chats.filter((c) => c.id !== contact.id && !sameRecord(c.contact)), chat],
       };
     });
   },
-  addContacts: (contacts) => {
+addContacts: (contacts) => {
     set((state) => {
       const chats = [...state.chats];
       const newChats: Chat[] = [];
+      const sameRecord = (existing: Contact, incoming: Contact) =>
+        existing.id === incoming.id ||
+        (existing.phone === incoming.phone &&
+          loanMatches(existing.loanId, incoming.loanId) &&
+          loanMatches(existing.appType, incoming.appType));
       for (const contact of contacts) {
-        const idx = chats.findIndex((c) => c.id === contact.id || c.contact.id === contact.id || c.contact.phone === contact.phone);
+        const idx = chats.findIndex((c) => c.id === contact.id || sameRecord(c.contact, contact));
         if (idx >= 0) {
           const existing = chats[idx];
           chats[idx] = {
@@ -173,7 +190,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
       }
       return {
         contacts: [
-          ...state.contacts.filter((existing) => !contacts.some((incoming) => incoming.id === existing.id || incoming.phone === existing.phone)),
+          ...state.contacts.filter((existing) => !contacts.some((incoming) => sameRecord(existing, incoming))),
           ...contacts,
         ],
         chats: [...chats, ...newChats],
