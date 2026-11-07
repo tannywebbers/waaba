@@ -15,6 +15,7 @@ import { format } from 'date-fns';
 import { generateMessageId } from '@/lib/utils/messageId';
 import { resolveTemplateBody } from '@/lib/templateVariables';
 import { ensureAppRegistered } from '@/lib/registerApp';
+import { useSendCooldown } from '@/hooks/useSendCooldown';
 
 interface MetaTemplate {
   id: string; template_id: string; name: string; language: string; category: string; status: string; components: any;
@@ -130,6 +131,7 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
   const [appSearch, setAppSearch] = useState('');
   const [appLoading, setAppLoading] = useState(false);
   const [appTemplatesMap, setAppTemplatesMap] = useState<Record<string, string>>({});
+  const { locked: sendLocked, run: runSend } = useSendCooldown(4000);
 
   useEffect(() => {
     if (open && user) {
@@ -263,15 +265,17 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
     setAppVarNums(appVars);
   };
 
-  const handleMetaConfirm = async () => {
+  const handleMetaConfirm = () => {
     if (!selectedMeta) return;
-    for (const [, value] of Object.entries(metaParams)) {
-      // Block if a mapped field could not be resolved (missing app template or leftover variable)
-      if (value.startsWith('[Missing template:') || value.includes('{{')) return;
-    }
-    await onSelectMetaTemplate(selectedMeta, metaParams);
-    setOpen(false);
-    setSelectedMeta(null);
+    runSend(async () => {
+      for (const [, value] of Object.entries(metaParams)) {
+        // Block if a mapped field could not be resolved (missing app template or leftover variable)
+        if (value.startsWith('[Missing template:') || value.includes('{{')) return;
+      }
+      await onSelectMetaTemplate(selectedMeta, metaParams);
+      setOpen(false);
+      setSelectedMeta(null);
+    });
   };
 
   const handleAppSelect = (template: any) => {
@@ -391,7 +395,7 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
             {/* Fixed action buttons at bottom */}
             <div className="flex justify-end gap-2 pt-4 border-t shrink-0">
               <Button variant="outline" onClick={() => setSelectedMeta(null)}>Back</Button>
-              <Button onClick={handleMetaConfirm}>Send Template</Button>
+              <Button onClick={handleMetaConfirm} disabled={sendLocked}>{sendLocked ? 'Sending…' : 'Send Template'}</Button>
             </div>
           </div>
         ) : (

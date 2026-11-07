@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -47,6 +47,14 @@ function buildPreview(template: MetaTemplate, params: Record<string, string>): s
 export function TemplatePickerModal({ visible, templates, loading, onClose, onSend }: Props) {
   const [selected, setSelected] = useState<MetaTemplate | null>(null);
   const [params, setParams] = useState<Record<string, string>>({});
+  const [sending, setSending] = useState(false);
+  const sendLockRef = useRef(false);
+  const sendTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (sendTimerRef.current) clearTimeout(sendTimerRef.current);
+    sendLockRef.current = false;
+  }, []);
 
   useEffect(() => {
     if (!visible) {
@@ -54,6 +62,22 @@ export function TemplatePickerModal({ visible, templates, loading, onClose, onSe
       setParams({});
     }
   }, [visible]);
+
+  const handleSend = () => {
+    if (!selected || sendLockRef.current) return;
+    sendLockRef.current = true;
+    setSending(true);
+    try {
+      onSend(selected, params, buildPreview(selected, params));
+    } finally {
+      if (sendTimerRef.current) clearTimeout(sendTimerRef.current);
+      sendTimerRef.current = setTimeout(() => {
+        sendLockRef.current = false;
+        setSending(false);
+        sendTimerRef.current = null;
+      }, 4000);
+    }
+  };
 
   const variables = useMemo(() => (selected ? extractVariables(selected.components) : []), [selected]);
 
@@ -123,17 +147,12 @@ export function TemplatePickerModal({ visible, templates, loading, onClose, onSe
 
       <View style={{ padding: 16 }}>
         <TouchableOpacity
-          style={styles.sendBtn}
-          onPress={() =>
-            onSend(
-              selected!,
-              params,
-              buildPreview(selected!, params)
-            )
-          }
+          style={[styles.sendBtn, sending && { opacity: 0.6 }]}
+          disabled={sending}
+          onPress={handleSend}
         >
           <Ionicons name="send" size={17} color="#fff" />
-          <Text style={styles.sendBtnText}>Send template</Text>
+          <Text style={styles.sendBtnText}>{sending ? 'Sending…' : 'Send template'}</Text>
         </TouchableOpacity>
       </View>
     </View>

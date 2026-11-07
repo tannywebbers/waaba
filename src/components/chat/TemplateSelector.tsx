@@ -8,6 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useSendCooldown } from '@/hooks/useSendCooldown';
 
 interface Template {
   id: string; template_id: string; name: string; language: string; category: string; status: string; components: any;
@@ -86,6 +87,7 @@ export function TemplateSelector({ contact, onSelectTemplate }: TemplateSelector
   const [params, setParams] = useState<Record<string, string>>({});
   const [mappings, setMappings] = useState<Record<number, string>>({});
   const [unmappedVars, setUnmappedVars] = useState<number[]>([]);
+  const { locked: sendLocked, run: runSend } = useSendCooldown(4000);
 
   useEffect(() => { if (open && user) fetchTemplates(); }, [open, user]);
 
@@ -165,17 +167,18 @@ export function TemplateSelector({ contact, onSelectTemplate }: TemplateSelector
   };
   
   const handleConfirm = () => {
-    if (selectedTemplate) {
+    if (!selectedTemplate) return;
+    runSend(async () => {
       // Block if there are unmapped variables with no values
       const emptyParams = Object.entries(params).filter(([_, v]) => !v);
       if (emptyParams.length > 0 && Object.keys(mappings).length > 0) {
         // Only block if mappings exist but are incomplete
         return;
       }
-      onSelectTemplate(selectedTemplate, params);
+      await onSelectTemplate(selectedTemplate, params);
       setOpen(false);
       setSelectedTemplate(null);
-    }
+    });
   };
 
   const filteredTemplates = templates.filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -253,7 +256,7 @@ export function TemplateSelector({ contact, onSelectTemplate }: TemplateSelector
               </div>
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setSelectedTemplate(null)}>Back</Button>
-                <Button onClick={handleConfirm}>Send Template</Button>
+                <Button onClick={handleConfirm} disabled={sendLocked}>{sendLocked ? 'Sending…' : 'Send Template'}</Button>
               </div>
             </div>
           </ScrollArea>
