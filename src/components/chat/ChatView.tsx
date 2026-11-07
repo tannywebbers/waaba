@@ -2,7 +2,7 @@
 import { getEffectiveWhatsAppUserId } from '@/lib/effectiveUser';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, Clock, Forward, Image as ImageIcon, MessageCircle, Search, Send, X, Reply as ReplyIcon } from 'lucide-react';
+import { ArrowLeft, Clock, Forward, MessageCircle, Search, Send, X, Reply as ReplyIcon } from 'lucide-react';
 import { EmojiPickerButton, MobileEmojiPanel } from '@/components/chat/EmojiPickerButton';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -15,6 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { ContactAvatar } from '@/components/shared/ContactAvatar';
 import { MessageBubble } from '@/components/chat/MessageBubble';
 import { ChatOptionsMenu } from '@/components/chat/ChatOptionsMenu';
+import { FileUploadButton } from '@/components/chat/FileUploadButton';
 import { UnifiedTemplateSelector } from '@/components/chat/UnifiedTemplateSelector';
 import { VoiceRecorderButton } from '@/components/chat/VoiceRecorderButton';
 import { ImagePastePreview } from '@/components/chat/ImagePastePreview';
@@ -1169,20 +1170,12 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
                   /* Allow typing while a message is sending — input is never disabled */
                 />
 
-                {/* Auto-reply image toggle: sends the customer's attached image after the reply */}
-                <div className="shrink-0 self-end pb-[2px] flex items-center gap-1">
-                  <Button
-                    type="button"
-                    variant={sendImageAfterReply ? 'default' : 'ghost'}
-                    size="icon"
-                    className="h-8 w-8"
-                    title={sendImageAfterReply
-                      ? 'The customer\'s attached image will be sent after the reply. Click to disable.'
-                      : 'Send the customer\'s attached image after the reply message'}
-                    onClick={() => setSendImageAfterReply(!sendImageAfterReply)}
-                  >
-                    <ImageIcon className="h-4 w-4" />
-                  </Button>
+                {/* File upload button */}
+                <div className="shrink-0 self-end pb-[2px]">
+                  <FileUploadButton
+                    onFileSelect={(file, type) => handleFileUpload(file, type)}
+                    uploading={uploading}
+                  />
                 </div>
 
                 {/* Template button */}
