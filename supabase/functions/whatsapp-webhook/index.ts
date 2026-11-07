@@ -302,14 +302,29 @@ const getSettingsByPhoneNumberId = async (supabase: any, phoneNumberId: string) 
     .from('whatsapp_settings')
     .select('user_id, api_token, phone_number_id, verify_token')
     .eq('phone_number_id', phoneNumberId)
-    .maybeSingle();
+    .limit(1);
 
   if (error) {
     console.error('❌ Settings lookup by phone_number_id failed:', error.message);
     return null;
   }
 
-  return data;
+  return data?.[0] || null;
+};
+
+const getSettingsByVerifyToken = async (supabase: any, verifyToken: string) => {
+  const { data, error } = await supabase
+    .from('whatsapp_settings')
+    .select('user_id, api_token, phone_number_id, verify_token')
+    .eq('verify_token', verifyToken)
+    .limit(1);
+
+  if (error) {
+    console.error('❌ Settings lookup by verify_token failed:', error.message);
+    return null;
+  }
+
+  return data?.[0] || null;
 };
 
 const resolveSettingsForWebhookItem = async (
@@ -328,20 +343,27 @@ const resolveSettingsForWebhookItem = async (
     settingsByPhoneNumber = await getSettingsByPhoneNumberId(supabase, phoneNumberId);
   }
 
+  // The phone_number_id is the authoritative connection identifier. Meta may keep
+  // calling an older callback URL whose ?user_id= param is stale, so never reject a
+  // payload just because that query param disagrees with the row that owns the number.
+  if (explicitUserId && settingsByPhoneNumber && settingsByPhoneNumber.user_id !== explicitUserId) {
+    console.log(
+      `⚠️ Stale webhook ?user_id=${explicitUserId}; using phone_number_id owner ${settingsByPhoneNumber.user_id}`,
+    );
+  }
+
   const settings = phoneNumberId && settingsByPhoneNumber ? settingsByPhoneNumber : settingsByExplicitUser;
   const matchedSettingsUserId = settings?.user_id || settingsByPhoneNumber?.user_id || settingsByExplicitUser?.user_id || null;
   const apiTokenExists = Boolean(settings?.api_token);
 
   let mappingFailureReason: string | null = null;
-  if (!phoneNumberId) {
+  if (!phoneNumberId && !explicitUserId) {
     mappingFailureReason = 'missing_phone_number_id';
   } else if (!settings) {
     mappingFailureReason = explicitUserId
       ? `no_db_match_for_phone_number_id:${phoneNumberId};explicit_user_has_no_usable_settings:${explicitUserId}`
       : `no_db_match_for_phone_number_id:${phoneNumberId}`;
-  } else if (explicitUserId && settingsByPhoneNumber && settingsByPhoneNumber.user_id !== explicitUserId) {
-    mappingFailureReason = `wrong_user_id:explicit=${explicitUserId},matched_by_phone=${settingsByPhoneNumber.user_id}`;
-  } else if (settings.phone_number_id !== phoneNumberId) {
+  } else if (phoneNumberId && settings.phone_number_id !== phoneNumberId) {
     mappingFailureReason = `phone_number_id_mismatch:payload=${phoneNumberId},db=${settings.phone_number_id || 'empty'}`;
   } else if (!settings.api_token) {
     mappingFailureReason = `missing_api_token:user_id=${settings.user_id}`;
@@ -1053,7 +1075,9 @@ const processWebhookPayload = async (
     }
 
     const settingsUserId = settings.user_id;
-    const superUserId = explicitUserId || settingsUserId;
+    // Always use the owner of the matched connection (phone_number_id). The
+    // ?user_id= query param can be stale and must not redirect data to another user.
+    const superUserId = settingsUserId;
 
     if (value.messages?.length) {
       console.log('📩 Real incoming messages detected:', value.messages.length);
@@ -1083,11 +1107,16 @@ serve(async (req) => {
     const token = url.searchParams.get('hub.verify_token');
     const challenge = url.searchParams.get('hub.challenge');
 
-    if (mode !== 'subscribe' || !token || !challenge || !explicitUserId) {
+    if (mode !== 'subscribe' || !token || !challenge) {
       return new Response('Forbidden', { status: 403, headers: corsHeaders });
     }
 
-    const settings = await getSettingsByUserId(supabase, explicitUserId);
+    // Accept verification when the token matches the settings row, even if the
+    // callback URL carries a stale ?user_id=. Meta only re-checks the token.
+    let settings = explicitUserId ? await getSettingsByUserId(supabase, explicitUserId) : null;
+    if (!settings?.verify_token || settings.verify_token !== token) {
+      settings = await getSettingsByVerifyToken(supabase, token);
+    }
 
     if (!settings?.verify_token || settings.verify_token !== token) {
       console.log('❌ Verification failed for user:', explicitUserId);
@@ -1095,7 +1124,7 @@ serve(async (req) => {
     }
 
     await logWebhookEvent(supabase, {
-      user_id: explicitUserId,
+      user_id: settings.user_id,
       event_type: 'webhook_verified',
       direction: 'incoming',
       status: 'success',
