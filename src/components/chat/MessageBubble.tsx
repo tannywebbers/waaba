@@ -25,6 +25,51 @@ interface MessageBubbleProps {
 
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 
+const URL_PATTERN = /(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+|(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:com|net|org|io|co|ng|app|dev|me|info|biz|xyz|link|ly|be|tv|uk|us|site|online|store|shop|ai|gov|edu)(?:\/[^\s<>"']*)?)/i;
+
+const trimTrailingUrlPunctuation = (raw: string) => raw.replace(/[.,!?;:)\]}"']+$/, '');
+
+export function renderTextWithLinks(text: string) {
+  if (!text) return text;
+  const re = new RegExp(URL_PATTERN.source, 'gi');
+  const nodes: Array<string | { url: string; label: string }> = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = re.exec(text)) !== null) {
+    const label = trimTrailingUrlPunctuation(match[0]);
+    if (!label) continue;
+    const start = match.index;
+    const end = start + label.length;
+    // Skip matches that are really part of an email address.
+    if (start > 0 && text[start - 1] === '@') { re.lastIndex = end; continue; }
+    if (start > lastIndex) nodes.push(text.slice(lastIndex, start));
+    const href = /^https?:\/\//i.test(label) ? label : `https://${label}`;
+    nodes.push({ url: href, label });
+    lastIndex = end;
+    re.lastIndex = end;
+  }
+
+  if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
+
+  return nodes.map((node, index) =>
+    typeof node === 'string' ? (
+      <span key={index}>{node}</span>
+    ) : (
+      <a
+        key={index}
+        href={node.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline break-all text-blue-600 dark:text-blue-400 hover:text-blue-500"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {node.label}
+      </a>
+    ),
+  );
+}
+
 export function MessageBubble({ message, onDelete, onReply, onReact, onForward }: MessageBubbleProps) {
   const { content, isOutgoing, timestamp, status, type, mediaUrl, replySnapshot, reactions, errorCode, errorTitle, errorDetails } = message;
   const [mediaPreview, setMediaPreview] = useState(false);
@@ -227,7 +272,7 @@ export function MessageBubble({ message, onDelete, onReply, onReact, onForward }
       );
     }
 
-    return <p className="text-[15px] sm:text-[14px] leading-[1.3] whitespace-pre-wrap break-words font-medium" style={{ overflowWrap: 'anywhere' }}>{content}</p>;
+    return <p className="text-[15px] sm:text-[14px] leading-[1.3] whitespace-pre-wrap break-words font-medium" style={{ overflowWrap: 'anywhere' }}>{renderTextWithLinks(content)}</p>;
   };
 
   // Group reactions by emoji and count
