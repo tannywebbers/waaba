@@ -16,6 +16,7 @@ import { ContactAvatar } from '@/components/shared/ContactAvatar';
 import { MessageBubble } from '@/components/chat/MessageBubble';
 import { ChatOptionsMenu } from '@/components/chat/ChatOptionsMenu';
 import { FileUploadButton } from '@/components/chat/FileUploadButton';
+import { formatTemplateForComposer } from '@/lib/templateVariables';
 import { UnifiedTemplateSelector } from '@/components/chat/UnifiedTemplateSelector';
 import { VoiceRecorderButton } from '@/components/chat/VoiceRecorderButton';
 import { ImagePastePreview } from '@/components/chat/ImagePastePreview';
@@ -128,6 +129,15 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
     setInputValue(useAppStore.getState().drafts?.[activeChat.id] || '');
     useAppStore.getState().clearUnread(activeChat.id);
   }, [activeChat?.id]);
+
+  // Grow the composer with its content (including inserted templates) instead of
+  // showing an inner scrollbar.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [inputValue]);
 
   // Real-time subscription for THIS chat's messages & status updates
   useEffect(() => {
@@ -1136,11 +1146,6 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
                   onChange={(e) => {
                     setInputValue(e.target.value);
                     setDraft(activeChat.id, e.target.value);
-                    // Auto-resize
-                    if (inputRef.current) {
-                      inputRef.current.style.height = 'auto';
-                      inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 154)}px`;
-                    }
                   }}
                   onFocus={() => {
                     if (isMobile && emojiPanelOpen) {
@@ -1162,33 +1167,37 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
                   }}
                   placeholder="Message"
                   rows={1}
-                  className="min-w-0 flex-1 resize-none border-0 focus:outline-none min-h-[38px] max-h-[154px] py-[7px] px-2 text-[16px] bg-transparent leading-[1.4] font-medium overflow-y-auto custom-scrollbar"
-                  style={{
-                    scrollbarWidth: 'thin',
-                    scrollbarColor: 'rgba(155, 155, 155, 0.5) transparent'
-                  }}
+                  className="min-w-0 flex-1 resize-none border-0 focus:outline-none min-h-[38px] py-[7px] px-2 text-[16px] bg-transparent leading-[1.4] font-medium overflow-hidden"
                   /* Allow typing while a message is sending — input is never disabled */
                 />
 
-                {/* File upload button */}
-                <div className="shrink-0 self-end pb-[2px]">
-                  <FileUploadButton
-                    onFileSelect={(file, type) => handleFileUpload(file, type)}
-                    uploading={uploading}
-                  />
-                </div>
+                {/* File upload + template buttons collapse while typing so the
+                    text area gets the full width. */}
+                {!inputValue.trim() && (
+                  <>
+                    <div className="shrink-0 self-end pb-[2px]">
+                      <FileUploadButton
+                        onFileSelect={(file, type) => handleFileUpload(file, type)}
+                        uploading={uploading}
+                      />
+                    </div>
 
-                {/* Template button */}
-                <div className="shrink-0 self-end pb-[2px]">
-                  <UnifiedTemplateSelector
-                    contact={contact}
-                    onSelectMetaTemplate={handleSendMetaTemplate}
-                    onInsertAppTemplate={(text) => {
-                      setInputValue((prev) => prev + text);
-                      setDraft(activeChat.id, inputValue + text);
-                    }}
-                  />
-                </div>
+                    {/* Template button */}
+                    <div className="shrink-0 self-end pb-[2px]">
+                      <UnifiedTemplateSelector
+                        contact={contact}
+                        onSelectMetaTemplate={handleSendMetaTemplate}
+                        onInsertAppTemplate={(text) => {
+                          const formatted = formatTemplateForComposer(text);
+                          const base = inputValue.trim() ? inputValue.replace(/\s+$/, '') + '\n\n' : '';
+                          const next = base + formatted;
+                          setInputValue(next);
+                          setDraft(activeChat.id, next);
+                        }}
+                      />
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Send or Voice button - OUTSIDE message area */}

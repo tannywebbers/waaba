@@ -28,6 +28,7 @@ import { logSendDiagnostics } from '@/lib/sendDiagnostics';
 import { resolveTemplateBody, resolveVariable } from '@/lib/templateVariables';
 import { ensureAppRegistered } from '@/lib/registerApp';
 import { ensureContactAppLabels } from '@/lib/contactAppLabel';
+import { useDisplayName } from '@/hooks/useDisplayName';
 
 type ChatFilter = 'all' | 'unread' | 'archived';
 type SortBy = 'recent' | 'name' | 'amount';
@@ -57,14 +58,14 @@ interface PreparedRow {
 // and closes the chat view, which tears this list down and back up).
 const preservedListScroll = new Map<string, number>();
 
-const resolveTemplate = (body: string, contact: any): string => resolveTemplateBody(body, contact).text;
+const resolveTemplate = (body: string, contact: any, senderName = ''): string => resolveTemplateBody(body, contact, { senderName }).text;
 
-const resolveMappedField = (field: string, contact: any, appTemplatesMap: Record<string, string>) => {
+const resolveMappedField = (field: string, contact: any, appTemplatesMap: Record<string, string>, senderName = '') => {
   if (field.startsWith('app_template:')) {
     const templateName = field.replace('app_template:', '');
-    return resolveTemplateBody(appTemplatesMap[templateName] || '', contact).text;
+    return resolveTemplateBody(appTemplatesMap[templateName] || '', contact, { senderName }).text;
   }
-  return resolveVariable(field, contact);
+  return resolveVariable(field, contact, { senderName });
 };
 
 const toUtcIsoFromLocalInput = (value: string) => {
@@ -91,6 +92,7 @@ const toContactModel = (c: any) => ({
 
 export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const { user } = useAuth();
+  const senderName = useDisplayName();
   const { toast } = useToast();
   const {
     viewMode, setViewMode, chats, contacts, activeChat, setActiveChat, searchQuery, setSearchQuery,
@@ -503,7 +505,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
 
       if (bulkSource === 'app' && appTemplate) {
         for (const contact of selectedContacts) {
-          const { text, missing } = resolveTemplateBody(appTemplate.body, contact);
+          const { text, missing } = resolveTemplateBody(appTemplate.body, contact, { senderName });
           const row: PreparedRow = {
             contact, phone: normalizePhoneNumber(contact.phone), text, missing,
             status: missing.length > 0 ? 'blocked' : 'ready',
@@ -542,7 +544,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
               params[`{{${n}}}`] = '';
               continue;
             }
-            const value = resolveMappedField(field, contact, appTemplatesMap);
+            const value = resolveMappedField(field, contact, appTemplatesMap, senderName);
             if (!value || value.includes('{{')) missing.push(`{{${n}}} → ${field}`);
             params[`{{${n}}}`] = value;
           }

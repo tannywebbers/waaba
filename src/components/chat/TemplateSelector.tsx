@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useSendCooldown } from '@/hooks/useSendCooldown';
+import { useDisplayName } from '@/hooks/useDisplayName';
 
 interface Template {
   id: string; template_id: string; name: string; language: string; category: string; status: string; components: any;
@@ -20,12 +21,17 @@ interface TemplateSelectorProps {
 }
 
 // Resolve a mapped field name to actual contact data
-function resolveField(field: string, contact: TemplateSelectorProps['contact']): string {
+function resolveField(field: string, contact: TemplateSelectorProps['contact'], senderName = ''): string {
   const paymentDetails = contact.accountDetails?.length
     ? contact.accountDetails.map(a => `${a.bank} - ${a.accountNumber} (${a.accountName})`).join('; ')
     : '';
 
   switch (field) {
+    case 'user_display_name':
+    case 'sender_name':
+    case 'user_name':
+    case 'display_name':
+      return senderName;
     case 'customer_name': return contact.name;
     case 'loan_id': return contact.loanId;
     case 'amount': return contact.amount?.toString() || '';
@@ -49,7 +55,7 @@ function resolveField(field: string, contact: TemplateSelectorProps['contact']):
 }
 
 // Also support named variables like {{customer_name}} for backward compat
-function mapNamedVariables(text: string, contact: TemplateSelectorProps['contact']): string {
+function mapNamedVariables(text: string, contact: TemplateSelectorProps['contact'], senderName = ''): string {
   const paymentDetails = contact.accountDetails?.length
     ? contact.accountDetails.map(a => `${a.bank} - ${a.accountNumber} (${a.accountName})`).join('; ')
     : '';
@@ -66,6 +72,9 @@ function mapNamedVariables(text: string, contact: TemplateSelectorProps['contact
   };
 
   return text
+    .replace(/\{\{user_display_name\}\}/gi, senderName)
+    .replace(/\{\{sender_name\}\}/gi, senderName)
+    .replace(/\{\{user_name\}\}/gi, senderName)
     .replace(/\{\{customer_name\}\}/gi, contact.name)
     .replace(/\{\{loan_id\}\}/gi, contact.loanId)
     .replace(/\{\{amount\}\}/gi, contact.amount?.toString() || '')
@@ -88,6 +97,7 @@ export function TemplateSelector({ contact, onSelectTemplate }: TemplateSelector
   const [mappings, setMappings] = useState<Record<number, string>>({});
   const [unmappedVars, setUnmappedVars] = useState<number[]>([]);
   const { locked: sendLocked, run: runSend } = useSendCooldown(4000);
+  const senderName = useDisplayName();
 
   useEffect(() => { if (open && user) fetchTemplates(); }, [open, user]);
 
@@ -132,7 +142,7 @@ export function TemplateSelector({ contact, onSelectTemplate }: TemplateSelector
     varNums.forEach((num: number) => {
       const field = dbMappings[num];
       if (field) {
-        resolvedParams[`{{${num}}}`] = resolveField(field, contact);
+        resolvedParams[`{{${num}}}`] = resolveField(field, contact, senderName);
       } else {
         resolvedParams[`{{${num}}}`] = '';
         unmapped.push(num);
@@ -151,7 +161,7 @@ export function TemplateSelector({ contact, onSelectTemplate }: TemplateSelector
             else if (lower.includes('loan') || lower.includes('id')) resolvedParams[paramKey] = contact.loanId;
             else if (lower.includes('amount')) resolvedParams[paramKey] = contact.amount?.toString() || '';
             else if (lower.includes('app')) resolvedParams[paramKey] = contact.appType || '';
-            else if (lower.includes('due') || lower.includes('date')) resolvedParams[paramKey] = resolveField('due_date', contact);
+            else if (lower.includes('due') || lower.includes('date')) resolvedParams[paramKey] = resolveField('due_date', contact, senderName);
             else if (lower.includes('day')) resolvedParams[paramKey] = contact.dayType?.toString() || '';
             else if ((lower.includes('account') || lower.includes('payment')) && contact.accountDetails?.[0]) {
               resolvedParams[paramKey] = `${contact.accountDetails[0].bank} - ${contact.accountDetails[0].accountNumber} (${contact.accountDetails[0].accountName})`;
@@ -187,7 +197,7 @@ export function TemplateSelector({ contact, onSelectTemplate }: TemplateSelector
     const body = template.components?.find((c: any) => c.type === 'BODY');
     let text = body?.text || 'No preview available';
     Object.entries(params).forEach(([key, value]) => { text = text.replace(key, value || key); });
-    text = mapNamedVariables(text, contact);
+    text = mapNamedVariables(text, contact, senderName);
     return text;
   };
 
@@ -250,13 +260,13 @@ export function TemplateSelector({ contact, onSelectTemplate }: TemplateSelector
                 {unmappedVars.length > 0 && Object.keys(mappings).length > 0 && (
                   <div className="flex items-center gap-2 text-destructive text-sm">
                     <AlertCircle className="h-4 w-4 shrink-0" />
-                    <span>Variables {unmappedVars.map(v => `{{${v}}}`).join(', ')} not mapped. Go to Settings → Template Mapping.</span>
+                    <span>Variables {unmappedVars.map(v => `{{${v}}}`).join(', ')} not mapped. Go to Settings â†’ Template Mapping.</span>
                   </div>
                 )}
               </div>
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setSelectedTemplate(null)}>Back</Button>
-                <Button onClick={handleConfirm} disabled={sendLocked}>{sendLocked ? 'Sending…' : 'Send Template'}</Button>
+                <Button onClick={handleConfirm} disabled={sendLocked}>{sendLocked ? 'Sendingâ€¦' : 'Send Template'}</Button>
               </div>
             </div>
           </ScrollArea>

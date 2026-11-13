@@ -8,6 +8,7 @@ export interface TemplateVariable {
 /** Variables available to app templates, Meta template mapping and auto replies. */
 export const APP_VARIABLES: TemplateVariable[] = [
   { value: 'customer_name', label: 'Customer Name' },
+  { value: 'user_display_name', label: 'Your Display Name' },
   { value: 'loan_id', label: 'Loan ID' },
   { value: 'amount', label: 'Amount' },
   { value: 'due_date', label: 'Due Date' },
@@ -64,13 +65,19 @@ export function formatCurrentTime(d = new Date()): string {
  * Resolves a single variable name against a contact.
  * `ctx.messageId` keeps {{message_id}} identical within one resolved message.
  */
-export function resolveVariable(name: string, c: any, ctx: { messageId?: string } = {}): string {
+export function resolveVariable(name: string, c: any, ctx: { messageId?: string; senderName?: string } = {}): string {
   const key = String(name || '').toLowerCase();
   const dayType = c?.dayType ?? c?.day_type;
   const ad = firstAccount(c);
   const now = new Date();
 
   switch (key) {
+    case 'user_display_name':
+    case 'sender_name':
+    case 'user_name':
+    case 'display_name':
+    case 'my_name':
+      return ctx.senderName || '';
     case 'customer_name':
     case 'name':
       return c?.name || '';
@@ -129,8 +136,12 @@ export function resolveVariable(name: string, c: any, ctx: { messageId?: string 
  * Returns the resolved text plus the list of variables that had no value,
  * so callers can warn before sending instead of shipping a broken message.
  */
-export function resolveTemplateBody(body: string, contact: any): { text: string; missing: string[] } {
-  const ctx = { messageId: generateMessageId() };
+export function resolveTemplateBody(
+  body: string,
+  contact: any,
+  options: { senderName?: string } = {},
+): { text: string; missing: string[] } {
+  const ctx = { messageId: generateMessageId(), senderName: options.senderName || '' };
   const missing: string[] = [];
   const text = String(body || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (match, name: string) => {
     const value = resolveVariable(name, contact, ctx);
@@ -141,6 +152,18 @@ export function resolveTemplateBody(body: string, contact: any): { text: string;
     return value;
   });
   return { text, missing };
+}
+
+/**
+ * Normalises template text before it is inserted into the composer so newlines
+ * are preserved, trailing whitespace is trimmed and blank-line runs are capped.
+ */
+export function formatTemplateForComposer(text: string): string {
+  return String(text || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 /**

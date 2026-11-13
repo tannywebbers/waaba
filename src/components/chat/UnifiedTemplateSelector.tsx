@@ -16,6 +16,7 @@ import { generateMessageId } from '@/lib/utils/messageId';
 import { resolveTemplateBody } from '@/lib/templateVariables';
 import { ensureAppRegistered } from '@/lib/registerApp';
 import { useSendCooldown } from '@/hooks/useSendCooldown';
+import { useDisplayName } from '@/hooks/useDisplayName';
 
 interface MetaTemplate {
   id: string; template_id: string; name: string; language: string; category: string; status: string; components: any;
@@ -35,14 +36,14 @@ function calculateDueDate(dayType: number | undefined): string {
   return format(dueDate, 'dd/MM/yyyy');
 }
 
-function resolveField(field: string, contact: Contact, appTemplatesMap: Record<string, string>): string {
+function resolveField(field: string, contact: Contact, appTemplatesMap: Record<string, string>, senderName = ''): string {
   if (field.startsWith('app_template:')) {
     const templateName = field.replace('app_template:', '');
     const content = appTemplatesMap[templateName];
     if (!content) return `[Missing template: ${templateName}]`;
     // Fully resolve any {{customer_name}}, {{loan_id}}, {{app_name}} etc. embedded in the
     // app template so the Meta template is sent with real values — not raw variable names.
-    return resolveTemplateBody(content, contact).text;
+    return resolveTemplateBody(content, contact, { senderName }).text;
   }
 
   const paymentDetails = contact.accountDetails?.length
@@ -50,6 +51,11 @@ function resolveField(field: string, contact: Contact, appTemplatesMap: Record<s
     : '';
 
   switch (field) {
+    case 'user_display_name':
+    case 'sender_name':
+    case 'user_name':
+    case 'display_name':
+      return senderName;
     case 'customer_name': return contact.name;
     case 'loan_id': return contact.loanId;
     case 'amount': return contact.amount?.toString() || '';
@@ -66,11 +72,14 @@ function resolveField(field: string, contact: Contact, appTemplatesMap: Record<s
   }
 }
 
-function mapNamedVariables(text: string, contact: Contact): string {
+function mapNamedVariables(text: string, contact: Contact, senderName = ''): string {
   const paymentDetails = contact.accountDetails?.length
     ? contact.accountDetails.map(a => `${a.bank} - ${a.accountNumber} (${a.accountName})`).join('; ')
     : '';
   return text
+    .replace(/\{\{user_display_name\}\}/gi, senderName)
+    .replace(/\{\{sender_name\}\}/gi, senderName)
+    .replace(/\{\{user_name\}\}/gi, senderName)
     .replace(/\{\{customer_name\}\}/gi, contact.name)
     .replace(/\{\{loan_id\}\}/gi, contact.loanId)
     .replace(/\{\{amount\}\}/gi, contact.amount?.toString() || '')
@@ -98,8 +107,11 @@ const APP_VARIABLE_MAP: Record<string, (c: Contact) => string> = {
   message_id: () => generateMessageId(),
 };
 
-function resolveAppTemplate(body: string, contact: Contact, fallbackApp = ''): string {
+function resolveAppTemplate(body: string, contact: Contact, fallbackApp = '', senderName = ''): string {
   return body.replace(/\{\{(\w+)\}\}/g, (match, varName) => {
+    if (varName === 'user_display_name' || varName === 'sender_name' || varName === 'user_name') {
+      return senderName || match;
+    }
     const resolver = APP_VARIABLE_MAP[varName];
     if (!resolver) return match;
     let value = resolver(contact) || '';
@@ -132,6 +144,7 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
   const [appLoading, setAppLoading] = useState(false);
   const [appTemplatesMap, setAppTemplatesMap] = useState<Record<string, string>>({});
   const { locked: sendLocked, run: runSend } = useSendCooldown(4000);
+  const senderName = useDisplayName();
 
   useEffect(() => {
     if (open && user) {
@@ -234,7 +247,7 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
         appVars.push(num);
         resolved[`{{${num}}}`] = currentApp;
       } else if (field) {
-        resolved[`{{${num}}}`] = resolveField(field, contact, appTemplatesMap);
+        resolved[`{{${num}}}`] = resolveField(field, contact, appTemplatesMap, senderName);
       } else {
         resolved[`{{${num}}}`] = '';
         unmapped.push(num);
@@ -279,7 +292,7 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
   };
 
   const handleAppSelect = (template: any) => {
-    const resolved = resolveAppTemplate(template.body, contact, selectedApp);
+    const resolved = resolveAppTemplate(template.body, contact, selectedApp, senderName);
     onInsertAppTemplate(resolved);
     setOpen(false);
   };
@@ -288,7 +301,7 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
     const body = template.components?.find((c: any) => c.type === 'BODY');
     let text = body?.text || 'No preview available';
     Object.entries(metaParams).forEach(([key, value]) => { text = text.replace(key, value || key); });
-    text = mapNamedVariables(text, contact);
+    text = mapNamedVariables(text, contact, senderName);
     return text;
   };
 

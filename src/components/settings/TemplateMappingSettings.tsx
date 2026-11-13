@@ -24,6 +24,7 @@ interface Mapping {
 // Static CRM fields
 const STATIC_FIELDS = [
   { value: 'customer_name', label: 'Customer Name' },
+  { value: 'user_display_name', label: 'Your Display Name' },
   { value: 'loan_id', label: 'Loan ID' },
   { value: 'amount', label: 'Amount' },
   { value: 'payment_details', label: 'Payment Details' },

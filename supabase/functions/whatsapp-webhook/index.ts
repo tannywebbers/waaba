@@ -136,7 +136,7 @@ const calcDueDate = (dayType: any) => {
 };
 
 /** Replaces {{variable}} placeholders in an auto reply message with contact data. */
-const resolveAutoReplyVariables = async (supabase: any, contactId: string, body: string) => {
+const resolveAutoReplyVariables = async (supabase: any, contactId: string, body: string, ownerUserId?: string) => {
   if (!body || !/\{\{\s*\w+\s*\}\}/.test(body)) return body;
 
   const { data: contact } = await supabase
@@ -144,6 +144,16 @@ const resolveAutoReplyVariables = async (supabase: any, contactId: string, body:
     .select('name, phone, loan_id, amount, app_type, day_type')
     .eq('id', contactId)
     .maybeSingle();
+
+  let senderName = '';
+  if (ownerUserId && /user_display_name|sender_name|user_name|display_name/.test(body)) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('name')
+      .eq('user_id', ownerUserId)
+      .maybeSingle();
+    senderName = profile?.name || '';
+  }
 
   let accounts: any[] = [];
   if (/account_number|payment_details/.test(body)) {
@@ -157,6 +167,10 @@ const resolveAutoReplyVariables = async (supabase: any, contactId: string, body:
   const now = new Date();
   const map: Record<string, string> = {
     customer_name: contact?.name || '',
+    user_display_name: senderName,
+    sender_name: senderName,
+    user_name: senderName,
+    display_name: senderName,
     loan_id: contact?.loan_id || '',
     amount: contact?.amount !== null && contact?.amount !== undefined ? String(contact.amount) : '',
     phone_number: contact?.phone || '',
@@ -228,7 +242,7 @@ const runAutoReply = async (
 
       const rawBody = String(match.step?.message || '').trim();
       if (!rawBody) continue;
-      const replyBody = await resolveAutoReplyVariables(supabase, contactId, rawBody);
+      const replyBody = await resolveAutoReplyVariables(supabase, contactId, rawBody, ownerUserId);
       if (!replyBody) continue;
 
       const result = await sendWhatsAppText(settings, from, replyBody);
