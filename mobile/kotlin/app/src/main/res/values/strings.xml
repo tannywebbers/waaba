@@ -14,4 +14,12 @@
     <string name="profile_auto_reply">Auto reply</string>
     <string name="profile_logout">Log out</string>
     <string name="version">Waaba Mobile v1.0.0</string>
+    <string name="login_logo">W</string>
+    <string name="login_title">Sign in to Waaba</string>
+    <string name="login_subtitle">Use your Waaba account to continue</string>
+    <string name="login_email_label">Email</string>
+    <string name="login_email_hint">name@example.com</string>
+    <string name="login_password_label">Password</string>
+    <string name="login_password_hint">Your password</string>
+    <string name="login_button">Sign in</string>
 </resources>

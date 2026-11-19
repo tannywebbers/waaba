@@ -3,15 +3,9 @@ package com.waaba.mobile
 import android.util.Log
 import android.webkit.JavascriptInterface
 
-class WaabaBridge(private val activity: MainActivity) {
-
-    @JavascriptInterface
-    fun onSession(json: String) {
-        activity.onSessionFromWeb(json)
-    }
-
+class WaabaBridge {
     @JavascriptInterface
     fun log(message: String) {
-        Log.d("WaabaWeb", message)
+        Log.d("WaabaBridge", message)
     }
 }
