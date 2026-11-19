@@ -25,7 +25,8 @@ import { Badge } from '@/components/ui/badge';
 import { normalizePhoneNumber, parsePhoneNumbers } from '@/lib/utils/phone';
 import { useApps } from '@/hooks/useApps';
 import { logSendDiagnostics } from '@/lib/sendDiagnostics';
-import { resolveTemplateBody, resolveVariable } from '@/lib/templateVariables';
+import { generateMessageId } from '@/lib/utils/messageId';
+import { resolveMappedField, resolveTemplateBody } from '@/lib/templateVariables';
 import { ensureAppRegistered } from '@/lib/registerApp';
 import { ensureContactAppLabels } from '@/lib/contactAppLabel';
 import { useDisplayName } from '@/hooks/useDisplayName';
@@ -57,16 +58,6 @@ interface PreparedRow {
 // Chat/Contact list scroll positions, preserved across unmounts (mobile opens
 // and closes the chat view, which tears this list down and back up).
 const preservedListScroll = new Map<string, number>();
-
-const resolveTemplate = (body: string, contact: any, senderName = ''): string => resolveTemplateBody(body, contact, { senderName }).text;
-
-const resolveMappedField = (field: string, contact: any, appTemplatesMap: Record<string, string>, senderName = '') => {
-  if (field.startsWith('app_template:')) {
-    const templateName = field.replace('app_template:', '');
-    return resolveTemplateBody(appTemplatesMap[templateName] || '', contact, { senderName }).text;
-  }
-  return resolveVariable(field, contact, { senderName });
-};
 
 const toUtcIsoFromLocalInput = (value: string) => {
   const date = new Date(value);
@@ -505,7 +496,13 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
 
       if (bulkSource === 'app' && appTemplate) {
         for (const contact of selectedContacts) {
-          const { text, missing } = resolveTemplateBody(appTemplate.body, contact, { senderName });
+          const ctx = {
+            senderName,
+            fallbackApp: contact.appType || '',
+            appTemplates: appTemplatesMap,
+            messageId: generateMessageId(),
+          };
+          const { text, missing } = resolveTemplateBody(appTemplate.body, contact, ctx);
           const row: PreparedRow = {
             contact, phone: normalizePhoneNumber(contact.phone), text, missing,
             status: missing.length > 0 ? 'blocked' : 'ready',
@@ -535,6 +532,12 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
         // Always advance to the preview: unmapped variables are shown as blocked
         // rows instead of silently refusing to continue.
         for (const contact of selectedContacts) {
+          const ctx = {
+            senderName,
+            fallbackApp: contact.appType || '',
+            appTemplates: appTemplatesMap,
+            messageId: generateMessageId(),
+          };
           const params: Record<string, string> = {};
           const missing: string[] = [];
           for (const n of varNumbers) {
@@ -544,7 +547,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
               params[`{{${n}}}`] = '';
               continue;
             }
-            const value = resolveMappedField(field, contact, appTemplatesMap, senderName);
+            const value = resolveMappedField(field, contact, ctx);
             if (!value || value.includes('{{')) missing.push(`{{${n}}} → ${field}`);
             params[`{{${n}}}`] = value;
           }

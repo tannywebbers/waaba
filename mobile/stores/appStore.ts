@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
 import { Chat, Contact, Message } from '@/lib/types';
 import { mapContactRow, mapMessageRow, sortChats } from '@/lib/mappers';
+import { mobileApi } from '@/lib/api';
 
 interface AppState {
   contacts: Contact[];
@@ -87,30 +88,39 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ loading: true });
 
     try {
-      const { data: contactsData, error: contactsError } = await supabase
-        .from('contacts')
-        .select('*, account_details (*)')
-        .or(`user_id.eq.${userId},assigned_user_id.eq.${userId}`)
-        .order('created_at', { ascending: false });
+      let contactsData: any[];
+      let messagesData: any[];
 
-      if (contactsError) throw contactsError;
+      try {
+        const result = await mobileApi.bootstrap();
+        contactsData = (result.contacts as any[]) || [];
+        messagesData = (result.messages as any[]) || [];
+      } catch (apiError) {
+        console.warn('[Store] Mobile API unavailable, loading directly:', apiError);
+        const directContacts = await supabase
+          .from('contacts')
+          .select('*, account_details (*)')
+          .or(`user_id.eq.${userId},assigned_user_id.eq.${userId}`)
+          .order('created_at', { ascending: false });
+        if (directContacts.error) throw directContacts.error;
+        contactsData = directContacts.data || [];
 
-      const contacts: Contact[] = (contactsData || [])
-        .filter((c: any) => !c.is_deleted)
-        .map(mapContactRow);
-
-      const contactIds = contacts.map(c => c.id);
-      const { data: messagesData, error: messagesError } =
-        contactIds.length > 0
+        const ids = contactsData.map((c: any) => c.id).filter(Boolean);
+        const directMessages = ids.length > 0
           ? await supabase
               .from('messages')
               .select('*')
-              .in('contact_id', contactIds)
+              .in('contact_id', ids)
               .eq('is_deleted', false)
               .order('created_at', { ascending: true })
           : { data: [], error: null };
-      if (messagesError) throw messagesError;
+        if (directMessages.error) throw directMessages.error;
+        messagesData = directMessages.data || [];
+      }
 
+      const contacts: Contact[] = contactsData
+        .filter((c: any) => !c.is_deleted)
+        .map(mapContactRow);
       const messagesMap: Record<string, Message[]> = {};
       const lastMessages: Record<string, Message> = {};
       const unreadCounts: Record<string, number> = {};

@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { Message } from '@/lib/types';
 import { formatTime } from '@/lib/format';
+import { iosTheme } from '@/lib/theme';
 
 function Ticks({ status }: { status: Message['status'] }) {
   switch (status) {
@@ -244,21 +245,21 @@ const styles = StyleSheet.create({
   inWrap: { alignSelf: 'flex-start' },
 
   bubble: {
-    borderRadius: 9,
+    borderRadius: iosTheme.radius.bubble,
     paddingHorizontal: 9,
     paddingTop: 6,
     paddingBottom: 6,
   },
-  bubbleOut: { backgroundColor: '#d9fdd3', borderBottomRightRadius: 2 },
+  bubbleOut: { backgroundColor: iosTheme.colors.outgoing, borderBottomRightRadius: iosTheme.radius.bubbleTail },
   bubbleIn: {
-    backgroundColor: '#fff',
-    borderBottomLeftRadius: 2,
+    backgroundColor: iosTheme.colors.incoming,
+    borderBottomLeftRadius: iosTheme.radius.bubbleTail,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e9edef',
+    borderColor: iosTheme.colors.divider,
   },
 
-  contentOut: { fontSize: 15.5, color: '#111b21', lineHeight: 21 },
-  contentIn: { fontSize: 15.5, color: '#111b21', lineHeight: 21 },
+  contentOut: { fontFamily: iosTheme.fonts.regular, fontSize: 15.5, color: iosTheme.colors.text, lineHeight: 21 },
+  contentIn: { fontFamily: iosTheme.fonts.regular, fontSize: 15.5, color: iosTheme.colors.text, lineHeight: 21 },
 
   image: { width: 220, height: 240, borderRadius: 8, marginBottom: 3 },
 

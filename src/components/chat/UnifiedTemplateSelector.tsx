@@ -11,9 +11,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useApps } from '@/hooks/useApps';
 import { useDialogBackButton } from '@/hooks/useDialogBackButton';
 import { Contact } from '@/types';
-import { format } from 'date-fns';
 import { generateMessageId } from '@/lib/utils/messageId';
-import { resolveTemplateBody } from '@/lib/templateVariables';
+import { resolveMappedField, resolveTemplateBody } from '@/lib/templateVariables';
 import { ensureAppRegistered } from '@/lib/registerApp';
 import { useSendCooldown } from '@/hooks/useSendCooldown';
 import { useDisplayName } from '@/hooks/useDisplayName';
@@ -26,98 +25,6 @@ interface UnifiedTemplateSelectorProps {
   contact: Contact;
   onSelectMetaTemplate: (template: MetaTemplate, params: Record<string, string>) => void | Promise<void>;
   onInsertAppTemplate: (text: string) => void;
-}
-
-function calculateDueDate(dayType: number | undefined): string {
-  if (dayType === undefined || dayType === null) return '';
-  const today = new Date();
-  const dueDate = new Date(today);
-  dueDate.setDate(today.getDate() - dayType);
-  return format(dueDate, 'dd/MM/yyyy');
-}
-
-function resolveField(field: string, contact: Contact, appTemplatesMap: Record<string, string>, senderName = ''): string {
-  if (field.startsWith('app_template:')) {
-    const templateName = field.replace('app_template:', '');
-    const content = appTemplatesMap[templateName];
-    if (!content) return `[Missing template: ${templateName}]`;
-    // Fully resolve any {{customer_name}}, {{loan_id}}, {{app_name}} etc. embedded in the
-    // app template so the Meta template is sent with real values — not raw variable names.
-    return resolveTemplateBody(content, contact, { senderName }).text;
-  }
-
-  const paymentDetails = contact.accountDetails?.length
-    ? contact.accountDetails.map(a => `${a.bank} - ${a.accountNumber} (${a.accountName})`).join('; ')
-    : '';
-
-  switch (field) {
-    case 'user_display_name':
-    case 'sender_name':
-    case 'user_name':
-    case 'display_name':
-      return senderName;
-    case 'customer_name': return contact.name;
-    case 'loan_id': return contact.loanId;
-    case 'amount': return contact.amount?.toString() || '';
-    case 'payment_details': return paymentDetails;
-    case 'app_name': return contact.appType || '';
-    case 'due_date': return calculateDueDate(contact.dayType);
-    case 'phone_number': return contact.phone;
-    case 'day_type': return contact.dayType?.toString() || '';
-    case 'current_date': return format(new Date(), 'dd MMM yyyy');
-    // Unique 16-character reference generated per send, keeps identical
-    // template bodies unique so WhatsApp does not flag them as spam.
-    case 'message_id': return generateMessageId();
-    default: return '';
-  }
-}
-
-function mapNamedVariables(text: string, contact: Contact, senderName = ''): string {
-  const paymentDetails = contact.accountDetails?.length
-    ? contact.accountDetails.map(a => `${a.bank} - ${a.accountNumber} (${a.accountName})`).join('; ')
-    : '';
-  return text
-    .replace(/\{\{user_display_name\}\}/gi, senderName)
-    .replace(/\{\{sender_name\}\}/gi, senderName)
-    .replace(/\{\{user_name\}\}/gi, senderName)
-    .replace(/\{\{customer_name\}\}/gi, contact.name)
-    .replace(/\{\{loan_id\}\}/gi, contact.loanId)
-    .replace(/\{\{amount\}\}/gi, contact.amount?.toString() || '')
-    .replace(/\{\{payment_details\}\}/gi, paymentDetails)
-    .replace(/\{\{app_name\}\}/gi, contact.appType || '')
-    .replace(/\{\{due_date\}\}/gi, calculateDueDate(contact.dayType))
-    .replace(/\{\{day_type\}\}/gi, contact.dayType?.toString() || '')
-    .replace(/\{\{current_date\}\}/gi, format(new Date(), 'dd MMM yyyy'))
-    .replace(/\{\{phone_number\}\}/gi, contact.phone)
-    .replace(/\{\{message_id\}\}/gi, () => generateMessageId());
-}
-
-const APP_VARIABLE_MAP: Record<string, (c: Contact) => string> = {
-  customer_name: (c) => c.name,
-  loan_id: (c) => c.loanId,
-  amount: (c) => c.amount?.toString() || '',
-  phone_number: (c) => c.phone,
-  app_name: (c) => c.appType || '',
-  day_type: (c) => c.dayType?.toString() || '',
-  due_date: (c) => calculateDueDate(c.dayType),
-  account_number: (c) => c.accountDetails?.[0]?.accountNumber || '',
-  payment_details: (c) => c.accountDetails?.map(a => `${a.bank} - ${a.accountNumber} (${a.accountName})`).join('; ') || '',
-  current_date: () => format(new Date(), 'dd MMM yyyy'),
-  current_time: () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-  message_id: () => generateMessageId(),
-};
-
-function resolveAppTemplate(body: string, contact: Contact, fallbackApp = '', senderName = ''): string {
-  return body.replace(/\{\{(\w+)\}\}/g, (match, varName) => {
-    if (varName === 'user_display_name' || varName === 'sender_name' || varName === 'user_name') {
-      return senderName || match;
-    }
-    const resolver = APP_VARIABLE_MAP[varName];
-    if (!resolver) return match;
-    let value = resolver(contact) || '';
-    if (varName === 'app_name' && !value) value = fallbackApp || match;
-    return value || match;
-  });
 }
 
 export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInsertAppTemplate }: UnifiedTemplateSelectorProps) {
@@ -145,6 +52,12 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
   const [appTemplatesMap, setAppTemplatesMap] = useState<Record<string, string>>({});
   const { locked: sendLocked, run: runSend } = useSendCooldown(4000);
   const senderName = useDisplayName();
+  const variableCtx = (extra: Record<string, unknown> = {}) => ({
+    senderName,
+    fallbackApp: selectedApp || contact.appType || '',
+    appTemplates: appTemplatesMap,
+    ...extra,
+  });
 
   useEffect(() => {
     if (open && user) {
@@ -241,13 +154,14 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
     const unmapped: number[] = [];
     const appVars: number[] = [];
     const currentApp = selectedApp || contact.appType || '';
+    const ctx = variableCtx({ messageId: generateMessageId() });
     varNums.forEach(num => {
       const field = dbMappings[num];
       if (field === 'app_name') {
         appVars.push(num);
         resolved[`{{${num}}}`] = currentApp;
       } else if (field) {
-        resolved[`{{${num}}}`] = resolveField(field, contact, appTemplatesMap, senderName);
+        resolved[`{{${num}}}`] = resolveMappedField(field, contact, ctx);
       } else {
         resolved[`{{${num}}}`] = '';
         unmapped.push(num);
@@ -261,14 +175,15 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
           comp.example.body_text[0]?.forEach((param: string, index: number) => {
             const num = index + 1;
             const paramKey = `{{${num}}}`;
-            const lower = param.toLowerCase();
-            if (lower.includes('name') || lower.includes('customer')) resolved[paramKey] = contact.name;
-            else if (lower.includes('loan') || lower.includes('id')) resolved[paramKey] = contact.loanId;
-            else if (lower.includes('amount')) resolved[paramKey] = contact.amount?.toString() || '';
+            const paramValue = resolveTemplateBody(param, contact, ctx).text;
+            const lower = paramValue.toLowerCase();
+            if (lower.includes('name') || lower.includes('customer')) resolved[paramKey] = resolveMappedField('customer_name', contact, ctx);
+            else if (lower.includes('loan') || lower.includes('id')) resolved[paramKey] = resolveMappedField('loan_id', contact, ctx);
+            else if (lower.includes('amount')) resolved[paramKey] = resolveMappedField('amount', contact, ctx);
             else if (lower.includes('app')) { resolved[paramKey] = currentApp; appVars.push(num); }
-            else if (lower.includes('due') || lower.includes('date')) resolved[paramKey] = calculateDueDate(contact.dayType);
-            else if (lower.includes('day')) resolved[paramKey] = contact.dayType?.toString() || '';
-            else resolved[paramKey] = param;
+            else if (lower.includes('due') || lower.includes('date')) resolved[paramKey] = resolveMappedField('due_date', contact, ctx);
+            else if (lower.includes('day')) resolved[paramKey] = resolveMappedField('day_type', contact, ctx);
+            else resolved[paramKey] = paramValue;
           });
         }
       });
@@ -292,7 +207,7 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
   };
 
   const handleAppSelect = (template: any) => {
-    const resolved = resolveAppTemplate(template.body, contact, selectedApp, senderName);
+    const resolved = resolveTemplateBody(template.body, contact, variableCtx({ messageId: generateMessageId() })).text;
     onInsertAppTemplate(resolved);
     setOpen(false);
   };
@@ -301,7 +216,7 @@ export function UnifiedTemplateSelector({ contact, onSelectMetaTemplate, onInser
     const body = template.components?.find((c: any) => c.type === 'BODY');
     let text = body?.text || 'No preview available';
     Object.entries(metaParams).forEach(([key, value]) => { text = text.replace(key, value || key); });
-    text = mapNamedVariables(text, contact, senderName);
+    text = resolveTemplateBody(text, contact, variableCtx()).text;
     return text;
   };
 

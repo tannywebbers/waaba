@@ -77,6 +77,7 @@ serve(async (req) => {
           templateLanguage,
           templateComponents,
           mediaFileName,
+          caption,
           replyToWamid,        // ✨ NEW: WhatsApp message ID being replied to
           reactionEmoji,       // ✨ NEW: emoji for reaction; '' to remove
         } = params;
@@ -198,11 +199,11 @@ serve(async (req) => {
         }
         else if (type === 'image') {
           messageBody.type = 'image';
-          messageBody.image = { link: content };
+          messageBody.image = { link: content, ...(caption ? { caption } : {}) };
         }
         else if (type === 'document') {
           messageBody.type = 'document';
-          messageBody.document = { link: content, filename: mediaFileName || 'document' };
+          messageBody.document = { link: content, filename: mediaFileName || 'document', ...(caption ? { caption } : {}) };
         }
         else if (type === 'audio') {
           messageBody.type = 'audio';

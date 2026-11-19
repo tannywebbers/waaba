@@ -10,10 +10,76 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
+type MediaType = 'image' | 'video' | 'document' | 'audio';
+
 interface FileUploadButtonProps {
-  onFileSelect: (file: File, type: 'image' | 'document' | 'audio') => void;
+  onFileSelect: (file: File, type: MediaType) => void;
   uploading?: boolean;
 }
+
+const EXTENSION_MIME: Record<string, string> = {
+  apk: 'application/vnd.android.package-archive',
+  zip: 'application/zip',
+  rar: 'application/vnd.rar',
+  '7z': 'application/x-7z-compressed',
+  tar: 'application/x-tar',
+  gz: 'application/gzip',
+  pdf: 'application/pdf',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ppt: 'application/vnd.ms-powerpoint',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  txt: 'text/plain',
+  csv: 'text/csv',
+  json: 'application/json',
+  xml: 'application/xml',
+  epub: 'application/epub+zip',
+  mp3: 'audio/mpeg',
+  m4a: 'audio/mp4',
+  aac: 'audio/aac',
+  amr: 'audio/amr',
+  ogg: 'audio/ogg',
+  opus: 'audio/opus',
+  wav: 'audio/wav',
+  mp4: 'video/mp4',
+  '3gp': 'video/3gpp',
+  mov: 'video/quicktime',
+  m4v: 'video/x-m4v',
+  webm: 'video/webm',
+  mkv: 'video/x-matroska',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  heic: 'image/heic',
+  heif: 'image/heif',
+};
+
+const mimeFromName = (name: string) => {
+  const extension = name.split('.').pop()?.toLowerCase() || '';
+  return EXTENSION_MIME[extension] || '';
+};
+
+const normalizeFile = (file: File) => {
+  const mime = file.type || mimeFromName(file.name) || 'application/octet-stream';
+  if (file.type === mime) return file;
+  try {
+    return new File([file], file.name, { type: mime, lastModified: file.lastModified });
+  } catch {
+    return file;
+  }
+};
+
+const classifyFile = (file: File): MediaType => {
+  const mime = (file.type || mimeFromName(file.name) || '').toLowerCase();
+  if (mime.startsWith('image/')) return 'image';
+  if (mime.startsWith('video/')) return 'video';
+  if (mime.startsWith('audio/')) return 'audio';
+  return 'document';
+};
 
 export function FileUploadButton({ onFileSelect, uploading }: FileUploadButtonProps) {
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -22,14 +88,15 @@ export function FileUploadButton({ onFileSelect, uploading }: FileUploadButtonPr
   const audioInputRef = useRef<HTMLInputElement>(null);
 
   const [pendingFile, setPendingFile] = useState<File | null>(null);
-  const [pendingType, setPendingType] = useState<'image' | 'document' | 'audio'>('image');
+  const [pendingType, setPendingType] = useState<MediaType>('document');
   const [showPreview, setShowPreview] = useState(false);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'document' | 'audio') => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setPendingFile(file);
-      setPendingType(type);
+      const normalized = normalizeFile(file);
+      setPendingFile(normalized);
+      setPendingType(classifyFile(normalized));
       setShowPreview(true);
       e.target.value = '';
     }
@@ -50,14 +117,14 @@ export function FileUploadButton({ onFileSelect, uploading }: FileUploadButtonPr
         type="file"
         accept="image/*,video/*"
         className="hidden"
-        onChange={(e) => handleFileChange(e, 'image')}
+        onChange={handleFileChange}
       />
       <input
         ref={documentInputRef}
         type="file"
-        accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
+        accept="*/*"
         className="hidden"
-        onChange={(e) => handleFileChange(e, 'document')}
+        onChange={handleFileChange}
       />
       <input
         ref={cameraInputRef}
@@ -65,19 +132,18 @@ export function FileUploadButton({ onFileSelect, uploading }: FileUploadButtonPr
         accept="image/*"
         capture="environment"
         className="hidden"
-        onChange={(e) => handleFileChange(e, 'image')}
+        onChange={handleFileChange}
       />
       <input
         ref={audioInputRef}
         type="file"
         accept="audio/*"
         className="hidden"
-        onChange={(e) => handleFileChange(e, 'audio')}
+        onChange={handleFileChange}
       />
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          {/* FIXED: Deep grey for the paperclip/attachment button */}
           <Button
             variant="ghost"
             size="icon"
@@ -88,25 +154,21 @@ export function FileUploadButton({ onFileSelect, uploading }: FileUploadButtonPr
         </DropdownMenuTrigger>
 
         <DropdownMenuContent align="start" className="w-48">
-          {/* Photos & Videos → BLUE */}
           <DropdownMenuItem onClick={() => imageInputRef.current?.click()}>
             <Image className="h-4 w-4 mr-2 text-blue-500" />
             Photos & Videos
           </DropdownMenuItem>
 
-          {/* Document → PURPLE */}
           <DropdownMenuItem onClick={() => documentInputRef.current?.click()}>
             <FileText className="h-4 w-4 mr-2 text-purple-500" />
             Document
           </DropdownMenuItem>
 
-          {/* Audio → ORANGE */}
           <DropdownMenuItem onClick={() => audioInputRef.current?.click()}>
             <Music className="h-4 w-4 mr-2 text-orange-500" />
             Audio File
           </DropdownMenuItem>
 
-          {/* Camera → RED */}
           <DropdownMenuItem onClick={() => cameraInputRef.current?.click()}>
             <Camera className="h-4 w-4 mr-2 text-red-500" />
             Camera

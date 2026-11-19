@@ -1,7 +1,14 @@
 import { supabase } from '@/integrations/supabase/client';
 import { getEffectiveWhatsAppUserId } from '@/lib/effectiveUser';
+import { resolveTemplateBody } from '@/lib/templateVariables';
 
 export type MatchType = 'exact' | 'contains';
+
+export interface AutoReplyRecipient {
+  id?: string;
+  phone: string;
+  name?: string;
+}
 
 export interface AutoReplyStep {
   id: string;
@@ -9,6 +16,9 @@ export interface AutoReplyStep {
   matchType: MatchType;
   message: string;
   delaySeconds?: number;
+  imageUrl?: string;
+  appName?: string;
+  recipients?: AutoReplyRecipient[];
 }
 
 export interface AutoReply {
@@ -35,60 +45,33 @@ function normalize(value: string): string {
   return (value || '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-/** Formats a due date as dd/mm/yyyy, dayType days before today. Mirrors the webhook's calcDueDate. */
-function calcDueDate(dayType: unknown): string {
-  if (dayType === null || dayType === undefined || dayType === '') return '';
-  const d = new Date();
-  d.setDate(d.getDate() - Number(dayType || 0));
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  return `${dd}/${mm}/${d.getFullYear()}`;
-}
+const normalizeRecipient = (value: string) => String(value || '').replace(/\D/g, '');
 
-/**
- * Replaces {{variable}} placeholders in an auto reply message with the contact's
- * real details. Mirrors supabase/functions/whatsapp-webhook/index.ts so client-side
- * previews/sends match what the live webhook path produces.
- */
 export async function resolveAutoReplyVariables(contactId: string, body: string): Promise<string> {
   if (!body || !/\{\{\s*\w+\s*\}\}/.test(body)) return body;
 
   const { data: contact } = await supabase
     .from('contacts')
-    .select('name, phone, loan_id, amount, app_type, day_type')
+    .select('name, phone, loan_id, amount, app_type, day_type, bvn, image_url')
     .eq('id', contactId)
     .maybeSingle();
 
-  let accounts: any[] = [];
-  if (/account_number|payment_details/.test(body)) {
-    const { data } = await supabase
-      .from('account_details')
-      .select('bank, account_number, account_name')
-      .eq('contact_id', contactId);
-    accounts = data || [];
-  }
+  const { data: accounts } = await supabase
+    .from('account_details')
+    .select('bank, account_number, account_name')
+    .eq('contact_id', contactId);
 
-  const now = new Date();
-  const map: Record<string, string> = {
-    customer_name: contact?.name || '',
-    loan_id: contact?.loan_id || '',
-    amount: contact?.amount !== null && contact?.amount !== undefined ? String(contact.amount) : '',
-    phone_number: contact?.phone || '',
-    app_name: contact?.app_type || '',
-    day_type: contact?.day_type !== null && contact?.day_type !== undefined ? String(contact.day_type) : '',
-    due_date: calcDueDate(contact?.day_type),
-    account_number: accounts[0]?.account_number || '',
-    payment_details: accounts
-      .map((a) => `${a.bank} - ${a.account_number} (${a.account_name})`)
-      .join('; '),
-    current_date: now.toLocaleDateString('en-NG', { year: 'numeric', month: 'long', day: 'numeric' }),
-    current_time: now.toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' }),
-  };
+  const { data: customerContacts } = await supabase
+    .from('customer_contacts')
+    .select('name, phone, email, role, bank_name, account_number, recipient_name, is_primary')
+    .eq('customer_id', contactId)
+    .order('is_primary', { ascending: false });
 
-  return body.replace(/\{\{\s*(\w+)\s*\}\}/g, (match, name) => {
-    const key = String(name).toLowerCase();
-    return key in map ? map[key] : match;
-  });
+  return resolveTemplateBody(body, {
+    ...(contact || {}),
+    account_details: accounts || [],
+    contacts: customerContacts || [],
+  }, { fallbackApp: contact?.app_type || '' }).text;
 }
 
 /** Returns true when the incoming text matches a step's keywords. */
@@ -142,6 +125,9 @@ export interface AutoReplyJSON {
     matchType?: MatchType;
     message: string;
     delaySeconds?: number;
+    imageUrl?: string;
+    appName?: string;
+    recipients?: AutoReplyRecipient[];
   }[];
 }
 
@@ -212,7 +198,20 @@ export function parseAutoReplyJSON(raw: unknown): { valid: AutoReplyJSON[]; erro
         return;
       }
       const matchType: MatchType = step.matchType === 'exact' ? 'exact' : 'contains';
-      steps.push({ keywords, matchType, message: step.message, delaySeconds: Number(step.delaySeconds) || 0 });
+      const recipients: AutoReplyRecipient[] = Array.isArray(step.recipients)
+        ? step.recipients
+          .filter((r: any) => r?.phone)
+          .map((r: any) => ({ id: r.id || undefined, phone: String(r.phone), name: r.name || undefined }))
+        : [];
+      steps.push({
+        keywords,
+        matchType,
+        message: step.message,
+        delaySeconds: Number(step.delaySeconds) || 0,
+        imageUrl: step.imageUrl ? String(step.imageUrl) : undefined,
+        appName: step.appName ? String(step.appName) : undefined,
+        recipients: recipients.length > 0 ? recipients : undefined,
+      });
     });
     if (steps.length > 0) {
       valid.push({ name: item.name, isActive: item.isActive !== false, steps });
@@ -229,6 +228,9 @@ export function toStoredSteps(json: AutoReplyJSON): AutoReplyStep[] {
     matchType: s.matchType === 'exact' ? 'exact' : 'contains',
     message: s.message,
     delaySeconds: Number(s.delaySeconds) || 0,
+    imageUrl: s.imageUrl || undefined,
+    appName: s.appName || undefined,
+    recipients: s.recipients?.length ? s.recipients : undefined,
   }));
 }
 
@@ -269,34 +271,68 @@ export async function runAutoReply(params: {
     if (!settings?.api_token || !settings?.phone_number_id) return false;
 
     for (const match of matches) {
-      const messageBody = await resolveAutoReplyVariables(contactId, match.step.message);
+      const step = match.step;
+      const messageBody = await resolveAutoReplyVariables(contactId, step.message);
 
-      const delay = Math.max(0, Number(match.step.delaySeconds) || 0);
+      const delay = Math.max(0, Number(step.delaySeconds) || 0);
       if (delay > 0) await new Promise((r) => setTimeout(r, delay * 1000));
 
-      const to = (contactPhone || '').replace(/[^\d+]/g, '').replace(/^\+/, '');
-      const { data } = await supabase.functions.invoke('whatsapp-api', {
-        body: {
-          action: 'send_message',
-          token: settings.api_token,
-          phoneNumberId: settings.phone_number_id,
-          to,
-          type: 'text',
+      const configured = (step.recipients || []).filter((r) => normalizeRecipient(r.phone));
+      const recipients = configured.length > 0
+        ? configured
+        : [{ id: contactId, phone: contactPhone }];
+
+      for (const recipient of recipients) {
+        const to = normalizeRecipient(recipient.phone);
+        if (!to) continue;
+        const recipientContactId = recipient.id || contactId;
+
+        const { data } = await supabase.functions.invoke('whatsapp-api', {
+          body: {
+            action: 'send_message',
+            token: settings.api_token,
+            phoneNumberId: settings.phone_number_id,
+            to,
+            type: 'text',
+            content: messageBody,
+          },
+        });
+
+        const wamid = data?.messageId || data?.wamid || null;
+
+        await supabase.from('messages').insert({
+          user_id: userId,
+          contact_id: recipientContactId,
           content: messageBody,
-        },
-      });
+          type: 'text',
+          status: data?.success ? 'sent' : 'failed',
+          is_outgoing: true,
+          whatsapp_message_id: wamid,
+        } as any);
 
-      const wamid = data?.messageId || data?.wamid || null;
-
-      await supabase.from('messages').insert({
-        user_id: userId,
-        contact_id: contactId,
-        content: messageBody,
-        type: 'text',
-        status: data?.success ? 'sent' : 'failed',
-        is_outgoing: true,
-        whatsapp_message_id: wamid,
-      } as any);
+        if (step.imageUrl) {
+          const { data: imageData } = await supabase.functions.invoke('whatsapp-api', {
+            body: {
+              action: 'send_message',
+              token: settings.api_token,
+              phoneNumberId: settings.phone_number_id,
+              to,
+              type: 'image',
+              content: step.imageUrl,
+            },
+          });
+          await supabase.from('messages').insert({
+            user_id: userId,
+            contact_id: recipientContactId,
+            content: step.imageUrl,
+            type: 'image',
+            media_url: step.imageUrl,
+            status: imageData?.success ? 'sent' : 'failed',
+            is_outgoing: true,
+            whatsapp_message_id: imageData?.messageId || imageData?.wamid || null,
+          } as any);
+        }
+      }
     }
 
     return true;

@@ -8,6 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { APP_VARIABLES } from '@/lib/templateVariables';
 
 interface Template {
   id: string;
@@ -21,20 +22,8 @@ interface Mapping {
   mapped_field: string;
 }
 
-// Static CRM fields
-const STATIC_FIELDS = [
-  { value: 'customer_name', label: 'Customer Name' },
-  { value: 'user_display_name', label: 'Your Display Name' },
-  { value: 'loan_id', label: 'Loan ID' },
-  { value: 'amount', label: 'Amount' },
-  { value: 'payment_details', label: 'Payment Details' },
-  { value: 'app_name', label: 'App Name' },
-  { value: 'due_date', label: 'Due Date' },
-  { value: 'phone_number', label: 'Phone Number' },
-  { value: 'day_type', label: 'Day Type' },
-  { value: 'current_date', label: 'Current Date (auto)' },
-  { value: 'message_id', label: 'Message ID (auto · unique 16 characters)' },
-];
+// Every canonical variable, kept in sync with the shared resolver.
+const STATIC_FIELDS = APP_VARIABLES;
 
 function extractVariables(text: string): number[] {
   const matches = text.match(/\{\{(\d+)\}\}/g);

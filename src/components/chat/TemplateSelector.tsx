@@ -10,6 +10,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useSendCooldown } from '@/hooks/useSendCooldown';
 import { useDisplayName } from '@/hooks/useDisplayName';
+import { generateMessageId } from '@/lib/utils/messageId';
+import { resolveMappedField, resolveTemplateBody } from '@/lib/templateVariables';
 
 interface Template {
   id: string; template_id: string; name: string; language: string; category: string; status: string; components: any;
@@ -18,72 +20,6 @@ interface Template {
 interface TemplateSelectorProps {
   contact: { loanId: string; name: string; phone: string; amount?: number; appType?: string; dayType?: number; accountDetails?: { bank: string; accountNumber: string; accountName: string }[] };
   onSelectTemplate: (template: Template, params: Record<string, string>) => void;
-}
-
-// Resolve a mapped field name to actual contact data
-function resolveField(field: string, contact: TemplateSelectorProps['contact'], senderName = ''): string {
-  const paymentDetails = contact.accountDetails?.length
-    ? contact.accountDetails.map(a => `${a.bank} - ${a.accountNumber} (${a.accountName})`).join('; ')
-    : '';
-
-  switch (field) {
-    case 'user_display_name':
-    case 'sender_name':
-    case 'user_name':
-    case 'display_name':
-      return senderName;
-    case 'customer_name': return contact.name;
-    case 'loan_id': return contact.loanId;
-    case 'amount': return contact.amount?.toString() || '';
-    case 'payment_details': return paymentDetails;
-    case 'app_name': return contact.appType || '';
-    case 'due_date': {
-      const dayType = contact.dayType;
-      if (dayType === undefined || dayType === null) return '';
-      const today = new Date();
-      const dueDate = new Date(today);
-      dueDate.setDate(today.getDate() - dayType);
-      const dd = String(dueDate.getDate()).padStart(2, '0');
-      const mm = String(dueDate.getMonth() + 1).padStart(2, '0');
-      const yyyy = dueDate.getFullYear();
-      return `${dd}/${mm}/${yyyy}`;
-    }
-    case 'phone_number': return contact.phone;
-    case 'day_type': return contact.dayType?.toString() || '';
-    default: return '';
-  }
-}
-
-// Also support named variables like {{customer_name}} for backward compat
-function mapNamedVariables(text: string, contact: TemplateSelectorProps['contact'], senderName = ''): string {
-  const paymentDetails = contact.accountDetails?.length
-    ? contact.accountDetails.map(a => `${a.bank} - ${a.accountNumber} (${a.accountName})`).join('; ')
-    : '';
-
-  const calculateDue = (dayType: number | undefined): string => {
-    if (dayType === undefined || dayType === null) return '';
-    const today = new Date();
-    const dueDate = new Date(today);
-    dueDate.setDate(today.getDate() - dayType);
-    const dd = String(dueDate.getDate()).padStart(2, '0');
-    const mm = String(dueDate.getMonth() + 1).padStart(2, '0');
-    const yyyy = dueDate.getFullYear();
-    return `${dd}/${mm}/${yyyy}`;
-  };
-
-  return text
-    .replace(/\{\{user_display_name\}\}/gi, senderName)
-    .replace(/\{\{sender_name\}\}/gi, senderName)
-    .replace(/\{\{user_name\}\}/gi, senderName)
-    .replace(/\{\{customer_name\}\}/gi, contact.name)
-    .replace(/\{\{loan_id\}\}/gi, contact.loanId)
-    .replace(/\{\{amount\}\}/gi, contact.amount?.toString() || '')
-    .replace(/\{\{payment_details\}\}/gi, paymentDetails)
-    .replace(/\{\{app_name\}\}/gi, contact.appType || '')
-    .replace(/\{\{due_date\}\}/gi, calculateDue(contact.dayType))
-    .replace(/\{\{day_type\}\}/gi, contact.dayType?.toString() || '')
-    .replace(/\{\{current_date\}\}/gi, new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }))
-    .replace(/\{\{phone_number\}\}/gi, contact.phone);
 }
 
 export function TemplateSelector({ contact, onSelectTemplate }: TemplateSelectorProps) {
@@ -98,6 +34,13 @@ export function TemplateSelector({ contact, onSelectTemplate }: TemplateSelector
   const [unmappedVars, setUnmappedVars] = useState<number[]>([]);
   const { locked: sendLocked, run: runSend } = useSendCooldown(4000);
   const senderName = useDisplayName();
+  const [appTemplatesMap, setAppTemplatesMap] = useState<Record<string, string>>({});
+  const variableCtx = (extra: Record<string, unknown> = {}) => ({
+    senderName,
+    fallbackApp: contact.appType || '',
+    appTemplates: appTemplatesMap,
+    ...extra,
+  });
 
   useEffect(() => { if (open && user) fetchTemplates(); }, [open, user]);
 
@@ -108,6 +51,10 @@ export function TemplateSelector({ contact, onSelectTemplate }: TemplateSelector
       const { data, error } = await supabase.from('whatsapp_templates' as any).select('*').eq('user_id', user.id);
       if (error) throw error;
       setTemplates((data as any[]) || []);
+      const { data: appData } = await supabase.from('app_templates' as any).select('name, body').eq('user_id', user.id);
+      const map: Record<string, string> = {};
+      ((appData as any[]) || []).forEach((t) => { map[t.name] = t.body; });
+      setAppTemplatesMap(map);
     } catch (error) { console.error('Error fetching templates:', error); }
     finally { setLoading(false); }
   };
@@ -139,10 +86,11 @@ export function TemplateSelector({ contact, onSelectTemplate }: TemplateSelector
     // Build params from mappings
     const resolvedParams: Record<string, string> = {};
     const unmapped: number[] = [];
+    const ctx = variableCtx({ messageId: generateMessageId() });
     varNums.forEach((num: number) => {
       const field = dbMappings[num];
       if (field) {
-        resolvedParams[`{{${num}}}`] = resolveField(field, contact, senderName);
+        resolvedParams[`{{${num}}}`] = resolveMappedField(field, contact, ctx);
       } else {
         resolvedParams[`{{${num}}}`] = '';
         unmapped.push(num);
@@ -157,16 +105,16 @@ export function TemplateSelector({ contact, onSelectTemplate }: TemplateSelector
           comp.example.body_text[0]?.forEach((param: string, index: number) => {
             const paramKey = `{{${index + 1}}}`;
             const lower = param.toLowerCase();
-            if (lower.includes('name') || lower.includes('customer')) resolvedParams[paramKey] = contact.name;
-            else if (lower.includes('loan') || lower.includes('id')) resolvedParams[paramKey] = contact.loanId;
-            else if (lower.includes('amount')) resolvedParams[paramKey] = contact.amount?.toString() || '';
-            else if (lower.includes('app')) resolvedParams[paramKey] = contact.appType || '';
-            else if (lower.includes('due') || lower.includes('date')) resolvedParams[paramKey] = resolveField('due_date', contact, senderName);
-            else if (lower.includes('day')) resolvedParams[paramKey] = contact.dayType?.toString() || '';
+            if (lower.includes('name') || lower.includes('customer')) resolvedParams[paramKey] = resolveMappedField('customer_name', contact, ctx);
+            else if (lower.includes('loan') || lower.includes('id')) resolvedParams[paramKey] = resolveMappedField('loan_id', contact, ctx);
+            else if (lower.includes('amount')) resolvedParams[paramKey] = resolveMappedField('amount', contact, ctx);
+            else if (lower.includes('app')) resolvedParams[paramKey] = resolveMappedField('app_name', contact, ctx);
+            else if (lower.includes('due') || lower.includes('date')) resolvedParams[paramKey] = resolveMappedField('due_date', contact, ctx);
+            else if (lower.includes('day')) resolvedParams[paramKey] = resolveMappedField('day_type', contact, ctx);
             else if ((lower.includes('account') || lower.includes('payment')) && contact.accountDetails?.[0]) {
               resolvedParams[paramKey] = `${contact.accountDetails[0].bank} - ${contact.accountDetails[0].accountNumber} (${contact.accountDetails[0].accountName})`;
             }
-            else resolvedParams[paramKey] = param;
+            else resolvedParams[paramKey] = resolveTemplateBody(param, contact, ctx).text;
           });
         }
       });
@@ -197,7 +145,7 @@ export function TemplateSelector({ contact, onSelectTemplate }: TemplateSelector
     const body = template.components?.find((c: any) => c.type === 'BODY');
     let text = body?.text || 'No preview available';
     Object.entries(params).forEach(([key, value]) => { text = text.replace(key, value || key); });
-    text = mapNamedVariables(text, contact, senderName);
+    text = resolveTemplateBody(text, contact, variableCtx()).text;
     return text;
   };
 

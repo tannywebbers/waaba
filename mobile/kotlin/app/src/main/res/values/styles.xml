@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="WaabaTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="colorPrimary">@color/waaba_green</item>
+        <item name="colorAccent">@color/waaba_green</item>
+        <item name="android:windowBackground">@color/ios_chat_bg</item>
+        <item name="android:statusBarColor">@color/ios_surface</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:navigationBarColor">@color/ios_surface</item>
+        <item name="fontFamily">@font/ios_regular</item>
+        <item name="android:fontFamily">@font/ios_regular</item>
+    </style>
+
+    <style name="WaabaTab">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">match_parent</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:gravity">center</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:paddingTop">4dp</item>
+        <item name="android:paddingBottom">4dp</item>
+        <item name="android:background">@android:color/transparent</item>
+    </style>
+
+    <style name="WaabaTabIcon">
+        <item name="android:layout_width">30dp</item>
+        <item name="android:layout_height">30dp</item>
+        <item name="android:adjustViewBounds">true</item>
+        <item name="android:scaleType">fitCenter</item>
+    </style>
+
+    <style name="WaabaTabLabel">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:fontFamily">@font/ios_regular</item>
+        <item name="android:textColor">@color/ios_tab_inactive</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:singleLine">true</item>
+    </style>
+
+    <style name="WaabaProfileRow">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">56dp</item>
+        <item name="android:background">@drawable/bg_card</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:paddingStart">16dp</item>
+        <item name="android:paddingEnd">16dp</item>
+        <item name="android:textColor">@color/ios_text</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:fontFamily">@font/ios_medium</item>
+    </style>
+
+</resources>

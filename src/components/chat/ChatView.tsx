@@ -804,7 +804,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
     'audio/opus', 'audio/ogg; codecs=opus',
   ];
 
-  const handleFileUpload = async (file: File, type: 'image' | 'document' | 'audio') => {
+  const handleFileUpload = async (file: File, type: 'image' | 'video' | 'document' | 'audio') => {
     if (!activeChat || !user) return;
     setUploading(true);
 
@@ -813,19 +813,32 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       const blocked = await checkConflictingAssignment();
       if (blocked) { setUploading(false); return; }
 
-      const finalFile = file;
-      const finalMimeType = file.type || 'application/octet-stream';
+      const extensionMimes: Record<string, string> = {
+        apk: 'application/vnd.android.package-archive', zip: 'application/zip', rar: 'application/vnd.rar',
+        '7z': 'application/x-7z-compressed', pdf: 'application/pdf', doc: 'application/msword',
+        docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ppt: 'application/vnd.ms-powerpoint', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        txt: 'text/plain', csv: 'text/csv', json: 'application/json', xml: 'application/xml',
+        epub: 'application/epub+zip', mp3: 'audio/mpeg', m4a: 'audio/mp4', aac: 'audio/aac',
+        amr: 'audio/amr', ogg: 'audio/ogg', opus: 'audio/opus', wav: 'audio/wav',
+        mp4: 'video/mp4', '3gp': 'video/3gpp', mov: 'video/quicktime', m4v: 'video/x-m4v',
+        webm: 'video/webm', mkv: 'video/x-matroska', png: 'image/png', jpg: 'image/jpeg',
+        jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', heic: 'image/heic', heif: 'image/heif',
+      };
+      const detectedMime = file.type || extensionMimes[file.name.split('.').pop()?.toLowerCase() || ''] || 'application/octet-stream';
+      const finalFile = file.type ? file : new File([file], file.name, { type: detectedMime, lastModified: file.lastModified });
+      const finalMimeType = detectedMime;
 
-      // Detect video files (selected via Photos & Videos picker, which uses type='image')
       let effectiveType: 'image' | 'document' | 'audio' | 'video' = type;
       const isVideo = finalMimeType.toLowerCase().startsWith('video/') ||
         /\.(mp4|3gp|mov|m4v|webm|mkv)$/i.test(finalFile.name);
-      if (type === 'image' && isVideo) {
+      if (isVideo && type !== 'audio') {
         effectiveType = 'video';
       }
 
       // If audio format isn't supported by Meta, send as document so recipient can open it
-      if (type === 'audio' && !SUPPORTED_AUDIO_MIMES.some(m => finalMimeType.toLowerCase().startsWith(m))) {
+      if (finalMimeType.toLowerCase().startsWith('audio/') && !SUPPORTED_AUDIO_MIMES.some(m => finalMimeType.toLowerCase().startsWith(m))) {
         console.log(`⚠️ Audio MIME "${finalMimeType}" not supported by WhatsApp, sending as document`);
         effectiveType = 'document';
       }

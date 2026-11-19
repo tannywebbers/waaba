@@ -27,3 +27,8 @@ dist-ssr
 *.sw?
 
 supabase/.temp/
+mobile/kotlin/local.properties
+mobile/kotlin/.gradle/
+mobile/kotlin/build/
+mobile/kotlin/app/build/
+mobile/kotlin/.cxx/

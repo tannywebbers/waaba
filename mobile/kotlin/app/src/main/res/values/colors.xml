@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="waaba_green">#FF28A156</color>
+    <color name="waaba_green_bright">#FF25D366</color>
+    <color name="waaba_teal_dark">#FF128C7E</color>
+
+    <color name="ios_blue">@color/waaba_green</color>
+    <color name="ios_surface">#FFF7F5F3</color>
+    <color name="ios_surface_dark">#FF101010</color>
+    <color name="ios_header">#FFF7F5F3</color>
+    <color name="ios_incoming">#FFFFFFFF</color>
+    <color name="ios_outgoing">#FFD9FDD3</color>
+    <color name="ios_outgoing_dark">#FF144D37</color>
+    <color name="ios_text">#FF111B21</color>
+    <color name="ios_text_muted">#FF667781</color>
+    <color name="ios_divider">#FFCECECE</color>
+    <color name="ios_border">#FFD1D7DB</color>
+    <color name="ios_scrim">#99000000</color>
+    <color name="ios_chat_bg">#FFEFEAE2</color>
+    <color name="ios_green">@color/waaba_green_bright</color>
+    <color name="ios_green_dark">@color/waaba_green</color>
+    <color name="ios_tick_blue">#FF53BDEB</color>
+    <color name="ios_soft_gray">#FFF0F2F5</color>
+    <color name="ios_media_bg">#FF0B141A</color>
+    <color name="ios_danger">#FFE53935</color>
+    <color name="ios_tab_inactive">#FF8696A0</color>
+</resources>

@@ -9,42 +9,13 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Contact } from '@/types';
+import { useDisplayName } from '@/hooks/useDisplayName';
+import { generateMessageId } from '@/lib/utils/messageId';
+import { resolveTemplateBody } from '@/lib/templateVariables';
 
 interface AppTemplateSelectorProps {
   contact: Contact;
   onInsertText: (text: string) => void;
-}
-
-function calculateDueDate(dayType: number | undefined): string {
-  if (dayType === undefined || dayType === null) return '';
-  const today = new Date();
-  const dueDate = new Date(today);
-  dueDate.setDate(today.getDate() - dayType);
-  const dd = String(dueDate.getDate()).padStart(2, '0');
-  const mm = String(dueDate.getMonth() + 1).padStart(2, '0');
-  const yyyy = dueDate.getFullYear();
-  return `${dd}/${mm}/${yyyy}`;
-}
-
-const VARIABLE_MAP: Record<string, (c: Contact) => string> = {
-  customer_name: (c) => c.name,
-  loan_id: (c) => c.loanId,
-  amount: (c) => c.amount?.toString() || '',
-  phone_number: (c) => c.phone,
-  app_name: (c) => c.appType || '',
-  day_type: (c) => c.dayType?.toString() || '',
-  due_date: (c) => calculateDueDate(c.dayType),
-  account_number: (c) => c.accountDetails?.[0]?.accountNumber || '',
-  payment_details: (c) => c.accountDetails?.map(a => `${a.bank} - ${a.accountNumber} (${a.accountName})`).join('; ') || '',
-  current_date: () => new Date().toLocaleDateString(),
-  current_time: () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-};
-
-function resolveTemplate(body: string, contact: Contact): string {
-  return body.replace(/\{\{(\w+)\}\}/g, (match, varName) => {
-    const resolver = VARIABLE_MAP[varName];
-    return resolver ? resolver(contact) || match : match;
-  });
 }
 
 export function AppTemplateSelector({ contact, onInsertText }: AppTemplateSelectorProps) {
@@ -53,6 +24,7 @@ export function AppTemplateSelector({ contact, onInsertText }: AppTemplateSelect
   const [templates, setTemplates] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
+  const senderName = useDisplayName();
 
   useEffect(() => {
     if (open && user) {
@@ -74,7 +46,10 @@ export function AppTemplateSelector({ contact, onInsertText }: AppTemplateSelect
   );
 
   const handleSelect = (template: any) => {
-    const resolved = resolveTemplate(template.body, contact);
+    const resolved = resolveTemplateBody(template.body, contact, {
+      senderName,
+      messageId: generateMessageId(),
+    }).text;
     onInsertText(resolved);
     setOpen(false);
   };
@@ -117,7 +92,7 @@ export function AppTemplateSelector({ contact, onInsertText }: AppTemplateSelect
                 >
                   <p className="font-medium text-sm">{t.name}</p>
                   <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
-                    {resolveTemplate(t.body, contact)}
+                    {resolveTemplateBody(t.body, contact, { senderName }).text}
                   </p>
                 </button>
               ))}

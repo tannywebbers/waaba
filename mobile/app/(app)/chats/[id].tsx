@@ -43,6 +43,7 @@ import { MessageBubble } from '@/components/chat/MessageBubble';
 import { MediaViewer } from '@/components/chat/MediaViewer';
 import { TemplatePickerModal, MetaTemplate } from '@/components/chat/TemplatePickerModal';
 import { StickerPickerModal, StickerItem } from '@/components/chat/StickerPickerModal';
+import { iosTheme } from '@/lib/theme';
 
 const REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 
@@ -861,7 +862,7 @@ export default function ChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#efeae2' },
+  container: { flex: 1, backgroundColor: iosTheme.colors.chatBackground },
 
   header: {
     flexDirection: 'row',
@@ -869,7 +870,7 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 10,
     paddingVertical: 10,
-    backgroundColor: '#f0f2f5',
+    backgroundColor: iosTheme.colors.surface,
   },
   headerMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
   avatar: {
@@ -881,8 +882,8 @@ const styles = StyleSheet.create({
   },
   avatarImg: { resizeMode: 'cover' },
   avatarText: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  headerName: { fontSize: 16, fontWeight: '600', color: '#111b21' },
-  headerStatus: { fontSize: 12, color: '#667781' },
+  headerName: { fontFamily: iosTheme.fonts.semibold, fontSize: 16, color: iosTheme.colors.text },
+  headerStatus: { fontFamily: iosTheme.fonts.regular, fontSize: 12, color: iosTheme.colors.textMuted },
 
   messagesArea: { flex: 1 },
   listContent: { paddingHorizontal: 10, paddingVertical: 12 },
@@ -921,9 +922,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
     overflow: 'hidden',
   },
-  replyBarAccent: { width: 4, backgroundColor: '#25D366' },
+  replyBarAccent: { width: 4, backgroundColor: iosTheme.colors.accent },
   replyBarMain: { flex: 1, paddingHorizontal: 8, paddingVertical: 6 },
-  replyQuoteName: { fontSize: 12.5, fontWeight: '600', color: '#25D366' },
+  replyQuoteName: { fontFamily: iosTheme.fonts.semibold, fontSize: 12.5, color: iosTheme.colors.accent },
   replyQuoteText: { fontSize: 12.5, color: '#54656f' },
 
   inputBar: {
@@ -933,7 +934,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingTop: 6,
     paddingBottom: Platform.OS === 'ios' ? 8 : 6,
-    backgroundColor: '#efeae2',
+    backgroundColor: iosTheme.colors.chatBackground,
   },
   attachBtn: {
     width: 38,
@@ -950,7 +951,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 11,
     fontSize: 15.5,
-    color: '#111b21',
+    fontFamily: iosTheme.fonts.regular,
+    color: iosTheme.colors.text,
   },
   toolsRow: {
     flexDirection: 'row',
@@ -963,7 +965,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: '#25D366',
+    backgroundColor: iosTheme.colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 2,
@@ -993,7 +995,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: '#25D366',
+    backgroundColor: iosTheme.colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1005,22 +1007,22 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 16,
     paddingVertical: 4,
-    backgroundColor: '#efeae2',
+    backgroundColor: iosTheme.colors.chatBackground,
   },
   statusText: { fontSize: 12.5, color: '#54656f' },
 
-  overlay: { flex: 1, backgroundColor: 'rgba(11,20,26,0.5)', justifyContent: 'flex-end' },
+  overlay: { flex: 1, backgroundColor: iosTheme.colors.scrim, justifyContent: 'flex-end' },
   sheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
+    backgroundColor: iosTheme.colors.incoming,
+    borderTopLeftRadius: iosTheme.radius.sheet,
+    borderTopRightRadius: iosTheme.radius.sheet,
     paddingTop: 8,
     maxHeight: '75%',
   },
   sheetSmall: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
+    backgroundColor: iosTheme.colors.incoming,
+    borderTopLeftRadius: iosTheme.radius.sheet,
+    borderTopRightRadius: iosTheme.radius.sheet,
     paddingTop: 8,
     alignItems: 'center',
     paddingBottom: 20,

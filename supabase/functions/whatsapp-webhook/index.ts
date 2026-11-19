@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveTemplateBody } from "../_shared/templateVariables.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -109,6 +110,8 @@ const findAutoReplyMatches = (replies: any[], incoming: string) => {
   return matches;
 };
 
+const normalizeRecipient = (value: string) => String(value || '').replace(/\D/g, '');
+
 const sendWhatsAppText = async (settings: any, to: string, body: string) => {
   const response = await fetch(`${WHATSAPP_API_URL}/${settings.phone_number_id}/messages`, {
     method: 'POST',
@@ -118,6 +121,7 @@ const sendWhatsAppText = async (settings: any, to: string, body: string) => {
   const raw = await response.text();
   let parsed: any = null;
   try { parsed = JSON.parse(raw); } catch { /* non-JSON response */ }
+
   return {
     ok: response.ok,
     wamid: parsed?.messages?.[0]?.id || null,
@@ -125,28 +129,41 @@ const sendWhatsAppText = async (settings: any, to: string, body: string) => {
   };
 };
 
-/** Formats a due date as dd/mm/yyyy, dayType days before today. */
-const calcDueDate = (dayType: any) => {
-  if (dayType === null || dayType === undefined || dayType === '') return '';
-  const d = new Date();
-  d.setDate(d.getDate() - Number(dayType || 0));
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  return `${dd}/${mm}/${d.getFullYear()}`;
+const sendWhatsAppImage = async (settings: any, to: string, link: string, caption = '') => {
+  const response = await fetch(`${WHATSAPP_API_URL}/${settings.phone_number_id}/messages`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${settings.api_token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to,
+      type: 'image',
+      image: { link, ...(caption ? { caption } : {}) },
+    }),
+  });
+  const raw = await response.text();
+  let parsed: any = null;
+  try { parsed = JSON.parse(raw); } catch { /* non-JSON response */ }
+
+  return {
+    ok: response.ok,
+    wamid: parsed?.messages?.[0]?.id || null,
+    error: parsed?.error?.message || (response.ok ? null : raw?.slice(0, 300)),
+  };
 };
 
-/** Replaces {{variable}} placeholders in an auto reply message with contact data. */
+/** Replaces {{variable}} placeholders in an auto reply message with every supported contact/context field. */
 const resolveAutoReplyVariables = async (supabase: any, contactId: string, body: string, ownerUserId?: string) => {
   if (!body || !/\{\{\s*\w+\s*\}\}/.test(body)) return body;
 
   const { data: contact } = await supabase
     .from('contacts')
-    .select('name, phone, loan_id, amount, app_type, day_type')
+    .select('name, phone, loan_id, amount, app_type, day_type, bvn, image_url')
     .eq('id', contactId)
     .maybeSingle();
 
   let senderName = '';
-  if (ownerUserId && /user_display_name|sender_name|user_name|display_name/.test(body)) {
+  if (ownerUserId) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('name')
@@ -155,40 +172,27 @@ const resolveAutoReplyVariables = async (supabase: any, contactId: string, body:
     senderName = profile?.name || '';
   }
 
-  let accounts: any[] = [];
-  if (/account_number|payment_details/.test(body)) {
-    const { data } = await supabase
-      .from('account_details')
-      .select('bank, account_number, account_name')
-      .eq('contact_id', contactId);
-    accounts = data || [];
-  }
+  const { data: accounts } = await supabase
+    .from('account_details')
+    .select('bank, account_number, account_name')
+    .eq('contact_id', contactId);
 
-  const now = new Date();
-  const map: Record<string, string> = {
-    customer_name: contact?.name || '',
-    user_display_name: senderName,
-    sender_name: senderName,
-    user_name: senderName,
-    display_name: senderName,
-    loan_id: contact?.loan_id || '',
-    amount: contact?.amount !== null && contact?.amount !== undefined ? String(contact.amount) : '',
-    phone_number: contact?.phone || '',
-    app_name: contact?.app_type || '',
-    day_type: contact?.day_type !== null && contact?.day_type !== undefined ? String(contact.day_type) : '',
-    due_date: calcDueDate(contact?.day_type),
-    account_number: accounts[0]?.account_number || '',
-    payment_details: accounts
-      .map((a) => `${a.bank} - ${a.account_number} (${a.account_name})`)
-      .join('; '),
-    current_date: now.toLocaleDateString('en-NG', { year: 'numeric', month: 'long', day: 'numeric' }),
-    current_time: now.toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' }),
+  const { data: customerContacts } = await supabase
+    .from('customer_contacts')
+    .select('name, phone, email, role, bank_name, account_number, recipient_name, is_primary')
+    .eq('customer_id', contactId)
+    .order('is_primary', { ascending: false });
+
+  const contactRecord = {
+    ...(contact || {}),
+    account_details: accounts || [],
+    contacts: customerContacts || [],
   };
 
-  return body.replace(/\{\{\s*(\w+)\s*\}\}/g, (match, name) => {
-    const key = String(name).toLowerCase();
-    return key in map ? map[key] : match;
-  });
+  return resolveTemplateBody(body, contactRecord, {
+    senderName,
+    fallbackApp: contact?.app_type || '',
+  }).text;
 };
 
 /**
@@ -245,41 +249,71 @@ const runAutoReply = async (
       const replyBody = await resolveAutoReplyVariables(supabase, contactId, rawBody, ownerUserId);
       if (!replyBody) continue;
 
-      const result = await sendWhatsAppText(settings, from, replyBody);
+      const configured = Array.isArray(match.step?.recipients)
+        ? match.step.recipients.filter((r: any) => normalizeRecipient(r?.phone))
+        : [];
+      const recipients = configured.length > 0
+        ? configured
+        : [{ id: contactId, phone: from }];
+      const imageUrl = String(match.step?.imageUrl || '').trim();
 
-      const { error: insertError } = await supabase.from('messages').insert({
-        user_id: targetUserId,
-        contact_id: contactId,
-        content: replyBody,
-        type: 'text',
-        status: result.ok ? 'sent' : 'failed',
-        is_outgoing: true,
-        whatsapp_message_id: result.wamid,
-      });
+      for (const recipient of recipients) {
+        const to = normalizeRecipient(recipient.phone);
+        if (!to) continue;
+        const recipientContactId = recipient.id || contactId;
 
-      if (insertError) console.error('❌ Auto reply message insert failed:', insertError.message);
+        const result = await sendWhatsAppText(settings, to, replyBody);
 
-      await logWebhookEvent(supabase, {
-        user_id: targetUserId,
-        event_type: 'auto_reply_sent',
-        direction: 'outgoing',
-        phone_number: from,
-        message_type: 'text',
-        status: result.ok ? 'sent' : 'failed',
-        error: result.error,
-        payload: {
-          contactId,
-          autoReplyId: match.reply?.id,
-          autoReplyName: match.reply?.name,
-          matchType: match.step?.matchType || 'contains',
-          keywords: match.step?.keywords,
-          trigger: incomingText.slice(0, 120),
-          wamid: result.wamid,
-          delaySeconds,
-        },
-      });
+        const { error: insertError } = await supabase.from('messages').insert({
+          user_id: targetUserId,
+          contact_id: recipientContactId,
+          content: replyBody,
+          type: 'text',
+          status: result.ok ? 'sent' : 'failed',
+          is_outgoing: true,
+          whatsapp_message_id: result.wamid,
+        });
 
-      console.log(result.ok ? '🤖 Auto reply sent' : '🤖 Auto reply failed', { contactId, rule: match.reply?.name, error: result.error });
+        if (insertError) console.error('❌ Auto reply message insert failed:', insertError.message);
+
+        if (imageUrl) {
+          const imageResult = await sendWhatsAppImage(settings, to, imageUrl);
+          const { error: imageInsertError } = await supabase.from('messages').insert({
+            user_id: targetUserId,
+            contact_id: recipientContactId,
+            content: imageUrl,
+            type: 'image',
+            media_url: imageUrl,
+            status: imageResult.ok ? 'sent' : 'failed',
+            is_outgoing: true,
+            whatsapp_message_id: imageResult.wamid,
+          });
+          if (imageInsertError) console.error('❌ Auto reply image insert failed:', imageInsertError.message);
+        }
+
+        await logWebhookEvent(supabase, {
+          user_id: targetUserId,
+          event_type: 'auto_reply_sent',
+          direction: 'outgoing',
+          phone_number: to,
+          message_type: imageUrl ? 'image' : 'text',
+          status: result.ok ? 'sent' : 'failed',
+          error: result.error,
+          payload: {
+            contactId: recipientContactId,
+            autoReplyId: match.reply?.id,
+            autoReplyName: match.reply?.name,
+            matchType: match.step?.matchType || 'contains',
+            keywords: match.step?.keywords,
+            trigger: incomingText.slice(0, 120),
+            wamid: result.wamid,
+            delaySeconds,
+            recipientCount: recipients.length,
+          },
+        });
+
+        console.log(result.ok ? '🤖 Auto reply sent' : '🤖 Auto reply failed', { contactId: recipientContactId, rule: match.reply?.name, error: result.error });
+      }
     } catch (autoReplyStepError) {
       // Keep sending the OTHER matching replies — one failure must not drop the rest.
       console.error('🤖 Auto reply step failed (continuing to next match):', getErrorMessage(autoReplyStepError));

@@ -1,12 +1,14 @@
 // @ts-nocheck
 import { useEffect, useRef, useState } from 'react';
-import { Plus, Trash2, Pencil, Download, Upload, MessageSquareReply, X, Save, FileText } from 'lucide-react';
+import { Plus, Trash2, Pencil, Download, Upload, MessageSquareReply, X, Save, FileText, Image as ImageIcon } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { insertAtCursor } from '@/lib/templateVariables';
+import { uploadUserImage } from '@/lib/uploadImage';
+import { useApps } from '@/hooks/useApps';
 import { VariablePills } from '@/components/settings/VariablePills';
 import { KeywordPillInput } from '@/components/settings/KeywordPillInput';
 import { Button } from '@/components/ui/button';
@@ -22,7 +24,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useAutoReplies } from '@/hooks/useAutoReplies';
 import {
-  AUTO_REPLY_DEMO_JSON, AutoReply, AutoReplyStep, newStep,
+  AUTO_REPLY_DEMO_JSON, AutoReply, AutoReplyRecipient, AutoReplyStep, newStep,
   parseAutoReplyJSON, toStoredSteps,
 } from '@/lib/autoReply';
 import { cn } from '@/lib/utils';
@@ -39,10 +41,15 @@ export function AutoReplySettings() {
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const { user } = useAuth();
+  const { apps } = useApps();
   const [appTemplates, setAppTemplates] = useState<any[]>([]);
   const messageRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
   const templateFileRef = useRef<HTMLInputElement>(null);
   const templateTargetIndex = useRef<number>(0);
+  const imageFileRef = useRef<HTMLInputElement>(null);
+  const imageTargetIndex = useRef<number>(0);
+  const [recipientOptions, setRecipientOptions] = useState<Record<string, AutoReplyRecipient[]>>({});
+  const [uploadingImageIndex, setUploadingImageIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -90,6 +97,70 @@ export function AutoReplySettings() {
     }
   };
 
+  const uploadStepImage = async (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !user) return;
+    setUploadingImageIndex(index);
+    try {
+      const url = await uploadUserImage(user.id, file, 'auto-reply-images');
+      if (!url) throw new Error('Upload failed');
+      updateStep(index, { imageUrl: url });
+      toast({ title: 'Image added to this response' });
+    } catch (err: any) {
+      toast({ title: 'Could not upload that image', description: err?.message, variant: 'destructive' });
+    } finally {
+      setUploadingImageIndex(null);
+    }
+  };
+
+  const loadRecipients = async (stepId: string, appName: string) => {
+    if (!user || !appName) {
+      setRecipientOptions((prev) => ({ ...prev, [stepId]: [] }));
+      return;
+    }
+    const { data: contactsData } = await supabase
+      .from('contacts')
+      .select('id, name, phone')
+      .eq('user_id', user.id)
+      .eq('app_type', appName);
+    const parents = (contactsData || []) as { id: string; name: string; phone: string }[];
+    const parentById = new Map(parents.map((c) => [c.id, c]));
+    const options: AutoReplyRecipient[] = parents
+      .filter((c) => c.phone)
+      .map((c) => ({ id: c.id, phone: c.phone, name: c.name }));
+
+    if (parents.length > 0) {
+      const { data: linkedData } = await supabase
+        .from('customer_contacts')
+        .select('customer_id, name, phone')
+        .eq('user_id', user.id)
+        .in('customer_id', parents.map((c) => c.id));
+      for (const linked of (linkedData || []) as { customer_id: string; name: string; phone: string }[]) {
+        if (!linked.phone) continue;
+        const parent = parentById.get(linked.customer_id);
+        options.push({
+          id: linked.customer_id,
+          phone: linked.phone,
+          name: `${linked.name}${parent?.name ? ` (${parent.name})` : ''}`,
+        });
+      }
+    }
+
+    setRecipientOptions((prev) => ({ ...prev, [stepId]: options }));
+  };
+
+  const toggleRecipient = (index: number, recipient: AutoReplyRecipient) => {
+    const step = draftSteps[index];
+    const selected = step.recipients || [];
+    const exists = selected.some((r) => r.phone === recipient.phone);
+    updateStep(index, {
+      recipients: exists
+        ? selected.filter((r) => r.phone !== recipient.phone)
+        : [...selected, recipient],
+    });
+  };
+
   const startNew = () => {
     setEditing({ id: '', userId: '', name: '', isActive: true, steps: [] });
     setDraftName('');
@@ -102,6 +173,7 @@ export function AutoReplySettings() {
     setDraftName(reply.name);
     setDraftActive(reply.isActive);
     setDraftSteps(reply.steps?.length ? reply.steps.map((s) => ({ ...s })) : [newStep()]);
+    (reply.steps || []).forEach((s) => { if (s.appName) loadRecipients(s.id, s.appName); });
   };
 
   const closeEditor = () => setEditing(null);
@@ -173,6 +245,9 @@ export function AutoReplySettings() {
         matchType: s.matchType,
         message: s.message,
         delaySeconds: s.delaySeconds || 0,
+        imageUrl: s.imageUrl,
+        appName: s.appName,
+        recipients: s.recipients,
       })),
     }));
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -220,6 +295,7 @@ export function AutoReplySettings() {
 
       <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
       <input ref={templateFileRef} type="file" accept=".json,.txt" className="hidden" onChange={importTemplateFile} />
+      <input ref={imageFileRef} type="file" accept="image/*" className="hidden" onChange={(e) => uploadStepImage(e, imageTargetIndex.current)} />
 
       <div className="flex flex-wrap gap-2">
         <Button onClick={startNew} className="gap-2">
@@ -351,6 +427,76 @@ export function AutoReplySettings() {
                     rows={3}
                   />
                   <VariablePills onInsert={(v) => insertIntoMessage(index, `{{${v}}}`)} />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Attach image (sent right after the text)</Label>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1 h-8"
+                      disabled={uploadingImageIndex === index}
+                      onClick={() => {
+                        imageTargetIndex.current = index;
+                        imageFileRef.current?.click();
+                      }}
+                    >
+                      <ImageIcon className="h-3.5 w-3.5" />
+                      {uploadingImageIndex === index ? 'Uploading...' : step.imageUrl ? 'Change image' : 'Add image'}
+                    </Button>
+                    {step.imageUrl && (
+                      <>
+                        <img src={step.imageUrl} alt="Auto reply attachment" className="h-12 w-12 rounded object-cover border" />
+                        <Button variant="ghost" size="icon" onClick={() => updateStep(index, { imageUrl: undefined })}>
+                          <X className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Send to</Label>
+                  <select
+                    value={step.appName || ''}
+                    onChange={(e) => {
+                      const appName = e.target.value;
+                      updateStep(index, { appName, recipients: [] });
+                      loadRecipients(step.id, appName);
+                    }}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="">Incoming sender only</option>
+                    {apps.map((app) => (
+                      <option key={app.id} value={app.name}>Contacts for {app.name}</option>
+                    ))}
+                  </select>
+                  {step.appName && (
+                    <div className="rounded-lg border border-panel-border bg-background p-2 max-h-40 overflow-y-auto space-y-1">
+                      {(recipientOptions[step.id] || []).length === 0 ? (
+                        <p className="text-xs text-muted-foreground p-1">No contacts found for this app.</p>
+                      ) : (
+                        (recipientOptions[step.id] || []).map((recipient) => {
+                          const checked = (step.recipients || []).some((r) => r.phone === recipient.phone);
+                          return (
+                            <label key={`${recipient.id || 'linked'}-${recipient.phone}`} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent/50 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleRecipient(index, recipient)}
+                              />
+                              <span className="truncate">{recipient.name || recipient.phone}</span>
+                              <span className="text-xs text-muted-foreground ml-auto">{recipient.phone}</span>
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Leave contacts unselected to send only to the number that messaged you. More than two steps are supported.
+                  </p>
                 </div>
 
                 <div className="space-y-2">

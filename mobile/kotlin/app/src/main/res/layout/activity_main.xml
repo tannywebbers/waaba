@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/ios_chat_bg"
+    android:orientation="vertical">
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <WebView
+            android:id="@+id/webView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/ios_chat_bg" />
+
+        <FrameLayout
+            android:id="@+id/profileOverlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/ios_surface"
+            android:visibility="gone">
+
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:fillViewport="true">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingStart="@dimen/screen_padding"
+                    android:paddingEnd="@dimen/screen_padding"
+                    android:paddingTop="32dp"
+                    android:paddingBottom="32dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="@font/ios_bold"
+                        android:text="@string/profile_title"
+                        android:textColor="@color/ios_text"
+                        android:textSize="32sp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="20dp"
+                        android:background="@drawable/bg_card"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:padding="16dp">
+
+                        <TextView
+                            android:id="@+id/profileAvatar"
+                            android:layout_width="@dimen/profile_avatar_size"
+                            android:layout_height="@dimen/profile_avatar_size"
+                            android:background="@drawable/bg_avatar"
+                            android:gravity="center"
+                            android:text="W"
+                            android:textColor="@color/ios_incoming"
+                            android:textSize="28sp"
+                            android:fontFamily="@font/ios_bold" />
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="16dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:id="@+id/profileName"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="@font/ios_semibold"
+                                android:text="Waaba user"
+                                android:textColor="@color/ios_text"
+                                android:textSize="18sp" />
+
+                            <TextView
+                                android:id="@+id/profileEmail"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="4dp"
+                                android:fontFamily="@font/ios_regular"
+                                android:text="Signed in"
+                                android:textColor="@color/ios_text_muted"
+                                android:textSize="14sp" />
+
+                        </LinearLayout>
+
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/profileRowAccount"
+                        style="@style/WaabaProfileRow"
+                        android:layout_marginTop="20dp"
+                        android:text="@string/profile_account" />
+
+                    <TextView
+                        android:id="@+id/profileRowNotifications"
+                        style="@style/WaabaProfileRow"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/profile_notifications" />
+
+                    <TextView
+                        android:id="@+id/profileRowAppearance"
+                        style="@style/WaabaProfileRow"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/profile_appearance" />
+
+                    <TextView
+                        android:id="@+id/profileRowApi"
+                        style="@style/WaabaProfileRow"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/profile_api" />
+
+                    <TextView
+                        android:id="@+id/profileRowShared"
+                        style="@style/WaabaProfileRow"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/profile_shared" />
+
+                    <TextView
+                        android:id="@+id/profileRowAutoReply"
+                        style="@style/WaabaProfileRow"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/profile_auto_reply" />
+
+                    <TextView
+                        android:id="@+id/profileLogout"
+                        android:layout_width="match_parent"
+                        android:layout_height="56dp"
+                        android:layout_marginTop="24dp"
+                        android:background="@drawable/bg_logout"
+                        android:fontFamily="@font/ios_medium"
+                        android:gravity="center"
+                        android:text="@string/profile_logout"
+                        android:textColor="@color/ios_danger"
+                        android:textSize="16sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center_horizontal"
+                        android:layout_marginTop="24dp"
+                        android:fontFamily="@font/ios_regular"
+                        android:text="@string/version"
+                        android:textColor="@color/ios_text_muted"
+                        android:textSize="12sp" />
+
+                </LinearLayout>
+
+            </ScrollView>
+
+        </FrameLayout>
+
+    </FrameLayout>
+
+    <View
+        android:id="@+id/tabDivider"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/hairline"
+        android:background="@color/ios_divider"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/tabBar"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/tab_height"
+        android:background="@color/ios_surface"
+        android:orientation="horizontal"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
+        android:visibility="gone">
+
+        <LinearLayout android:id="@+id/tabChats" style="@style/WaabaTab">
+            <ImageView
+                android:id="@+id/tabChatsIcon"
+                style="@style/WaabaTabIcon"
+                android:src="@drawable/tab_chats_selector" />
+            <TextView
+                android:id="@+id/tabChatsLabel"
+                style="@style/WaabaTabLabel"
+                android:text="@string/tab_chats" />
+        </LinearLayout>
+
+        <LinearLayout android:id="@+id/tabContacts" style="@style/WaabaTab">
+            <ImageView
+                android:id="@+id/tabContactsIcon"
+                style="@style/WaabaTabIcon"
+                android:src="@drawable/tab_contacts_selector" />
+            <TextView
+                android:id="@+id/tabContactsLabel"
+                style="@style/WaabaTabLabel"
+                android:text="@string/tab_contacts" />
+        </LinearLayout>
+
+        <LinearLayout android:id="@+id/tabSettings" style="@style/WaabaTab">
+            <ImageView
+                android:id="@+id/tabSettingsIcon"
+                style="@style/WaabaTabIcon"
+                android:src="@drawable/tab_settings_selector" />
+            <TextView
+                android:id="@+id/tabSettingsLabel"
+                style="@style/WaabaTabLabel"
+                android:text="@string/tab_settings" />
+        </LinearLayout>
+
+        <LinearLayout android:id="@+id/tabProfile" style="@style/WaabaTab">
+            <ImageView
+                android:id="@+id/tabProfileIcon"
+                style="@style/WaabaTabIcon"
+                android:src="@drawable/tab_profile_selector" />
+            <TextView
+                android:id="@+id/tabProfileLabel"
+                style="@style/WaabaTabLabel"
+                android:text="@string/tab_profile" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+</LinearLayout>
