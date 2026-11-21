@@ -23,7 +23,11 @@ export function DesktopLayout() {
   const { showContactPanel, activeChat, viewMode, setViewMode, setShowAddContactModal, editContactId, setEditContactId } = useAppStore();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showNewChatModal, setShowNewChatModal] = useState(false);
-  const chatsWithUnread = useAppStore((s) => s.chats.filter(c => c.unreadCount > 0 && !c.isArchived && !c.contact?.isArchived).length);
+  const chatsWithUnread = useAppStore((s) => s.chats.filter(c =>
+    c.unreadCount > 0
+    && !c.isArchived && !c.contact?.isArchived
+    && !c.isDeleted && !c.contact?.isDeleted
+  ).length);
 
   return (
     <div className="h-screen flex overflow-hidden bg-background">

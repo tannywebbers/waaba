@@ -260,7 +260,13 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   }, [user, fetchLabels]);
 
   const archivedCount = chats.filter((c) => c.isArchived || c.contact.isArchived).length;
-  const unreadCount = chats.filter((c) => c.unreadCount > 0).length;
+  const unreadCount = showTrash
+    ? 0
+    : chats.filter((c) =>
+        c.unreadCount > 0
+        && !c.isArchived && !c.contact.isArchived
+        && !c.isDeleted && !c.contact.isDeleted
+      ).length;
 
   const filteredChats = chats
     .filter((chat) => {
@@ -363,6 +369,11 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
     if (error) return toast({ title: 'Failed to delete permanently', description: error.message, variant: 'destructive' });
     setContacts(contacts.filter((contact) => !ids.includes(contact.id)));
     setChats(chats.filter((chat) => !ids.includes(chat.id)));
+    useAppStore.setState((state) => {
+      const unreadCounts = { ...state.unreadCounts };
+      ids.forEach((id) => { delete unreadCounts[id]; });
+      return { unreadCounts };
+    });
     setSelectedContactIds([]);
     setChatSelectionMode(false);
     setContactSelectionMode(false);

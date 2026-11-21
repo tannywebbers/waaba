@@ -33,7 +33,11 @@ export function MobileLayout() {
   }, [activeChat]);
 
   // Count non-archived chats with unread messages
-  const chatsWithUnread = useAppStore((s) => s.chats.filter(c => c.unreadCount > 0 && !c.isArchived && !c.contact?.isArchived).length);
+  const chatsWithUnread = useAppStore((s) => s.chats.filter(c =>
+    c.unreadCount > 0
+    && !c.isArchived && !c.contact?.isArchived
+    && !c.isDeleted && !c.contact?.isDeleted
+  ).length);
 
   const handleBack = useCallback(() => {
     if (showContactPanel) { setShowContactPanel(false); return true; }

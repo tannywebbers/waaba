@@ -161,7 +161,7 @@ export function FileUploadButton({ onFileSelect, uploading }: FileUploadButtonPr
 
           <DropdownMenuItem onClick={() => documentInputRef.current?.click()}>
             <FileText className="h-4 w-4 mr-2 text-purple-500" />
-            Document
+            Any file / APK
           </DropdownMenuItem>
 
           <DropdownMenuItem onClick={() => audioInputRef.current?.click()}>

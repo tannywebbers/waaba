@@ -112,6 +112,15 @@ const findAutoReplyMatches = (replies: any[], incoming: string) => {
 
 const normalizeRecipient = (value: string) => String(value || '').replace(/\D/g, '');
 
+const normalizeStringList = (value: any): string[] => {
+  const raw = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value.split(',')
+      : [];
+  return Array.from(new Set(raw.map((item) => String(item || '').trim()).filter(Boolean)));
+};
+
 const sendWhatsAppText = async (settings: any, to: string, body: string) => {
   const response = await fetch(`${WHATSAPP_API_URL}/${settings.phone_number_id}/messages`, {
     method: 'POST',
@@ -139,6 +148,29 @@ const sendWhatsAppImage = async (settings: any, to: string, link: string, captio
       to,
       type: 'image',
       image: { link, ...(caption ? { caption } : {}) },
+    }),
+  });
+  const raw = await response.text();
+  let parsed: any = null;
+  try { parsed = JSON.parse(raw); } catch { /* non-JSON response */ }
+
+  return {
+    ok: response.ok,
+    wamid: parsed?.messages?.[0]?.id || null,
+    error: parsed?.error?.message || (response.ok ? null : raw?.slice(0, 300)),
+  };
+};
+
+const sendWhatsAppDocument = async (settings: any, to: string, link: string, filename: string) => {
+  const response = await fetch(`${WHATSAPP_API_URL}/${settings.phone_number_id}/messages`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${settings.api_token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to,
+      type: 'document',
+      document: { link, filename },
     }),
   });
   const raw = await response.text();
@@ -195,6 +227,61 @@ const resolveAutoReplyVariables = async (supabase: any, contactId: string, body:
   }).text;
 };
 
+const resolveAppRecipients = async (
+  supabase: any,
+  ownerUserId: string,
+  targetUserId: string,
+  targetApps: string[]
+): Promise<{ id: string; phone: string }[]> => {
+  const appsLower = targetApps.map((name) => normalizeText(name)).filter(Boolean);
+  if (appsLower.length === 0) return [];
+
+  const { data: contacts, error } = await supabase
+    .from('contacts')
+    .select('id, phone, app_type, is_deleted')
+    .or(`user_id.eq.${ownerUserId},assigned_user_id.eq.${targetUserId}`);
+
+  if (error) {
+    console.error('❌ Auto reply app contact lookup failed:', error.message);
+    return [];
+  }
+
+  return (contacts || [])
+    .filter((contact: any) => !contact.is_deleted && normalizeRecipient(contact.phone))
+    .filter((contact: any) => appsLower.includes(normalizeText(contact.app_type || '')))
+    .map((contact: any) => ({ id: contact.id, phone: contact.phone }));
+};
+
+const withinAutoReplyCooldown = async (
+  supabase: any,
+  userId: string,
+  contactId: string,
+  body: string,
+  cooldownMinutes: number
+): Promise<boolean> => {
+  const minutes = Number(cooldownMinutes) || 0;
+  if (minutes <= 0) return false;
+
+  const since = new Date(Date.now() - minutes * 60_000).toISOString();
+  const { data, error } = await supabase
+    .from('messages')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('contact_id', contactId)
+    .eq('is_outgoing', true)
+    .eq('status', 'sent')
+    .eq('content', body)
+    .gte('created_at', since)
+    .limit(1);
+
+  if (error) {
+    console.error('❌ Auto reply cooldown lookup failed:', error.message);
+    return false;
+  }
+
+  return (data || []).length > 0;
+};
+
 /**
  * Runs the user's auto replies against an incoming text message.
  * Sends all matching replies through the Cloud API and stores it as an
@@ -249,18 +336,48 @@ const runAutoReply = async (
       const replyBody = await resolveAutoReplyVariables(supabase, contactId, rawBody, ownerUserId);
       if (!replyBody) continue;
 
+      const targetApps = normalizeStringList(match.step?.targetApps ?? (match.step?.appName ? [match.step.appName] : []));
       const configured = Array.isArray(match.step?.recipients)
         ? match.step.recipients.filter((r: any) => normalizeRecipient(r?.phone))
         : [];
-      const recipients = configured.length > 0
+      let recipients = configured.length > 0
         ? configured
         : [{ id: contactId, phone: from }];
+
+      if (targetApps.length > 0) {
+        recipients = await resolveAppRecipients(supabase, ownerUserId, targetUserId, targetApps);
+      }
+
       const imageUrl = String(match.step?.imageUrl || '').trim();
+      const fileUrl = String(match.step?.fileUrl || '').trim();
+      const fileName = String(match.step?.fileName || '').trim() || fileUrl.split('/').pop() || 'file';
+      const cooldownMinutes = Number(match.step?.cooldownMinutes) || 0;
 
       for (const recipient of recipients) {
         const to = normalizeRecipient(recipient.phone);
         if (!to) continue;
         const recipientContactId = recipient.id || contactId;
+
+        if (await withinAutoReplyCooldown(supabase, targetUserId, recipientContactId, replyBody, cooldownMinutes)) {
+          await logWebhookEvent(supabase, {
+            user_id: targetUserId,
+            event_type: 'auto_reply_skipped',
+            direction: 'outgoing',
+            phone_number: to,
+            message_type: 'text',
+            status: 'skipped',
+            payload: {
+              reason: 'cooldown',
+              contactId: recipientContactId,
+              autoReplyId: match.reply?.id,
+              autoReplyName: match.reply?.name,
+              cooldownMinutes,
+              content: replyBody.slice(0, 240),
+            },
+          });
+          console.log('⏭️ Auto reply skipped by cooldown:', { contactId: recipientContactId, rule: match.reply?.name, cooldownMinutes });
+          continue;
+        }
 
         const result = await sendWhatsAppText(settings, to, replyBody);
 
@@ -291,12 +408,27 @@ const runAutoReply = async (
           if (imageInsertError) console.error('❌ Auto reply image insert failed:', imageInsertError.message);
         }
 
+        if (fileUrl) {
+          const fileResult = await sendWhatsAppDocument(settings, to, fileUrl, fileName);
+          const { error: fileInsertError } = await supabase.from('messages').insert({
+            user_id: targetUserId,
+            contact_id: recipientContactId,
+            content: fileName,
+            type: 'document',
+            media_url: fileUrl,
+            status: fileResult.ok ? 'sent' : 'failed',
+            is_outgoing: true,
+            whatsapp_message_id: fileResult.wamid,
+          });
+          if (fileInsertError) console.error('❌ Auto reply file insert failed:', fileInsertError.message);
+        }
+
         await logWebhookEvent(supabase, {
           user_id: targetUserId,
           event_type: 'auto_reply_sent',
           direction: 'outgoing',
           phone_number: to,
-          message_type: imageUrl ? 'image' : 'text',
+          message_type: fileUrl ? 'document' : imageUrl ? 'image' : 'text',
           status: result.ok ? 'sent' : 'failed',
           error: result.error,
           payload: {
@@ -308,6 +440,9 @@ const runAutoReply = async (
             trigger: incomingText.slice(0, 120),
             wamid: result.wamid,
             delaySeconds,
+            cooldownMinutes,
+            targetApps,
+            fileName: fileUrl ? fileName : undefined,
             recipientCount: recipients.length,
           },
         });

@@ -9,7 +9,11 @@ export function useTabBadge() {
   useEffect(() => {
     const apply = () => {
       const state = useAppStore.getState();
-      const unreadChats = state.chats.filter(c => c.unreadCount > 0 && !c.isArchived && !c.contact?.isArchived).length;
+      const unreadChats = state.chats.filter(c =>
+        c.unreadCount > 0
+        && !c.isArchived && !c.contact?.isArchived
+        && !c.isDeleted && !c.contact?.isDeleted
+      ).length;
 
       if (unreadChats === lastUnreadRef.current) return;
       lastUnreadRef.current = unreadChats;

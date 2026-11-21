@@ -197,15 +197,29 @@ addContacts: (contacts) => {
       };
     });
   },
-  updateContact: (id, updates) => set((state) => ({
-    contacts: state.contacts.map(c => c.id === id ? { ...c, ...updates, updatedAt: new Date() } : c),
-    chats: state.chats.map(chat =>
-      chat.contact.id === id ? { ...chat, contact: { ...chat.contact, ...updates, updatedAt: new Date() }, ...(updates.isPinned !== undefined ? { isPinned: updates.isPinned } : {}), ...(updates.isMuted !== undefined ? { isMuted: updates.isMuted } : {}), ...(updates.isArchived !== undefined ? { isArchived: updates.isArchived } : {}) } : chat
-    ),
-    activeChat: state.activeChat?.id === id
-      ? { ...state.activeChat, contact: { ...state.activeChat.contact, ...updates, updatedAt: new Date() }, ...(updates.isPinned !== undefined ? { isPinned: updates.isPinned } : {}), ...(updates.isMuted !== undefined ? { isMuted: updates.isMuted } : {}), ...(updates.isArchived !== undefined ? { isArchived: updates.isArchived } : {}) }
-      : state.activeChat,
-  })),
+  updateContact: (id, updates) => set((state) => {
+    const clearUnread = updates.isArchived === true || updates.isDeleted === true;
+    const chatUpdates = {
+      ...(updates.isPinned !== undefined ? { isPinned: updates.isPinned } : {}),
+      ...(updates.isMuted !== undefined ? { isMuted: updates.isMuted } : {}),
+      ...(updates.isArchived !== undefined ? { isArchived: updates.isArchived } : {}),
+      ...(updates.isDeleted !== undefined ? { isDeleted: updates.isDeleted } : {}),
+      ...(clearUnread ? { unreadCount: 0 } : {}),
+    };
+
+    return {
+      contacts: state.contacts.map(c => c.id === id ? { ...c, ...updates, updatedAt: new Date() } : c),
+      chats: state.chats.map(chat =>
+        chat.contact.id === id
+          ? { ...chat, contact: { ...chat.contact, ...updates, updatedAt: new Date() }, ...chatUpdates }
+          : chat
+      ),
+      activeChat: state.activeChat?.id === id
+        ? { ...state.activeChat, contact: { ...state.activeChat.contact, ...updates, updatedAt: new Date() }, ...chatUpdates }
+        : state.activeChat,
+      unreadCounts: clearUnread ? { ...state.unreadCounts, [id]: 0 } : state.unreadCounts,
+    };
+  }),
   deleteContact: (id) => get().updateContact(id, { isDeleted: true, deletedAt: new Date() } as any),
 
   chats: [],
@@ -286,7 +300,11 @@ addContacts: (contacts) => {
         });
     }
     
-    const newUnread = !message.isOutgoing && !isCurrentChat
+    const hiddenChat = state.chats.find(chat => chat.id === contactId);
+    const countUnread = !message.isOutgoing && !isCurrentChat
+      && !hiddenChat?.isArchived && !hiddenChat?.contact?.isArchived
+      && !hiddenChat?.isDeleted && !hiddenChat?.contact?.isDeleted;
+    const newUnread = countUnread
       ? (state.unreadCounts[contactId] || 0) + 1
       : state.unreadCounts[contactId] || 0;
     
@@ -296,9 +314,11 @@ addContacts: (contacts) => {
         [contactId]: [...existing, finalMessage],
       },
       chats: state.chats.map(chat =>
-        chat.id === contactId ? { ...chat, lastMessage: finalMessage, unreadCount: isCurrentChat ? 0 : newUnread } : chat
+        chat.id === contactId
+          ? { ...chat, lastMessage: finalMessage, unreadCount: (isCurrentChat || !countUnread) ? 0 : newUnread }
+          : chat
       ),
-      unreadCounts: { ...state.unreadCounts, [contactId]: isCurrentChat ? 0 : newUnread },
+      unreadCounts: { ...state.unreadCounts, [contactId]: (isCurrentChat || !countUnread) ? 0 : newUnread },
     };
   }),
   updateMessageStatus: (contactId, messageId, status, errorInfo) => set((state) => {
@@ -372,8 +392,13 @@ addContacts: (contacts) => {
   },
   
   totalUnread: () => {
-    const counts = get().unreadCounts;
-    return Object.values(counts).reduce((sum, c) => sum + c, 0);
+    const state = get();
+    const hiddenIds = new Set(state.chats
+      .filter(chat => chat.isArchived || chat.contact?.isArchived || chat.isDeleted || chat.contact?.isDeleted)
+      .map(chat => chat.id));
+    return Object.entries(state.unreadCounts)
+      .filter(([id]) => !hiddenIds.has(id))
+      .reduce((sum, [, count]) => sum + count, 0);
   },
 
   // Favorites
@@ -401,12 +426,19 @@ addContacts: (contacts) => {
         ...ch,
         contact: { ...ch.contact, createdAt: new Date(ch.contact.createdAt), updatedAt: new Date(ch.contact.updatedAt), lastSeen: ch.contact.lastSeen ? new Date(ch.contact.lastSeen) : undefined },
         lastMessage: ch.lastMessage ? { ...ch.lastMessage, timestamp: new Date(ch.lastMessage.timestamp) } : undefined,
+        unreadCount: (ch.isArchived || ch.contact?.isArchived || ch.isDeleted || ch.contact?.isDeleted) ? 0 : (ch.unreadCount || 0),
       }));
       const restoredMessages: Record<string, Message[]> = {};
       for (const [cid, msgs] of Object.entries(cached.messages)) {
         restoredMessages[cid] = (msgs as any[]).map(m => ({ ...m, timestamp: new Date(m.timestamp) }));
       }
-      set({ contacts: restoredContacts, chats: restoredChats, messages: restoredMessages, unreadCounts: cached.unreadCounts, loading: false, dataLoaded: true });
+      const hiddenCachedIds = new Set(restoredChats
+        .filter((ch: any) => ch.isArchived || ch.contact?.isArchived || ch.isDeleted || ch.contact?.isDeleted)
+        .map((ch: any) => ch.id));
+      const cleanUnreadCounts = Object.fromEntries(
+        Object.entries(cached.unreadCounts || {}).filter(([id]) => !hiddenCachedIds.has(id))
+      );
+      set({ contacts: restoredContacts, chats: restoredChats, messages: restoredMessages, unreadCounts: cleanUnreadCounts, loading: false, dataLoaded: true });
     } else {
       set({ loading: true });
     }
@@ -463,6 +495,7 @@ addContacts: (contacts) => {
         : { data: [], error: null };
       if (messagesError) throw messagesError;
 
+      const contactsById = new Map(contacts.map(contact => [contact.id, contact]));
       const messagesMap: Record<string, Message[]> = {};
       const lastMessages: Record<string, Message> = {};
       const unreadCounts: Record<string, number> = {};
@@ -492,7 +525,9 @@ addContacts: (contacts) => {
         
         // 🔥 Count unread: incoming messages with status != 'read'
         // This is accurate because we now mark messages as 'read' in database when chat opens
-        if (!m.is_outgoing && m.status !== 'read') {
+        const contact = contactsById.get(m.contact_id);
+        const hiddenUnread = contact?.isArchived || contact?.isDeleted;
+        if (!m.is_outgoing && m.status !== 'read' && !hiddenUnread) {
           unreadCounts[m.contact_id] = (unreadCounts[m.contact_id] || 0) + 1;
         }
       });

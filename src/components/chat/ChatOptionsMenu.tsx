@@ -53,7 +53,7 @@ export function ChatOptionsMenu({
   onSearch,
   onClose 
 }: ChatOptionsMenuProps) {
-  const { updateContact, setMessages, chats, setChats } = useAppStore();
+  const { updateContact, setMessages, chats, setChats, clearUnread } = useAppStore();
   const { toast } = useToast();
   const { isSuperUser } = useSharedInbox();
   const [open, setOpen] = useState(false);
@@ -126,6 +126,7 @@ export function ChatOptionsMenu({
       if (error) throw error;
 
       setMessages(chatId, []);
+      await clearUnread(chatId);
       
       const updatedChats = chats.map(c => 
         c.id === chatId 

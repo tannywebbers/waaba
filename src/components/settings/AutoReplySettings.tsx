@@ -1,13 +1,13 @@
 // @ts-nocheck
 import { useEffect, useRef, useState } from 'react';
-import { Plus, Trash2, Pencil, Download, Upload, MessageSquareReply, X, Save, FileText, Image as ImageIcon } from 'lucide-react';
+import { Plus, Trash2, Pencil, Download, Upload, MessageSquareReply, X, Save, FileText, Image as ImageIcon, Paperclip } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { insertAtCursor } from '@/lib/templateVariables';
-import { uploadUserImage } from '@/lib/uploadImage';
+import { uploadUserFile } from '@/lib/uploadImage';
 import { useApps } from '@/hooks/useApps';
 import { VariablePills } from '@/components/settings/VariablePills';
 import { KeywordPillInput } from '@/components/settings/KeywordPillInput';
@@ -21,10 +21,13 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useAutoReplies } from '@/hooks/useAutoReplies';
 import {
-  AUTO_REPLY_DEMO_JSON, AutoReply, AutoReplyRecipient, AutoReplyStep, newStep,
+  AUTO_REPLY_DEMO_JSON, AutoReply, AutoReplyStep, newStep,
   parseAutoReplyJSON, toStoredSteps,
 } from '@/lib/autoReply';
 import { cn } from '@/lib/utils';
@@ -48,8 +51,10 @@ export function AutoReplySettings() {
   const templateTargetIndex = useRef<number>(0);
   const imageFileRef = useRef<HTMLInputElement>(null);
   const imageTargetIndex = useRef<number>(0);
-  const [recipientOptions, setRecipientOptions] = useState<Record<string, AutoReplyRecipient[]>>({});
+  const fileFileRef = useRef<HTMLInputElement>(null);
+  const fileTargetIndex = useRef<number>(0);
   const [uploadingImageIndex, setUploadingImageIndex] = useState<number | null>(null);
+  const [uploadingFileIndex, setUploadingFileIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -103,7 +108,7 @@ export function AutoReplySettings() {
     if (!file || !user) return;
     setUploadingImageIndex(index);
     try {
-      const url = await uploadUserImage(user.id, file, 'auto-reply-images');
+      const url = await uploadUserFile(user.id, file, 'auto-reply-images');
       if (!url) throw new Error('Upload failed');
       updateStep(index, { imageUrl: url });
       toast({ title: 'Image added to this response' });
@@ -114,50 +119,31 @@ export function AutoReplySettings() {
     }
   };
 
-  const loadRecipients = async (stepId: string, appName: string) => {
-    if (!user || !appName) {
-      setRecipientOptions((prev) => ({ ...prev, [stepId]: [] }));
-      return;
+  const uploadStepFile = async (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !user) return;
+    setUploadingFileIndex(index);
+    try {
+      const url = await uploadUserFile(user.id, file, 'auto-reply-files');
+      if (!url) throw new Error('Upload failed');
+      updateStep(index, { fileUrl: url, fileName: file.name, fileMimeType: file.type || '' });
+      toast({ title: 'File added to this response' });
+    } catch (err: any) {
+      toast({ title: 'Could not upload that file', description: err?.message, variant: 'destructive' });
+    } finally {
+      setUploadingFileIndex(null);
     }
-    const { data: contactsData } = await supabase
-      .from('contacts')
-      .select('id, name, phone')
-      .eq('user_id', user.id)
-      .eq('app_type', appName);
-    const parents = (contactsData || []) as { id: string; name: string; phone: string }[];
-    const parentById = new Map(parents.map((c) => [c.id, c]));
-    const options: AutoReplyRecipient[] = parents
-      .filter((c) => c.phone)
-      .map((c) => ({ id: c.id, phone: c.phone, name: c.name }));
-
-    if (parents.length > 0) {
-      const { data: linkedData } = await supabase
-        .from('customer_contacts')
-        .select('customer_id, name, phone')
-        .eq('user_id', user.id)
-        .in('customer_id', parents.map((c) => c.id));
-      for (const linked of (linkedData || []) as { customer_id: string; name: string; phone: string }[]) {
-        if (!linked.phone) continue;
-        const parent = parentById.get(linked.customer_id);
-        options.push({
-          id: linked.customer_id,
-          phone: linked.phone,
-          name: `${linked.name}${parent?.name ? ` (${parent.name})` : ''}`,
-        });
-      }
-    }
-
-    setRecipientOptions((prev) => ({ ...prev, [stepId]: options }));
   };
 
-  const toggleRecipient = (index: number, recipient: AutoReplyRecipient) => {
+  const toggleTargetApp = (index: number, appName: string) => {
     const step = draftSteps[index];
-    const selected = step.recipients || [];
-    const exists = selected.some((r) => r.phone === recipient.phone);
+    const selected = Array.isArray(step.targetApps)
+      ? step.targetApps
+      : step.appName ? [step.appName] : [];
+    const exists = selected.includes(appName);
     updateStep(index, {
-      recipients: exists
-        ? selected.filter((r) => r.phone !== recipient.phone)
-        : [...selected, recipient],
+      targetApps: exists ? selected.filter((name) => name !== appName) : [...selected, appName],
     });
   };
 
@@ -173,7 +159,6 @@ export function AutoReplySettings() {
     setDraftName(reply.name);
     setDraftActive(reply.isActive);
     setDraftSteps(reply.steps?.length ? reply.steps.map((s) => ({ ...s })) : [newStep()]);
-    (reply.steps || []).forEach((s) => { if (s.appName) loadRecipients(s.id, s.appName); });
   };
 
   const closeEditor = () => setEditing(null);
@@ -199,6 +184,10 @@ export function AutoReplySettings() {
           .filter(Boolean),
         message: (s.message || '').trim(),
         delaySeconds: Number(s.delaySeconds) || 0,
+        cooldownMinutes: Number(s.cooldownMinutes) || 0,
+        targetApps: Array.isArray(s.targetApps)
+          ? s.targetApps
+          : s.appName ? [s.appName] : [],
       }))
       .filter((s) => s.keywords.length > 0 && s.message);
 
@@ -245,7 +234,12 @@ export function AutoReplySettings() {
         matchType: s.matchType,
         message: s.message,
         delaySeconds: s.delaySeconds || 0,
+        cooldownMinutes: s.cooldownMinutes || 0,
         imageUrl: s.imageUrl,
+        fileUrl: s.fileUrl,
+        fileName: s.fileName,
+        fileMimeType: s.fileMimeType,
+        targetApps: s.targetApps || (s.appName ? [s.appName] : []),
         appName: s.appName,
         recipients: s.recipients,
       })),
@@ -296,6 +290,7 @@ export function AutoReplySettings() {
       <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
       <input ref={templateFileRef} type="file" accept=".json,.txt" className="hidden" onChange={importTemplateFile} />
       <input ref={imageFileRef} type="file" accept="image/*" className="hidden" onChange={(e) => uploadStepImage(e, imageTargetIndex.current)} />
+      <input ref={fileFileRef} type="file" accept="*/*" className="hidden" onChange={(e) => uploadStepFile(e, fileTargetIndex.current)} />
 
       <div className="flex flex-wrap gap-2">
         <Button onClick={startNew} className="gap-2">
@@ -314,21 +309,20 @@ export function AutoReplySettings() {
         )}
       </div>
 
-      {/* Editor */}
-      {editing && (
-        <div className="rounded-xl border border-panel-border p-4 space-y-4 bg-muted/30">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex-1 space-y-2">
-              <Label>Auto reply name</Label>
-              <Input
-                value={draftName}
-                onChange={(e) => setDraftName(e.target.value)}
-                placeholder="e.g. Greetings flow"
-              />
-            </div>
-            <Button variant="ghost" size="icon" onClick={closeEditor} className="mt-6">
-              <X className="h-4 w-4" />
-            </Button>
+      <Dialog open={!!editing} onOpenChange={(open) => { if (!open) closeEditor(); }}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editing?.id ? 'Edit auto reply' : 'New auto reply'}</DialogTitle>
+            <DialogDescription>Set triggers, reply text, attachments, recipients and cooldown.</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <Label>Auto reply name</Label>
+            <Input
+              value={draftName}
+              onChange={(e) => setDraftName(e.target.value)}
+              placeholder="e.g. Greetings flow"
+            />
           </div>
 
           <div className="flex items-center justify-between">
@@ -430,7 +424,7 @@ export function AutoReplySettings() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Attach image (sent right after the text)</Label>
+                  <Label>Attach image (sent after the text)</Label>
                   <div className="flex items-center gap-2 flex-wrap">
                     <Button
                       variant="outline"
@@ -457,57 +451,84 @@ export function AutoReplySettings() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Send to</Label>
-                  <select
-                    value={step.appName || ''}
-                    onChange={(e) => {
-                      const appName = e.target.value;
-                      updateStep(index, { appName, recipients: [] });
-                      loadRecipients(step.id, appName);
-                    }}
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  >
-                    <option value="">Incoming sender only</option>
-                    {apps.map((app) => (
-                      <option key={app.id} value={app.name}>Contacts for {app.name}</option>
-                    ))}
-                  </select>
-                  {step.appName && (
-                    <div className="rounded-lg border border-panel-border bg-background p-2 max-h-40 overflow-y-auto space-y-1">
-                      {(recipientOptions[step.id] || []).length === 0 ? (
-                        <p className="text-xs text-muted-foreground p-1">No contacts found for this app.</p>
-                      ) : (
-                        (recipientOptions[step.id] || []).map((recipient) => {
-                          const checked = (step.recipients || []).some((r) => r.phone === recipient.phone);
-                          return (
-                            <label key={`${recipient.id || 'linked'}-${recipient.phone}`} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent/50 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={() => toggleRecipient(index, recipient)}
-                              />
-                              <span className="truncate">{recipient.name || recipient.phone}</span>
-                              <span className="text-xs text-muted-foreground ml-auto">{recipient.phone}</span>
-                            </label>
-                          );
-                        })
-                      )}
-                    </div>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    Leave contacts unselected to send only to the number that messaged you. More than two steps are supported.
-                  </p>
+                  <Label>Attach file: APK, ZIP, document or any other file (sent after the text)</Label>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1 h-8"
+                      disabled={uploadingFileIndex === index}
+                      onClick={() => {
+                        fileTargetIndex.current = index;
+                        fileFileRef.current?.click();
+                      }}
+                    >
+                      <Paperclip className="h-3.5 w-3.5" />
+                      {uploadingFileIndex === index ? 'Uploading...' : step.fileUrl ? 'Change file' : 'Add file / APK'}
+                    </Button>
+                    {step.fileUrl && (
+                      <>
+                        <a href={step.fileUrl} target="_blank" rel="noreferrer" className="max-w-[220px] truncate text-sm text-primary underline">
+                          {step.fileName || 'Open file'}
+                        </a>
+                        <Button variant="ghost" size="icon" onClick={() => updateStep(index, { fileUrl: undefined, fileName: undefined, fileMimeType: undefined })}>
+                          <X className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Delay before replying (seconds)</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={step.delaySeconds ?? 0}
-                    onChange={(e) => updateStep(index, { delaySeconds: Number(e.target.value) })}
-                    className="w-28"
-                  />
+                  <Label>Send to apps</Label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 rounded-lg border border-panel-border bg-background p-2 max-h-40 overflow-y-auto">
+                    {apps.length === 0 ? (
+                      <p className="text-xs text-muted-foreground p-1">No apps yet. Add apps in Settings first.</p>
+                    ) : (
+                      apps.map((app) => {
+                        const selected = Array.isArray(step.targetApps)
+                          ? step.targetApps
+                          : step.appName ? [step.appName] : [];
+                        return (
+                          <label key={app.id} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent/50 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={selected.includes(app.name)}
+                              onChange={() => toggleTargetApp(index, app.name)}
+                            />
+                            <span className="truncate">{app.name}</span>
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Selecting apps automatically includes every non-deleted contact in those apps. Leave all unselected to reply only to the number that messaged you.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Delay before replying (seconds)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={step.delaySeconds ?? 0}
+                      onChange={(e) => updateStep(index, { delaySeconds: Number(e.target.value) })}
+                      className="w-28"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Cooldown (minutes)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={step.cooldownMinutes ?? 0}
+                      onChange={(e) => updateStep(index, { cooldownMinutes: Number(e.target.value) })}
+                      className="w-28"
+                    />
+                    <p className="text-xs text-muted-foreground">Skip when the same reply was already sent to that contact within this time.</p>
+                  </div>
                 </div>
               </div>
             ))}
@@ -517,20 +538,20 @@ export function AutoReplySettings() {
             <Plus className="h-4 w-4" /> Add another trigger &amp; response
           </Button>
 
-          <div className="flex gap-2">
-            <Button onClick={handleSave} disabled={saving} className="flex-1 gap-2">
+          <DialogFooter>
+            <Button onClick={handleSave} disabled={saving} className="gap-2">
               <Save className="h-4 w-4" /> {saving ? 'Saving...' : 'Save auto reply'}
             </Button>
             <Button variant="outline" onClick={closeEditor}>Cancel</Button>
-          </div>
-        </div>
-      )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* List */}
       <div className="space-y-2">
         {loading && <p className="text-sm text-muted-foreground">Loading...</p>}
         {!loading && autoReplies.length === 0 && (
-          <p className="text-sm text-muted-foreground">No auto replies yet. Create your first one above.</p>
+          <p className="text-sm text-muted-foreground">No auto replies yet. Use “New auto reply” to create one.</p>
         )}
         {autoReplies.map((reply) => (
           <div

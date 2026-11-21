@@ -16,8 +16,13 @@ export interface AutoReplyStep {
   matchType: MatchType;
   message: string;
   delaySeconds?: number;
+  cooldownMinutes?: number;
   imageUrl?: string;
+  fileUrl?: string;
+  fileName?: string;
+  fileMimeType?: string;
   appName?: string;
+  targetApps?: string[];
   recipients?: AutoReplyRecipient[];
 }
 
@@ -38,6 +43,8 @@ export function newStep(): AutoReplyStep {
     matchType: 'contains',
     message: '',
     delaySeconds: 0,
+    cooldownMinutes: 0,
+    targetApps: [],
   };
 }
 
@@ -46,6 +53,15 @@ function normalize(value: string): string {
 }
 
 const normalizeRecipient = (value: string) => String(value || '').replace(/\D/g, '');
+
+const normalizeStringList = (value: any): string[] => {
+  const raw = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value.split(',')
+      : [];
+  return Array.from(new Set(raw.map((item) => String(item || '').trim()).filter(Boolean)));
+};
 
 export async function resolveAutoReplyVariables(contactId: string, body: string): Promise<string> {
   if (!body || !/\{\{\s*\w+\s*\}\}/.test(body)) return body;
@@ -125,8 +141,13 @@ export interface AutoReplyJSON {
     matchType?: MatchType;
     message: string;
     delaySeconds?: number;
+    cooldownMinutes?: number;
     imageUrl?: string;
+    fileUrl?: string;
+    fileName?: string;
+    fileMimeType?: string;
     appName?: string;
+    targetApps?: string[] | string;
     recipients?: AutoReplyRecipient[];
   }[];
 }
@@ -203,13 +224,19 @@ export function parseAutoReplyJSON(raw: unknown): { valid: AutoReplyJSON[]; erro
           .filter((r: any) => r?.phone)
           .map((r: any) => ({ id: r.id || undefined, phone: String(r.phone), name: r.name || undefined }))
         : [];
+      const targetApps = normalizeStringList(step.targetApps ?? step.apps ?? (step.appName ? [step.appName] : []));
       steps.push({
         keywords,
         matchType,
         message: step.message,
         delaySeconds: Number(step.delaySeconds) || 0,
+        cooldownMinutes: Number(step.cooldownMinutes) || 0,
         imageUrl: step.imageUrl ? String(step.imageUrl) : undefined,
+        fileUrl: step.fileUrl ? String(step.fileUrl) : undefined,
+        fileName: step.fileName ? String(step.fileName) : undefined,
+        fileMimeType: step.fileMimeType ? String(step.fileMimeType) : undefined,
         appName: step.appName ? String(step.appName) : undefined,
+        targetApps: targetApps.length > 0 ? targetApps : undefined,
         recipients: recipients.length > 0 ? recipients : undefined,
       });
     });
@@ -228,11 +255,39 @@ export function toStoredSteps(json: AutoReplyJSON): AutoReplyStep[] {
     matchType: s.matchType === 'exact' ? 'exact' : 'contains',
     message: s.message,
     delaySeconds: Number(s.delaySeconds) || 0,
+    cooldownMinutes: Number(s.cooldownMinutes) || 0,
     imageUrl: s.imageUrl || undefined,
+    fileUrl: s.fileUrl || undefined,
+    fileName: s.fileName || undefined,
+    fileMimeType: s.fileMimeType || undefined,
     appName: s.appName || undefined,
+    targetApps: normalizeStringList(s.targetApps ?? (s.appName ? [s.appName] : [])),
     recipients: s.recipients?.length ? s.recipients : undefined,
   }));
 }
+
+const withinCooldown = async (
+  supabaseClient: any,
+  userId: string,
+  contactId: string,
+  body: string,
+  cooldownMinutes: number
+): Promise<boolean> => {
+  const minutes = Number(cooldownMinutes) || 0;
+  if (minutes <= 0) return false;
+  const since = new Date(Date.now() - minutes * 60_000).toISOString();
+  const { data } = await supabaseClient
+    .from('messages')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('contact_id', contactId)
+    .eq('is_outgoing', true)
+    .eq('status', 'sent')
+    .eq('content', body)
+    .gte('created_at', since)
+    .limit(1);
+  return (data || []).length > 0;
+};
 
 /**
  * Evaluates an incoming message against the user's auto replies and, on a match,
@@ -277,15 +332,30 @@ export async function runAutoReply(params: {
       const delay = Math.max(0, Number(step.delaySeconds) || 0);
       if (delay > 0) await new Promise((r) => setTimeout(r, delay * 1000));
 
+      const targetApps = normalizeStringList(step.targetApps ?? (step.appName ? [step.appName] : []));
       const configured = (step.recipients || []).filter((r) => normalizeRecipient(r.phone));
-      const recipients = configured.length > 0
+      let recipients = configured.length > 0
         ? configured
         : [{ id: contactId, phone: contactPhone }];
+
+      if (targetApps.length > 0) {
+        const appsLower = targetApps.map((name) => normalize(name));
+        const { data: appContacts } = await supabase
+          .from('contacts')
+          .select('id, phone, app_type')
+          .eq('user_id', userId)
+          .eq('is_deleted', false);
+        recipients = (appContacts || [])
+          .filter((c: any) => normalizeRecipient(c.phone) && appsLower.includes(normalize(c.app_type || '')))
+          .map((c: any) => ({ id: c.id, phone: c.phone }));
+      }
 
       for (const recipient of recipients) {
         const to = normalizeRecipient(recipient.phone);
         if (!to) continue;
         const recipientContactId = recipient.id || contactId;
+
+        if (await withinCooldown(supabase, userId, recipientContactId, messageBody, step.cooldownMinutes)) continue;
 
         const { data } = await supabase.functions.invoke('whatsapp-api', {
           body: {
@@ -330,6 +400,30 @@ export async function runAutoReply(params: {
             status: imageData?.success ? 'sent' : 'failed',
             is_outgoing: true,
             whatsapp_message_id: imageData?.messageId || imageData?.wamid || null,
+          } as any);
+        }
+
+        if (step.fileUrl) {
+          const { data: fileData } = await supabase.functions.invoke('whatsapp-api', {
+            body: {
+              action: 'send_message',
+              token: settings.api_token,
+              phoneNumberId: settings.phone_number_id,
+              to,
+              type: 'document',
+              content: step.fileUrl,
+              filename: step.fileName,
+            },
+          });
+          await supabase.from('messages').insert({
+            user_id: userId,
+            contact_id: recipientContactId,
+            content: step.fileName || step.fileUrl,
+            type: 'document',
+            media_url: step.fileUrl,
+            status: fileData?.success ? 'sent' : 'failed',
+            is_outgoing: true,
+            whatsapp_message_id: fileData?.messageId || fileData?.wamid || null,
           } as any);
         }
       }

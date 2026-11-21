@@ -84,7 +84,10 @@ export function ChatListItem({
   const isScrolling = useRef(false);
 
   const isFav = favorites[chat.id];
-  const hasUnread = unreadCount > 0;
+  const hasUnread = unreadCount > 0
+    && !isTrash
+    && !isArchived && !contact.isArchived
+    && !chat.isDeleted && !contact.isDeleted;
 
   useEffect(() => {
     setAssignedLabelIds(chatLabels.map((l) => l.id));
@@ -170,9 +173,7 @@ export function ChatListItem({
       return;
     }
 
-    setChats(chats.map((c) =>
-      c.id === chat.id ? { ...c, contact: { ...c.contact, isDeleted: true, deletedAt: new Date() } } : c
-    ));
+    updateContact(chat.id, { isDeleted: true, deletedAt: new Date() } as any);
     setShowDeleteDialog(false);
     setShowOptions(false);
     toast({ title: 'Chat moved to trash' });

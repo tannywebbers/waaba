@@ -4,23 +4,31 @@ function safeName(name: string): string {
   return (name || 'image').replace(/[^\w.\-]+/g, '_').slice(-80);
 }
 
+export async function uploadUserFile(
+  userId: string,
+  file: File,
+  folder = 'files',
+): Promise<string | null> {
+  if (!userId || !file) return null;
+  const path = `${userId}/${folder}/${Date.now()}-${safeName(file.name)}`;
+  const { error } = await supabase.storage
+    .from('chat-media')
+    .upload(path, file, { contentType: file.type || 'application/octet-stream', upsert: false });
+  if (error) {
+    console.warn('File upload failed:', error.message);
+    return null;
+  }
+  const { data } = supabase.storage.from('chat-media').getPublicUrl(path);
+  return data?.publicUrl || null;
+}
+
 // Uploads a local file into the public chat-media bucket under the user's folder.
 export async function uploadUserImage(
   userId: string,
   file: File,
   folder = 'avatars',
 ): Promise<string | null> {
-  if (!userId || !file) return null;
-  const path = `${userId}/${folder}/${Date.now()}-${safeName(file.name)}`;
-  const { error } = await supabase.storage
-    .from('chat-media')
-    .upload(path, file, { contentType: file.type || 'image/jpeg', upsert: false });
-  if (error) {
-    console.warn('Image upload failed:', error.message);
-    return null;
-  }
-  const { data } = supabase.storage.from('chat-media').getPublicUrl(path);
-  return data?.publicUrl || null;
+  return uploadUserFile(userId, file, folder);
 }
 
 // Downloads an image URL and stores it in the bucket so the app no longer
